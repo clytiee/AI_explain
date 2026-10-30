@@ -17,6 +17,7 @@
   let userW = null;               // 用户手动拉宽后的宽度（跨重建保留）
   let userH = null;               // 用户手动拉高后的高度
   let userMoved = false;          // 用户手动拖走浮层后为 true（滚动/重选不再弹回）
+  let lastSelectedText = "";      // 最近一次选中的文本（供复制/重试/汉典链接使用）
   let statusEl, bodyEl, resultEl, selEl, closeBtn, copyBtn, settingsBtn, retryBtn, header;
 
   chrome.storage.local.get({ config: null, paused: false }, (res) => {
@@ -125,10 +126,27 @@
     openPopup(info.text, rect);
   }
 
+  // 转义 HTML 特殊字符，防止所选文本注入破坏浮层
+  function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[c]);
+  }
+
   function openPopup(text, rect) {
     ensurePopup();
     userMoved = false; // 换选新文本时重新锚定到选中处
-    selEl.textContent = "「" + text + "」";
+    lastSelectedText = text;
+    // 单个汉字时，在字右侧附带汉典链接
+    if (text.length === 1) {
+      selEl.innerHTML =
+        "「" + escHtml(text) + "」" +
+        '<a class="aie-zdic" href="https://zdic.net/hans/' +
+        encodeURIComponent(text) +
+        '" target="_blank" rel="noopener" title="汉典：' + escHtml(text) + '">汉典</a>';
+    } else {
+      selEl.textContent = "「" + text + "」";
+    }
     selEl.title = text;
     resultEl.innerHTML = "";
     rawAnswer = "";
@@ -216,7 +234,7 @@
     copyBtn.addEventListener("click", copyAnswer);
     settingsBtn.addEventListener("click", openSettings);
     retryBtn.addEventListener("click", () => {
-      const sel = selEl.textContent.replace(/^「|」$/g, "").trim();
+      const sel = lastSelectedText || selEl.textContent.replace(/^「|」$/g, "").trim();
       if (sel) startExplain(sel);
     });
 
@@ -425,7 +443,7 @@
   }
 
   function copyAnswer() {
-    const text = rawAnswer || selEl.textContent.replace(/^「|」$/g, "");
+    const text = rawAnswer || lastSelectedText || selEl.textContent.replace(/^「|」$/g, "");
     const flash = () => {
       copyBtn.textContent = "已复制";
       setTimeout(() => (copyBtn.textContent = "复制"), 1200);

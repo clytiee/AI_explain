@@ -167,6 +167,20 @@
   white-space: nowrap;
 }
 
+/* 汉典链接（选中单字时显示在字右侧） */
+#ai-explain-popup .aie-zdic {
+  margin-left: 8px;
+  font-size: 11px;
+  color: #6366f1;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#ai-explain-popup .aie-zdic:hover {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+
 /* 状态 / 内容 */
 #ai-explain-popup .aie-body {
   flex: 1 1 auto;
