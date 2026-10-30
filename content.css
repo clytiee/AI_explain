@@ -1,0 +1,207 @@
+/* 划词AI释义 —— 浮层样式（毛玻璃浮动卡片） */
+
+#ai-explain-popup {
+  position: fixed;
+  z-index: 2147483647; /* 最大层级，压过绝大多数页面 */
+  box-sizing: border-box;
+  width: 360px;
+  max-width: calc(100vw - 16px);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #1f2937;
+  background: rgba(255, 255, 255, 0.86);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+#ai-explain-popup *,
+#ai-explain-popup *::before,
+#ai-explain-popup *::after {
+  box-sizing: border-box;
+}
+
+/* 头部 */
+#ai-explain-popup .aie-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px 8px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.12),
+    rgba(139, 92, 246, 0.1)
+  );
+}
+
+#ai-explain-popup .aie-label {
+  font-weight: 600;
+  font-size: 12px;
+  color: #4f46e5;
+  letter-spacing: 0.5px;
+}
+
+#ai-explain-popup .aie-actions {
+  display: flex;
+  gap: 6px;
+}
+
+#ai-explain-popup .aie-btn {
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+#ai-explain-popup .aie-btn:hover {
+  background: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+}
+
+#ai-explain-popup .aie-close {
+  font-size: 16px;
+  font-weight: 700;
+  padding: 2px 6px;
+}
+
+/* 所选文本 */
+#ai-explain-popup .aie-seltext {
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: #374151;
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
+  max-height: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 状态 / 内容 */
+#ai-explain-popup .aie-body {
+  padding: 10px 12px 12px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+#ai-explain-popup .aie-status {
+  font-size: 12.5px;
+  color: #9ca3af;
+}
+
+#ai-explain-popup .aie-status-loading::before {
+  content: "";
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 8px;
+  vertical-align: -1px;
+  border: 2px solid rgba(99, 102, 241, 0.3);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: aie-spin 0.8s linear infinite;
+}
+
+@keyframes aie-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+#ai-explain-popup .aie-status-error {
+  color: #dc2626;
+}
+
+/* markdown 渲染 */
+#ai-explain-popup .aie-result {
+  color: #1f2937;
+}
+#ai-explain-popup .aie-result p {
+  margin: 4px 0;
+}
+#ai-explain-popup .aie-result h1,
+#ai-explain-popup .aie-result h2,
+#ai-explain-popup .aie-result h3,
+#ai-explain-popup .aie-result h4 {
+  margin: 8px 0 4px;
+  font-size: 13.5px;
+}
+#ai-explain-popup .aie-result ul,
+#ai-explain-popup .aie-result ol {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+#ai-explain-popup .aie-result li {
+  margin: 2px 0;
+}
+#ai-explain-popup .aie-result code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace;
+  font-size: 12px;
+  background: rgba(99, 102, 241, 0.08);
+  color: #4f46e5;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+#ai-explain-popup .aie-result pre {
+  background: rgba(31, 41, 55, 0.06);
+  padding: 8px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+#ai-explain-popup .aie-result pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+#ai-explain-popup .aie-result blockquote {
+  margin: 6px 0;
+  padding: 2px 10px;
+  border-left: 3px solid #6366f1;
+  color: #4b5563;
+}
+#ai-explain-popup .aie-result a {
+  color: #4f46e5;
+  text-decoration: none;
+}
+#ai-explain-popup .aie-result a:hover {
+  text-decoration: underline;
+}
+
+/* 重试按钮行 */
+#ai-explain-popup .aie-retry-row {
+  margin-top: 8px;
+}
+#ai-explain-popup .aie-retry {
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #4f46e5;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.6);
+}
+#ai-explain-popup .aie-retry:hover {
+  background: rgba(99, 102, 241, 0.12);
+}
+
+#ai-explain-popup[hidden],
+#ai-explain-popup .aie-status[hidden],
+#ai-explain-popup .aie-result[hidden],
+#ai-explain-popup .aie-btn[hidden],
+#ai-explain-popup .aie-retry-row[hidden] {
+  display: none !important;
+}
+
+/* 重试按钮隐藏时，同时收起外层行，避免留出空白 */
+#ai-explain-popup .aie-retry-row:has(.aie-btn[hidden]) {
+  display: none;
+}

@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "划词AI释义",
+  "version": "1.0.0",
+  "description": "选中网页文本后自动弹出浮层，调用 AI 大模型 API 对所选文本进行释义、翻译或讲解（划词 AI 释义）。",
+  "minimum_chrome_version": "102",
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "permissions": ["storage", "contextMenus"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html",
+  "action": {
+    "default_title": "划词AI释义 · 设置",
+    "default_popup": "options.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  }
+}
