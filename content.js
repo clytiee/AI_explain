@@ -12,6 +12,9 @@
   let port = null;
   let rawAnswer = "";             // 累积的原文（markdown）
   let popupInteraction = false;   // 本次点击是否发生在浮层内部
+  let userW = null;               // 用户手动拉宽后的宽度（跨重建保留）
+  let userH = null;               // 用户手动拉高后的高度
+  let userMoved = false;          // 用户手动拖走浮层后为 true（滚动/重选不再弹回）
   let statusEl, bodyEl, resultEl, selEl, closeBtn, copyBtn, settingsBtn, retryBtn, header;
 
   chrome.storage.local.get({ config: null }, (res) => {
@@ -79,7 +82,7 @@
   document.addEventListener(
     "scroll",
     () => {
-      if (isVisible() && currentRange) {
+      if (isVisible() && currentRange && !userMoved) {
         reposition(currentRange.getBoundingClientRect());
       }
     },
@@ -100,7 +103,7 @@
     const rect = info.range.getBoundingClientRect();
 
     if (sig === currentSignature && isVisible()) {
-      reposition(rect);
+      if (!userMoved) reposition(rect); // 手动拖走过就不再弹回选中处
       return;
     }
     currentSignature = sig;
@@ -110,6 +113,7 @@
 
   function openPopup(text, rect) {
     ensurePopup();
+    userMoved = false; // 换选新文本时重新锚定到选中处
     selEl.textContent = "「" + text + "」";
     selEl.title = text;
     resultEl.innerHTML = "";
@@ -149,7 +153,8 @@
       '<div class="aie-status"></div>' +
       '<div class="aie-result"></div>' +
       '<div class="aie-retry-row"><button class="aie-btn aie-retry">重新解释</button></div>' +
-      "</div>";
+      "</div>" +
+      '<div class="aie-grip" title="拖动调整大小"></div>';
 
     document.documentElement.appendChild(root);
 
@@ -161,13 +166,74 @@
     statusEl = root.querySelector(".aie-status");
     bodyEl = root.querySelector(".aie-body");
     resultEl = root.querySelector(".aie-result");
+    header = root.querySelector(".aie-header");
+
+    // 拖动标题栏移动浮层位置（按钮区域除外）
+    header.addEventListener("pointerdown", (e) => {
+      if (e.target.closest(".aie-btn")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const r = root.getBoundingClientRect();
+      const startL = r.left;
+      const startT = r.top;
+
+      const onMove = (ev) => {
+        let left = startL + (ev.clientX - startX);
+        let top = startT + (ev.clientY - startY);
+        left = Math.min(Math.max(left, 4), window.innerWidth - root.offsetWidth - 4);
+        top = Math.min(Math.max(top, 4), window.innerHeight - 4);
+        root.style.left = left + "px";
+        root.style.top = top + "px";
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        userMoved = true;
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    });
 
     closeBtn.addEventListener("click", hidePopup);
     copyBtn.addEventListener("click", copyAnswer);
-    settingsBtn.addEventListener("click", () => chrome.runtime.openOptionsPage());
+    settingsBtn.addEventListener("click", openSettings);
     retryBtn.addEventListener("click", () => {
       const sel = selEl.textContent.replace(/^「|」$/g, "").trim();
       if (sel) startExplain(sel);
+    });
+
+    // 右下角拖拽调整大小
+    const grip = root.querySelector(".aie-grip");
+    grip.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startW = root.offsetWidth;
+      const startH = root.offsetHeight;
+      const rect = root.getBoundingClientRect();
+      const maxW = Math.max(240, window.innerWidth - rect.left - 8);
+      const maxH = Math.max(160, window.innerHeight - rect.top - 8);
+
+      const onMove = (ev) => {
+        let w = startW + (ev.clientX - startX);
+        let h = startH + (ev.clientY - startY);
+        w = Math.min(Math.max(w, 240), maxW);
+        h = Math.min(Math.max(h, 160), maxH);
+        root.style.width = w + "px";
+        root.style.height = h + "px";
+        if (bodyEl) bodyEl.style.maxHeight = "none"; // 拉高后允许内容区伸展
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        userW = root.offsetWidth;
+        userH = root.offsetHeight;
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
     });
 
     // 阻止 popup 内的选择冒泡触发展开/关闭
@@ -180,7 +246,21 @@
     const root = document.getElementById(POPUP_ID);
     if (!root) return;
 
-    const popupW = Math.min(380, window.innerWidth - 16);
+    // 尺寸：优先沿用用户手动拉过的宽/高，否则用默认
+    if (userW) {
+      root.style.width = userW + "px";
+    } else {
+      root.style.width = Math.min(380, window.innerWidth - 16) + "px";
+    }
+    if (userH) {
+      root.style.height = userH + "px";
+      if (bodyEl) bodyEl.style.maxHeight = "none";
+    } else {
+      root.style.height = "";
+      if (bodyEl) bodyEl.style.maxHeight = "";
+    }
+
+    const popupW = userW || Math.min(380, window.innerWidth - 16);
     const estH = 220;
 
     let left = rect.left;
@@ -191,7 +271,6 @@
     if (top < 8) top = rect.bottom + 10;
     if (top + estH > window.innerHeight - 8) top = Math.max(8, window.innerHeight - estH - 8);
 
-    root.style.width = popupW + "px";
     root.style.left = left + "px";
     root.style.top = top + "px";
   }
@@ -325,6 +404,18 @@
         port.disconnect();
       } catch {}
       port = null;
+    }
+  }
+
+  // 打开设置页：content script 无权直接调用 chrome.runtime.openOptionsPage，
+  // 且 window.open 打开扩展页会被 Edge 拦截（ERR_BLOCKED_BY_CLIENT）。
+  // 正确做法是发消息给后台（有权限）调用 openOptionsPage()。
+  function openSettings() {
+    try {
+      chrome.runtime.sendMessage({ type: "open-options" });
+    } catch (e) {
+      // 后台不可达时的兜底
+      chrome.runtime.openOptionsPage();
     }
   }
 

@@ -148,7 +148,10 @@
       </div>
       <label>系统提示词（决定解释的风格与侧重）</label>
       <textarea id="systemPrompt"></textarea>
-      <div class="hint">默认风格会兼顾外文翻译、专业术语通俗讲解、文言文与汉字的本字及造字原意考证；可按需改成只做某种解释。</div>
+      <div style="margin-top:6px">
+        <button class="ghost" id="resetPrompt" type="button">恢复默认提示词</button>
+      </div>
+      <div class="hint">默认风格会兼顾外文翻译、专业术语通俗讲解、文言文与汉字的本字及造字原意考证，并强制 AI 按「分板块 + 逐词列表」的规范格式输出，避免把整句翻译并进逐词解释里。改过提示词导致排版乱时，可一键恢复。</div>
     </div>
 
     <div class="btns">

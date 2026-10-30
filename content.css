@@ -4,7 +4,10 @@
   position: fixed;
   z-index: 2147483647; /* 最大层级，压过绝大多数页面 */
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   width: 360px;
+  min-width: 240px;
   max-width: calc(100vw - 16px);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
@@ -20,14 +23,37 @@
   overflow: hidden;
 }
 
+/* 右下角拖拽调整大小手柄 */
+#ai-explain-popup .aie-grip {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  z-index: 3;
+  touch-action: none;
+}
+#ai-explain-popup .aie-grip::before {
+  content: "";
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid rgba(99, 102, 241, 0.55);
+  border-bottom: 2px solid rgba(99, 102, 241, 0.55);
+}
+
 #ai-explain-popup *,
 #ai-explain-popup *::before,
 #ai-explain-popup *::after {
   box-sizing: border-box;
 }
 
-/* 头部 */
+/* 头部（可拖动标题栏移动浮层位置） */
 #ai-explain-popup .aie-header {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -38,6 +64,11 @@
     rgba(99, 102, 241, 0.12),
     rgba(139, 92, 246, 0.1)
   );
+  cursor: move;
+  user-select: none;
+}
+#ai-explain-popup .aie-header .aie-btn {
+  cursor: pointer;
 }
 
 #ai-explain-popup .aie-label {
@@ -77,6 +108,7 @@
 
 /* 所选文本 */
 #ai-explain-popup .aie-seltext {
+  flex: none;
   padding: 8px 12px;
   font-size: 12.5px;
   color: #374151;
@@ -89,9 +121,11 @@
 
 /* 状态 / 内容 */
 #ai-explain-popup .aie-body {
-  padding: 10px 12px 12px;
-  max-height: 320px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  padding: 10px 12px 18px; /* 底部留出拖拽手柄空间 */
+  max-height: 320px; /* 未手动拉高时的高度上限 */
 }
 
 #ai-explain-popup .aie-status {
