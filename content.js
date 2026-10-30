@@ -425,7 +425,10 @@
   function finish() {
     setStatus("idle", "");
     statusEl.hidden = true;
-    if (rawAnswer.trim()) resultEl.hidden = false;
+    if (rawAnswer.trim()) {
+      resultEl.hidden = false;
+      render(); // 释义完成时用最终原文重绘一次，确保显示与复制内容一致
+    }
     // 内容确定后按实际高度重新定位一次，避免浮层因加载时高度偏小、
     // 而在滚动时才按新高度突然跳位（上方放不下切到下方）
     if (currentRange && !userMoved) reposition(currentRange.getBoundingClientRect());
