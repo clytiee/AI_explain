@@ -31,8 +31,9 @@ let currentConfig = {
 };
 
 function load() {
-  chrome.storage.local.get({ config: null }, (res) => {
+  chrome.storage.local.get({ config: null, paused: false }, (res) => {
     if (res.config) currentConfig = { ...currentConfig, ...res.config };
+    $("pausedSwitch").checked = !!res.paused;
     $("apiBaseUrl").value = currentConfig.apiBaseUrl || "";
     $("model").value = currentConfig.model || "";
     $("apiKey").value = currentConfig.apiKey || "";
@@ -89,6 +90,12 @@ $("provider").addEventListener("change", (e) => {
   }
   applyPreset(provider);
   setStatus("已填入该服务商常用地址与模型。豆包需在下方填写你的「推理接入点」模型名。", true);
+});
+
+$("pausedSwitch").addEventListener("change", (e) => {
+  chrome.storage.local.set({ paused: e.target.checked }, () => {
+    setStatus(e.target.checked ? "已暂停划词（图标变为带红斜杠）" : "已恢复划词", true);
+  });
 });
 
 $("save").addEventListener("click", () => {

@@ -25,8 +25,7 @@
   ],
   "options_page": "options.html",
   "action": {
-    "default_title": "划词AI释义 · 设置",
-    "default_popup": "options.html",
+    "default_title": "划词AI释义（点击暂停/恢复）",
     "default_icon": {
       "16": "icon16.png",
       "32": "icon32.png",

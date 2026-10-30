@@ -7,6 +7,7 @@
 
   const POPUP_ID = "ai-explain-popup";
   let config = { autoExplain: true, maxLength: 500, stream: true };
+  let paused = false;             // 是否暂停划词（点击插件图标切换）
   let currentRange = null;        // 当前选中 Range，用于滚动后重定位
   let currentSignature = "";      // 去重标记
   let port = null;
@@ -17,12 +18,16 @@
   let userMoved = false;          // 用户手动拖走浮层后为 true（滚动/重选不再弹回）
   let statusEl, bodyEl, resultEl, selEl, closeBtn, copyBtn, settingsBtn, retryBtn, header;
 
-  chrome.storage.local.get({ config: null }, (res) => {
+  chrome.storage.local.get({ config: null, paused: false }, (res) => {
     if (res.config) config = { ...config, ...res.config };
+    paused = !!res.paused;
   });
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.config?.newValue) {
-      config = { ...config, ...changes.config.newValue };
+    if (area !== "local") return;
+    if (changes.config?.newValue) config = { ...config, ...changes.config.newValue };
+    if (changes.paused !== undefined) {
+      paused = !!changes.paused.newValue;
+      if (paused) hidePopup(); // 暂停时收起当前浮层
     }
   });
 
@@ -91,6 +96,7 @@
 
   // ---------- 主流程 ----------
   function handleSelection() {
+    if (paused) return; // 暂停时不再触发划词
     const info = getSelectionInfo();
     if (!info) return;
 
@@ -261,12 +267,24 @@
     }
 
     const popupW = userW || Math.min(380, window.innerWidth - 16);
-    const estH = 220;
+    // 用浮层实际高度定位，避免拉高后下沿盖住所划文字
+    const estH = root.offsetHeight || 220;
 
-    let left = rect.left;
-    if (left + popupW > window.innerWidth - 8) left = window.innerWidth - popupW - 8;
-    if (left < 8) left = 8;
+    // 水平：优先错开到所划文字右侧，右侧放不下则放左侧，
+    // 两侧都放不下才回退到左上对齐，避免浮层盖住文字
+    const vw = window.innerWidth;
+    let left;
+    if (rect.right + popupW + 8 <= vw - 8) {
+      left = rect.right + 8;
+    } else if (rect.left - popupW - 8 >= 8) {
+      left = rect.left - popupW - 8;
+    } else {
+      left = rect.left;
+      if (left + popupW > vw - 8) left = vw - popupW - 8;
+      if (left < 8) left = 8;
+    }
 
+    // 垂直：优先放所选文字上方，上方放不下才移到下方
     let top = rect.top - estH - 10;
     if (top < 8) top = rect.bottom + 10;
     if (top + estH > window.innerHeight - 8) top = Math.max(8, window.innerHeight - estH - 8);

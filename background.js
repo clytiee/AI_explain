@@ -29,7 +29,43 @@ async function getConfig() {
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes.config) configCache = null;
+  if (area !== "local") return;
+  if (changes.config) configCache = null;
+  if (changes.paused) setActionState();
+});
+
+// ---------- 暂停/恢复（点击插件图标切换） ----------
+const NORMAL_ICON = {
+  16: "icon16.png",
+  32: "icon32.png",
+  48: "icon48.png",
+  128: "icon128.png",
+};
+const PAUSED_ICON = {
+  16: "icon-paused-16.png",
+  32: "icon-paused-32.png",
+  48: "icon-paused-48.png",
+  128: "icon-paused-128.png",
+};
+
+async function getPaused() {
+  const res = await chrome.storage.local.get({ paused: false });
+  return !!res.paused;
+}
+
+async function setActionState() {
+  const paused = await getPaused();
+  await chrome.action.setIcon({ path: paused ? PAUSED_ICON : NORMAL_ICON }).catch(() => {});
+  await chrome.action
+    .setTitle({
+      title: paused ? "划词AI释义（已暂停，点击恢复）" : "划词AI释义（点击暂停）",
+    })
+    .catch(() => {});
+}
+
+chrome.action.onClicked.addListener(async () => {
+  const paused = await getPaused();
+  await chrome.storage.local.set({ paused: !paused });
 });
 
 function buildUrl(base) {
@@ -168,6 +204,7 @@ chrome.runtime.onInstalled.addListener(() => {
       contexts: ["selection"],
     });
   });
+  setActionState(); // 初始化图标状态（暂停/正常）
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
