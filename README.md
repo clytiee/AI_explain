@@ -15,7 +15,7 @@
 
 1. 打开浏览器，进入 `chrome://extensions`（Edge 为 `edge://extensions`）。
 2. 右上角打开「开发者模式」。
-3. 点击「加载已解压的扩展程序」，选择本目录：`C:\Users\Chinasoft\Documents\GitHub\AI_explain`。
+3. 点击「加载已解压的扩展程序」，选择本插件下载到的目录。
 4. 点击工具栏插件图标（或右上角扩展）进入设置。
 
 ## 使用
