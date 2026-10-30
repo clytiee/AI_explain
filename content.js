@@ -170,7 +170,7 @@
       "</div>" +
       '<div class="aie-grip aie-grip-w" title="单独拉宽"></div>' +
       '<div class="aie-grip aie-grip-h" title="单独拉高"></div>' +
-      '<div class="aie-grip" title="同时拉宽拉高"></div>';
+      '<div class="aie-grip aie-grip-corner" title="同时拉宽拉高"></div>';
 
     document.documentElement.appendChild(root);
 
@@ -258,7 +258,7 @@
     // 右边缘手柄：单独拉宽；底边手柄：单独拉高；右下角手柄：同时拉宽拉高
     root.querySelector(".aie-grip-w").addEventListener("pointerdown", (e) => startResize(e, { w: true }));
     root.querySelector(".aie-grip-h").addEventListener("pointerdown", (e) => startResize(e, { h: true }));
-    root.querySelector(".aie-grip").addEventListener("pointerdown", (e) => startResize(e, { w: true, h: true }));
+    root.querySelector(".aie-grip-corner").addEventListener("pointerdown", (e) => startResize(e, { w: true, h: true }));
 
     // 单独的拉宽/拉高手柄：鼠标靠近右边缘显示拉宽、靠近下边缘显示拉高
     const gripW = root.querySelector(".aie-grip-w");
