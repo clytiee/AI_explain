@@ -13,6 +13,7 @@
   let port = null;
   let rawAnswer = "";             // 累积的原文（markdown）
   let popupInteraction = false;   // 本次点击是否发生在浮层内部
+  let selectionWasInPopup = false; // 点击发生前，浮层内是否选中了一段文本（用于保护浮层内选词）
   let userW = null;               // 用户手动拉宽后的宽度（跨重建保留）
   let userH = null;               // 用户手动拉高后的高度
   let userMoved = false;          // 用户手动拖走浮层后为 true（滚动/重选不再弹回）
@@ -48,20 +49,35 @@
     return !!node.closest("#" + POPUP_ID);
   }
 
+  // 是否在浮层内实际选中了一段文本（塌陷的选择不算）
+  function selectionInPopup() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return false;
+    return isInsidePopup(sel.anchorNode) || isInsidePopup(sel.focusNode);
+  }
+
   document.addEventListener(
     "mousedown",
     (e) => {
       popupInteraction = isInsidePopup(e.target);
+      // 记录点击发生前，浮层内是否有选中的文本
+      selectionWasInPopup = selectionInPopup();
     },
     true
   );
 
+  // 浮层的关闭统一由 mouseup 决定，避免 selectionchange 的事件时序造成误关
   document.addEventListener(
     "mouseup",
     (e) => {
-      popupInteraction = false; // 本次 mousedown 已在 selectionchange 中消费
-      if (isInsidePopup(e.target)) return;
-      // 让 selectionchange 先落定
+      if (isInsidePopup(e.target)) return; // 浮层内点击：不关闭
+      if (selectionWasInPopup) {
+        // 点击前浮层内正选中文本：本次点击不关闭、不重开（保护选词/复制）
+        selectionWasInPopup = false;
+        return;
+      }
+      // 普通点击页面：关闭旧浮层，并可能为新选择重新弹出
+      hidePopup();
       setTimeout(handleSelection, 0);
     },
     true
@@ -74,14 +90,6 @@
       setTimeout(handleSelection, 0);
     }
   });
-
-  document.addEventListener(
-    "selectionchange",
-    () => {
-      const sel = window.getSelection();
-      if (sel && sel.isCollapsed && !popupInteraction) hidePopup();
-    }
-  );
 
   // 滚动时跟随选中区域重新定位
   document.addEventListener(
@@ -160,7 +168,9 @@
       '<div class="aie-result"></div>' +
       '<div class="aie-retry-row"><button class="aie-btn aie-retry">重新解释</button></div>' +
       "</div>" +
-      '<div class="aie-grip" title="拖动调整大小"></div>';
+      '<div class="aie-grip aie-grip-w" title="单独拉宽"></div>' +
+      '<div class="aie-grip aie-grip-h" title="单独拉高"></div>' +
+      '<div class="aie-grip" title="同时拉宽拉高"></div>';
 
     document.documentElement.appendChild(root);
 
@@ -210,9 +220,8 @@
       if (sel) startExplain(sel);
     });
 
-    // 右下角拖拽调整大小
-    const grip = root.querySelector(".aie-grip");
-    grip.addEventListener("pointerdown", (e) => {
+    // 拖拽调整大小：axes 指定允许变化的轴（w=宽, h=高）
+    const startResize = (e, axes) => {
       e.preventDefault();
       e.stopPropagation();
       const startX = e.clientX;
@@ -224,13 +233,17 @@
       const maxH = Math.max(160, window.innerHeight - rect.top - 8);
 
       const onMove = (ev) => {
-        let w = startW + (ev.clientX - startX);
-        let h = startH + (ev.clientY - startY);
-        w = Math.min(Math.max(w, 240), maxW);
-        h = Math.min(Math.max(h, 160), maxH);
-        root.style.width = w + "px";
-        root.style.height = h + "px";
-        if (bodyEl) bodyEl.style.maxHeight = "none"; // 拉高后允许内容区伸展
+        if (axes.w) {
+          let w = startW + (ev.clientX - startX);
+          w = Math.min(Math.max(w, 240), maxW);
+          root.style.width = w + "px";
+        }
+        if (axes.h) {
+          let h = startH + (ev.clientY - startY);
+          h = Math.min(Math.max(h, 160), maxH);
+          root.style.height = h + "px";
+          if (bodyEl) bodyEl.style.maxHeight = "none"; // 拉高后允许内容区伸展
+        }
       };
       const onUp = () => {
         window.removeEventListener("pointermove", onMove);
@@ -240,6 +253,25 @@
       };
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
+    };
+
+    // 右边缘手柄：单独拉宽；底边手柄：单独拉高；右下角手柄：同时拉宽拉高
+    root.querySelector(".aie-grip-w").addEventListener("pointerdown", (e) => startResize(e, { w: true }));
+    root.querySelector(".aie-grip-h").addEventListener("pointerdown", (e) => startResize(e, { h: true }));
+    root.querySelector(".aie-grip").addEventListener("pointerdown", (e) => startResize(e, { w: true, h: true }));
+
+    // 单独的拉宽/拉高手柄：鼠标靠近右边缘显示拉宽、靠近下边缘显示拉高
+    const gripW = root.querySelector(".aie-grip-w");
+    const gripH = root.querySelector(".aie-grip-h");
+    const edgeZone = 24; // 边缘判定阈值（px）
+    root.addEventListener("pointermove", (e) => {
+      const r = root.getBoundingClientRect();
+      gripW.style.opacity = r.right - e.clientX <= edgeZone ? "1" : "0";
+      gripH.style.opacity = r.bottom - e.clientY <= edgeZone ? "1" : "0";
+    });
+    root.addEventListener("pointerleave", () => {
+      gripW.style.opacity = "0";
+      gripH.style.opacity = "0";
     });
 
     // 阻止 popup 内的选择冒泡触发展开/关闭
@@ -284,9 +316,11 @@
       if (left < 8) left = 8;
     }
 
-    // 垂直：优先放所选文字上方，上方放不下才移到下方
-    let top = rect.top - estH - 10;
-    if (top < 8) top = rect.bottom + 10;
+    // 垂直：让浮层中“所选文本”区域的虚线分隔对齐所选文字的上边缘；
+    // 上方放不下时才移到文字下方
+    const selBottom = selEl ? selEl.offsetTop + selEl.offsetHeight : 40;
+    let top = rect.top - selBottom;
+    if (top < 8) top = rect.bottom + 10; // 上方放不下，改到文字下方
     if (top + estH > window.innerHeight - 8) top = Math.max(8, window.innerHeight - estH - 8);
 
     root.style.left = left + "px";
@@ -374,6 +408,9 @@
     setStatus("idle", "");
     statusEl.hidden = true;
     if (rawAnswer.trim()) resultEl.hidden = false;
+    // 内容确定后按实际高度重新定位一次，避免浮层因加载时高度偏小、
+    // 而在滚动时才按新高度突然跳位（上方放不下切到下方）
+    if (currentRange && !userMoved) reposition(currentRange.getBoundingClientRect());
   }
 
   function render() {
