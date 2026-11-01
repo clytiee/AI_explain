@@ -322,6 +322,103 @@ function exportMd() {
   exportStatus("已导出 " + all.length + " 条记录为 Markdown 文件：" + name, true);
 }
 
+// 导出为 HTML：样式复用历史页的原文卡片（含时间/来源/原文/释义），去掉删除按钮
+const CARD_CSS = `:root{--primary:#4f46e5;--primary-soft:rgba(99,102,241,0.12);--border:#e5e7eb;--text:#1f2937;--muted:#6b7280}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,sans-serif;color:var(--text);background:linear-gradient(160deg,#f6f7ff,#eef2ff 60%,#f5f3ff);min-height:100vh;padding:32px 16px 60px}
+.wrap{max-width:720px;margin:0 auto}
+h1{font-size:20px;margin:0 0 4px;display:flex;align-items:center;gap:10px}
+h1 .dot{width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a855f7)}
+.sub{color:var(--muted);font-size:13px;margin:0 0 20px}
+.card{background:rgba(255,255,255,0.88);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,0.6);border-radius:16px;padding:16px 18px;margin-bottom:12px;box-shadow:0 8px 30px rgba(0,0,0,0.05)}
+.item-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.item-time{font-size:12px;color:var(--muted);flex:1 1 auto}
+.item-src{font-size:12px;color:var(--muted)}
+.item-src a{color:var(--muted);text-decoration:none}
+.item-src a:hover{color:var(--primary);text-decoration:underline}
+.item-text{font-size:13px;font-weight:600;color:#374151;background:var(--primary-soft);border-radius:8px;padding:6px 10px;margin-bottom:8px;word-break:break-word}
+.item-answer{font-size:13px;line-height:1.65;color:#1f2937}
+.item-answer p{margin:4px 0}
+.item-answer h1,.item-answer h2,.item-answer h3,.item-answer h4{margin:8px 0 4px;font-size:14px}
+.item-answer ul,.item-answer ol{margin:4px 0;padding-left:20px}
+.item-answer li{margin:2px 0}
+.item-answer code{font-family:ui-monospace,SFMono-Regular,Consolas,"Courier New",monospace;font-size:12px;background:rgba(99,102,241,0.08);color:#4f46e5;padding:1px 4px;border-radius:4px}
+.item-answer pre{background:rgba(31,41,55,0.06);padding:8px;border-radius:8px;overflow-x:auto;margin:6px 0}
+.item-answer pre code{background:transparent;color:inherit;padding:0}
+.item-answer blockquote{margin:6px 0;padding:2px 10px;border-left:3px solid #6366f1;color:#4b5563}
+.item-answer a{color:#4f46e5;text-decoration:none}
+.item-answer a:hover{text-decoration:underline}`;
+
+function buildCardsHtml(list) {
+  const opts = exportOpts;
+  return list
+    .map((e) => {
+      const head = [];
+      if (opts.time) head.push('<span class="item-time">' + esc(formatTime(e.time)) + "</span>");
+      // 来源：勾选「来源页面」才显示；「页面地址」决定是否带超链接
+      if (opts.pageTitle && e.pageTitle) {
+        if (opts.pageUrl && e.pageUrl) {
+          head.push(
+            '<span class="item-src">来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+              esc(e.pageTitle) + "</a></span>"
+          );
+        } else {
+          head.push('<span class="item-src">来源：' + esc(e.pageTitle) + "</span>");
+        }
+      }
+      return (
+        '<div class="card">' +
+        '<div class="item-head">' + head.join("") + "</div>" +
+        '<div class="item-text">「' + esc(e.text || "") + "」</div>" +
+        '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>" +
+        "</div>"
+      );
+    })
+    .join("\n");
+}
+
+function exportHtml() {
+  const statusEl = $("exportStatus");
+  const exportStatus = (text, ok) => {
+    statusEl.textContent = text;
+    statusEl.className = "export-status" + (ok ? " ok" : " err");
+  };
+  if (!all.length) {
+    exportStatus("暂无记录可导出。", false);
+    return;
+  }
+  const html =
+    "<!DOCTYPE html>\n" +
+    '<html lang="zh-CN">\n<head>\n' +
+    '<meta charset="UTF-8" />\n' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n' +
+    "<title>划词AI释义 · 历史记录</title>\n" +
+    "<style>\n" + CARD_CSS + "\n</style>\n" +
+    "</head>\n<body>\n" +
+    '<div class="wrap">\n' +
+    '<h1><span class="dot"></span>划词AI释义 · 历史记录</h1>\n' +
+    '<p class="sub">共 ' + all.length + " 条 · 导出时间：" + formatTime(Date.now()) + "</p>\n" +
+    buildCardsHtml(all) +
+    "\n</div>\n</body>\n</html>";
+
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const d = new Date();
+  const name =
+    "划词释义历史_" +
+    d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) +
+    "_" + pad(d.getHours()) + pad(d.getMinutes()) +
+    ".html";
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  exportStatus("已导出 " + all.length + " 条记录为 HTML 文件：" + name, true);
+}
+
 function setStatus(text, ok) {
   const el = $("status");
   el.textContent = text;
@@ -331,6 +428,7 @@ function setStatus(text, ok) {
 // 事件
 $("search").addEventListener("input", render);
 $("export").addEventListener("click", exportMd);
+$("exportHtml").addEventListener("click", exportHtml);
 $("clear").addEventListener("click", clearAll);
 bindExportOpts();
 
