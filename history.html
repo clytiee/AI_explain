@@ -125,6 +125,9 @@
     .item-answer a:hover { text-decoration: underline; }
 
     .empty { text-align: center; color: var(--muted); font-size: 13px; padding: 40px 0; }
+    .export-status { font-size: 13px; min-height: 0; margin: 6px 0 12px; }
+    .export-status.ok { color: #16a34a; }
+    .export-status.err { color: #dc2626; }
     #status { margin-top: 12px; font-size: 13px; min-height: 20px; }
     #status.ok { color: #16a34a; }
     #status.err { color: #dc2626; }
@@ -141,12 +144,14 @@
       <button class="primary" id="export">导出为 MD</button>
       <button class="danger" id="clear">清空记录</button>
     </div>
+    <div id="exportStatus" class="export-status"></div>
 
     <div class="opts">
       <span class="opts-title">导出时包含：</span>
       <label><input type="checkbox" id="optTime" checked />时间</label>
       <label><input type="checkbox" id="optPageTitle" checked />来源页面</label>
       <label><input type="checkbox" id="optPageUrl" checked />页面地址</label>
+      <label><input type="checkbox" id="optCompact" />紧凑模式</label>
     </div>
 
     <div id="list"></div>

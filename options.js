@@ -131,14 +131,20 @@ $("openHistory").addEventListener("click", () => {
 
 $("test").addEventListener("click", async () => {
   const cfg = readForm();
+  // 测试反馈显示在「测试连接」按钮正下方
+  const statusEl = $("testStatus");
+  const testStatus = (text, ok) => {
+    statusEl.textContent = text;
+    statusEl.className = ok ? "ok" : "err";
+  };
   if (!cfg.apiKey) {
-    setStatus("请先填写 API Key。", false);
+    testStatus("请先填写 API Key。", false);
     return;
   }
   const box = $("testBox");
   box.textContent = "请求中…";
   box.classList.add("show");
-  setStatus("", true);
+  testStatus("", true);
 
   try {
     const base = cfg.apiBaseUrl.replace(/\/+$/, "");
@@ -161,16 +167,16 @@ $("test").addEventListener("click", async () => {
     if (!resp.ok) {
       const t = await resp.text().catch(() => "");
       box.textContent = "HTTP " + resp.status + "\n" + t.slice(0, 400);
-      setStatus("连接失败", false);
+      testStatus("连接失败", false);
       return;
     }
     const data = await resp.json();
     const reply = data?.choices?.[0]?.message?.content || "(空响应)";
     box.textContent = reply;
-    setStatus("连接成功 ✓ 已能调用该模型。", true);
+    testStatus("连接成功 ✓ 已能调用该模型。", true);
   } catch (err) {
     box.textContent = "请求出错：" + String(err && err.message ? err.message : err);
-    setStatus("连接失败", false);
+    testStatus("连接失败", false);
   }
 });
 

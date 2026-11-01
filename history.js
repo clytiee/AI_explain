@@ -7,7 +7,7 @@ const EXPORT_OPTS_KEY = "exportOpts"; // 导出选项：是否包含 时间/来�
 const $ = (id) => document.getElementById(id);
 
 let all = []; // 当前全部记录（新→旧）
-let exportOpts = { time: true, pageTitle: true, pageUrl: true }; // 导出时包含的字段
+let exportOpts = { time: true, pageTitle: true, pageUrl: true, compact: false }; // 导出选项
 
 // ---------- markdown → HTML（与浮层渲染一致） ----------
 function esc(s) {
@@ -145,6 +145,7 @@ function load() {
     $("optTime").checked = exportOpts.time;
     $("optPageTitle").checked = exportOpts.pageTitle;
     $("optPageUrl").checked = exportOpts.pageUrl;
+    $("optCompact").checked = exportOpts.compact;
     render();
   });
 }
@@ -156,12 +157,14 @@ function bindExportOpts() {
       time: $("optTime").checked,
       pageTitle: $("optPageTitle").checked,
       pageUrl: $("optPageUrl").checked,
+      compact: $("optCompact").checked,
     };
     chrome.storage.local.set({ [EXPORT_OPTS_KEY]: exportOpts });
   };
   $("optTime").addEventListener("change", persist);
   $("optPageTitle").addEventListener("change", persist);
   $("optPageUrl").addEventListener("change", persist);
+  $("optCompact").addEventListener("change", persist);
 }
 
 // ---------- 渲染 ----------
@@ -256,33 +259,48 @@ function clearAll() {
 }
 
 // ---------- 导出 Markdown ----------
+// 紧凑模式：仅导出时间（放在原文右侧、右对齐），去掉「释义」标题行，原文下直接是释义内容
 function buildMarkdown(list) {
   const opts = exportOpts;
   const lines = [];
-  lines.push("# 划词AI释义 · 历史记录");
+  lines.push("# 划词AI释义 · 历史记录" + (opts.compact ? "（紧凑）" : ""));
   lines.push("");
   lines.push("共 " + list.length + " 条 · 导出时间：" + formatTime(Date.now()));
   list.forEach((e, i) => {
     lines.push("");
-    lines.push("---");
-    lines.push("");
-    lines.push("## " + (i + 1) + ". 「" + (e.text || "") + "」");
-    lines.push("");
-    if (opts.time) lines.push("- **时间**：" + formatTime(e.time));
-    if (opts.pageTitle && e.pageTitle) lines.push("- **来源页面**：" + e.pageTitle);
-    if (opts.pageUrl && e.pageUrl) lines.push("- **页面地址**：" + e.pageUrl);
-    lines.push("");
-    lines.push("**释义：**");
-    lines.push("");
-    lines.push(e.answer || "");
-    lines.push("");
+    if (opts.compact) {
+      // 表格：左列原文，右列时间（右对齐）
+      const text = String(e.text || "").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+      lines.push("| " + (i + 1) + ". 「" + text + "」 | " + formatTime(e.time) + " |");
+      lines.push("| :--- | ---: |");
+      lines.push("");
+      lines.push(e.answer || "");
+      lines.push("");
+    } else {
+      lines.push("---");
+      lines.push("");
+      lines.push("## " + (i + 1) + ". 「" + (e.text || "") + "」");
+      lines.push("");
+      if (opts.time) lines.push("- **时间**：" + formatTime(e.time));
+      if (opts.pageTitle && e.pageTitle) lines.push("- **来源页面**：" + e.pageTitle);
+      if (opts.pageUrl && e.pageUrl) lines.push("- **页面地址**：" + e.pageUrl);
+      lines.push("");
+      lines.push(e.answer || ""); // 去掉「释义：」标题行，释义内容直接跟在其后
+      lines.push("");
+    }
   });
   return lines.join("\n");
 }
 
 function exportMd() {
+  // 导出反馈显示在「导出为 MD」按钮下方
+  const statusEl = $("exportStatus");
+  const exportStatus = (text, ok) => {
+    statusEl.textContent = text;
+    statusEl.className = "export-status" + (ok ? " ok" : " err"); // 保留基础类，绿色/红色由 ok/err 决定
+  };
   if (!all.length) {
-    setStatus("暂无记录可导出。", false);
+    exportStatus("暂无记录可导出。", false);
     return;
   }
   const md = buildMarkdown(all);
@@ -301,7 +319,7 @@ function exportMd() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  setStatus("已导出 " + all.length + " 条记录为 Markdown 文件：" + name, true);
+  exportStatus("已导出 " + all.length + " 条记录为 Markdown 文件：" + name, true);
 }
 
 function setStatus(text, ok) {

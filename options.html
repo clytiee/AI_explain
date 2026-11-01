@@ -23,6 +23,11 @@
       padding: 32px 16px 48px;
     }
     .wrap { max-width: 640px; margin: 0 auto; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .topbar h1 { margin-bottom: 0; }
+    .key-row { display: flex; gap: 10px; align-items: center; }
+    .key-row input { flex: 1 1 auto; min-width: 0; }
+    .key-row button { flex: 0 0 auto; }
     h1 { font-size: 20px; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
     h1 .dot {
       width: 12px; height: 12px; border-radius: 50%;
@@ -86,13 +91,20 @@
     #status { margin-top: 10px; font-size: 13px; min-height: 20px; }
     #status.ok { color: #16a34a; }
     #status.err { color: #dc2626; }
-    .test-box { margin-top: 12px; padding: 10px 12px; background: rgba(31,41,55,0.05); border-radius: 8px; font-size: 13px; white-space: pre-wrap; word-break: break-word; display: none; }
+    .test-feedback { margin-top: 8px; }
+    #testStatus { font-size: 13px; }
+    #testStatus.ok { color: #16a34a; }
+    #testStatus.err { color: #dc2626; }
+    .test-box { margin-top: 8px; padding: 10px 12px; background: rgba(31,41,55,0.05); border-radius: 8px; font-size: 13px; white-space: pre-wrap; word-break: break-word; display: none; }
     .test-box.show { display: block; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1><span class="dot"></span>划词AI释义 · 设置</h1>
+    <div class="topbar">
+      <h1><span class="dot"></span>划词AI释义 · 设置</h1>
+      <button class="ghost" id="openHistory">查看历史记录</button>
+    </div>
     <p class="sub">选择网页文本后自动弹出浮层，调用你配置的大模型 API 对所选文本进行释义。</p>
 
     <div class="card">
@@ -116,7 +128,14 @@
         </div>
       </div>
       <label>API Key</label>
-      <input type="password" id="apiKey" placeholder="sk-…" autocomplete="off" />
+      <div class="key-row">
+        <input type="password" id="apiKey" placeholder="sk-…" autocomplete="off" />
+        <button class="ghost" id="test" type="button">测试连接</button>
+      </div>
+      <div class="test-feedback">
+        <div id="testStatus"></div>
+        <div class="test-box" id="testBox"></div>
+      </div>
       <div class="hint">Key 仅保存在本地浏览器（chrome.storage.local），由后台 Service Worker 使用，不会注入到页面。</div>
       <div class="row">
         <div>
@@ -173,11 +192,8 @@
 
     <div class="btns">
       <button class="primary" id="save">保存设置</button>
-      <button class="ghost" id="test">测试连接</button>
-      <button class="ghost" id="openHistory">查看历史记录</button>
     </div>
     <div id="status"></div>
-    <div class="test-box" id="testBox"></div>
 
     <p class="sub" style="margin-top:18px">
       使用步骤：① 填写 API Key 并保存 → ② 打开任意网页选中一段文字 → ③ 浮层自动弹出并解释。
