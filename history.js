@@ -171,15 +171,25 @@ function bindExportOpts() {
 }
 
 // ---------- 渲染 ----------
-function render() {
+// 按当前搜索框返回筛选后的记录；无关键字时返回全部
+function filteredList() {
   const q = ($("search").value || "").trim().toLowerCase();
-  const list = q
+  return q
     ? all.filter(
         (e) =>
           (e.text || "").toLowerCase().includes(q) ||
-          (e.answer || "").toLowerCase().includes(q)
+          (e.answer || "").toLowerCase().includes(q) ||
+          (e.pageTitle || "").toLowerCase().includes(q) ||
+          (e.pageUrl || "").toLowerCase().includes(q)
       )
     : all;
+}
+
+function render() {
+  const q = ($("search").value || "").trim().toLowerCase();
+  // 有内容时显示搜索框右侧的清空按钮
+  $("searchClear").style.display = q ? "flex" : "none";
+  const list = filteredList();
 
   $("count").textContent = "共 " + list.length + " 条" + (q ? "（已筛选）" : "");
 
@@ -199,15 +209,41 @@ function render() {
     const item = document.createElement("div");
     item.className = "card";
 
-    const src = e.pageUrl
-      ? '<span class="item-src">来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
-        esc(e.pageTitle || safeHost(e.pageUrl)) + "</a></span>"
-      : "";
+    const srcKey = e.pageUrl || e.pageTitle || "";
 
     const head = document.createElement("div");
     head.className = "item-head";
-    head.innerHTML =
-      '<span class="item-time">' + formatTime(e.time) + "</span>" + src;
+
+    const timeEl = document.createElement("span");
+    timeEl.className = "item-time";
+    timeEl.textContent = formatTime(e.time);
+    head.appendChild(timeEl);
+
+    // 来源左侧的搜索图标：点击筛选同来源记录
+    if (srcKey) {
+      const srcBtn = document.createElement("button");
+      srcBtn.type = "button";
+      srcBtn.className = "item-src-search";
+      srcBtn.title = "搜索同来源记录";
+      srcBtn.innerHTML =
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+      srcBtn.addEventListener("click", () => {
+        $("search").value = srcKey;
+        render();
+      });
+      head.appendChild(srcBtn);
+
+      const src = document.createElement("span");
+      src.className = "item-src";
+      if (e.pageUrl) {
+        src.innerHTML =
+          '来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+          esc(e.pageTitle || safeHost(e.pageUrl)) + "</a>";
+      } else {
+        src.textContent = "来源：" + e.pageTitle;
+      }
+      head.appendChild(src);
+    }
 
     const del = document.createElement("button");
     del.className = "item-del";
@@ -302,11 +338,12 @@ function exportMd() {
     statusEl.textContent = text;
     statusEl.className = "export-status" + (ok ? " ok" : " err"); // 保留基础类，绿色/红色由 ok/err 决定
   };
-  if (!all.length) {
+  if (!filteredList().length) {
     exportStatus("暂无记录可导出。", false);
     return;
   }
-  const md = buildMarkdown(all);
+  const list = filteredList();
+  const md = buildMarkdown(list);
   const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -322,7 +359,7 @@ function exportMd() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  exportStatus("已导出 " + all.length + " 条记录为 Markdown 文件：" + name, true);
+  exportStatus("已导出 " + list.length + " 条记录为 Markdown 文件：" + name, true);
 }
 
 // 导出为 HTML：样式复用历史页的原文卡片（含时间/来源/原文/释义），去掉删除按钮
@@ -390,10 +427,11 @@ function exportHtml() {
     statusEl.textContent = text;
     statusEl.className = "export-status" + (ok ? " ok" : " err");
   };
-  if (!all.length) {
+  if (!filteredList().length) {
     exportStatus("暂无记录可导出。", false);
     return;
   }
+  const list = filteredList();
   // 勾选「卡片不跨页拆分」时，额外追加打印规则（不改动现有卡片样式）：
   // 卡片不跨页截断；每张卡片前的透明占位 div 提供 16px 顶部空隙
   // （与左右留白一致、露出页面背景色），并用 break-after:avoid 使其
@@ -411,8 +449,8 @@ function exportHtml() {
     "</head>\n<body>\n" +
     '<div class="wrap">\n' +
     '<h1><span class="dot"></span>划词AI释义 · 历史记录</h1>\n' +
-    '<p class="sub">共 ' + all.length + " 条 · 导出时间：" + formatTime(Date.now()) + "</p>\n" +
-    buildCardsHtml(all) +
+    '<p class="sub">共 ' + list.length + " 条 · 导出时间：" + formatTime(Date.now()) + "</p>\n" +
+    buildCardsHtml(list) +
     "\n</div>\n</body>\n</html>";
 
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -430,7 +468,7 @@ function exportHtml() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  exportStatus("已导出 " + all.length + " 条记录为 HTML 文件：" + name, true);
+  exportStatus("已导出 " + list.length + " 条记录为 HTML 文件：" + name, true);
 }
 
 function setStatus(text, ok) {
@@ -441,6 +479,10 @@ function setStatus(text, ok) {
 
 // 事件
 $("search").addEventListener("input", render);
+$("searchClear").addEventListener("click", () => {
+  $("search").value = "";
+  render();
+});
 $("export").addEventListener("click", exportMd);
 $("exportHtml").addEventListener("click", exportHtml);
 $("clear").addEventListener("click", clearAll);
