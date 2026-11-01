@@ -148,6 +148,13 @@
       </div>
       <div class="switch-row">
         <div>
+          <div class="switch-label">自动保存释义到历史记录</div>
+          <div class="hint">释义成功后写入历史，可在浮层点「历史」查看并导出为 Markdown。</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="autoSaveHistory" checked /><span class="slider"></span></label>
+      </div>
+      <div class="switch-row">
+        <div>
           <div class="switch-label">流式输出（逐字显示）</div>
           <div class="hint">关闭则等待完整结果一次性返回。</div>
         </div>
@@ -164,6 +171,7 @@
     <div class="btns">
       <button class="primary" id="save">保存设置</button>
       <button class="ghost" id="test">测试连接</button>
+      <button class="ghost" id="openHistory">查看历史记录</button>
     </div>
     <div id="status"></div>
     <div class="test-box" id="testBox"></div>

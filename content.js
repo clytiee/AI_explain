@@ -6,7 +6,7 @@
   window.__aiExplainLoaded = true;
 
   const POPUP_ID = "ai-explain-popup";
-  let config = { autoExplain: true, maxLength: 500, stream: true };
+  let config = { autoExplain: true, autoSaveHistory: true, maxLength: 500, stream: true };
   let paused = false;             // 是否暂停划词（点击插件图标切换）
   let currentRange = null;        // 当前选中 Range，用于滚动后重定位
   let currentSignature = "";      // 去重标记
@@ -18,7 +18,8 @@
   let userH = null;               // 用户手动拉高后的高度
   let userMoved = false;          // 用户手动拖走浮层后为 true（滚动/重选不再弹回）
   let lastSelectedText = "";      // 最近一次选中的文本（供复制/重试/汉典链接使用）
-  let statusEl, bodyEl, resultEl, selEl, closeBtn, copyBtn, settingsBtn, retryBtn, header;
+  let statusEl, bodyEl, resultEl, selEl, closeBtn, copyBtn, historyBtn, settingsBtn, retryBtn, header;
+  let savedThisExplain = false; // 本次释义是否已写入历史（防止 result+done 重复保存）
 
   chrome.storage.local.get({ config: null, paused: false }, (res) => {
     if (res.config) config = { ...config, ...res.config };
@@ -136,6 +137,7 @@
   function openPopup(text, rect) {
     ensurePopup();
     userMoved = false; // 换选新文本时重新锚定到选中处
+    savedThisExplain = false; // 新一轮释义可重新写入历史
     lastSelectedText = text;
     // 单个汉字时，在字右侧附带汉典链接
     if (text.length === 1) {
@@ -176,6 +178,7 @@
       '<span class="aie-label">划词释义</span>' +
       '<div class="aie-actions">' +
       '<button class="aie-btn aie-copy" title="复制释义">复制</button>' +
+      '<button class="aie-btn aie-history" title="查看历史记录并导出MD">历史</button>' +
       '<button class="aie-btn aie-settings" title="设置">设置</button>' +
       '<button class="aie-btn aie-close" title="关闭">×</button>' +
       "</div>" +
@@ -194,6 +197,7 @@
 
     closeBtn = root.querySelector(".aie-close");
     copyBtn = root.querySelector(".aie-copy");
+    historyBtn = root.querySelector(".aie-history");
     settingsBtn = root.querySelector(".aie-settings");
     retryBtn = root.querySelector(".aie-retry");
     selEl = root.querySelector(".aie-seltext");
@@ -232,6 +236,7 @@
 
     closeBtn.addEventListener("click", hidePopup);
     copyBtn.addEventListener("click", copyAnswer);
+    historyBtn.addEventListener("click", openHistory);
     settingsBtn.addEventListener("click", openSettings);
     retryBtn.addEventListener("click", () => {
       const sel = lastSelectedText || selEl.textContent.replace(/^「|」$/g, "").trim();
@@ -383,6 +388,7 @@
 
   function startExplain(text) {
     abortPort();
+    savedThisExplain = false;
     rawAnswer = "";
     resultEl.innerHTML = "";
     resultEl.hidden = true;
@@ -428,10 +434,32 @@
     if (rawAnswer.trim()) {
       resultEl.hidden = false;
       render(); // 释义完成时用最终原文重绘一次，确保显示与复制内容一致
+      saveToHistory(); // 释义成功后写入历史记录
     }
     // 内容确定后按实际高度重新定位一次，避免浮层因加载时高度偏小、
     // 而在滚动时才按新高度突然跳位（上方放不下切到下方）
     if (currentRange && !userMoved) reposition(currentRange.getBoundingClientRect());
+  }
+
+  // 释义完成后自动写入历史记录（可在设置里关闭）
+  function saveToHistory() {
+    if (savedThisExplain) return;
+    if (config.autoSaveHistory === false) return;
+    const text =
+      lastSelectedText ||
+      (selEl ? selEl.textContent.replace(/^「|」$/g, "").trim() : "");
+    if (!text || !rawAnswer.trim()) return;
+    savedThisExplain = true;
+    chrome.runtime
+      .sendMessage({
+        type: "history-save",
+        text,
+        answer: rawAnswer,
+        context: buildContext(currentRange) || "",
+        pageUrl: location.href,
+        pageTitle: document.title,
+      })
+      .catch(() => {});
   }
 
   function render() {
@@ -492,6 +520,15 @@
     } catch (e) {
       // 后台不可达时的兜底
       chrome.runtime.openOptionsPage();
+    }
+  }
+
+  // 打开历史记录页：同样交由后台用 chrome.tabs.create 打开扩展页，规避拦截
+  function openHistory() {
+    try {
+      chrome.runtime.sendMessage({ type: "open-history" });
+    } catch (e) {
+      chrome.tabs.create({ url: chrome.runtime.getURL("history.html") });
     }
   }
 

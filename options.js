@@ -26,6 +26,7 @@ let currentConfig = {
   temperature: 0.3,
   stream: true,
   autoExplain: true,
+  autoSaveHistory: true,
   maxLength: 500,
   systemPrompt: DEFAULT_PROMPT,
 };
@@ -41,6 +42,7 @@ function load() {
     $("maxLength").value = currentConfig.maxLength ?? 500;
     $("autoExplain").checked = !!currentConfig.autoExplain;
     $("stream").checked = !!currentConfig.stream;
+    $("autoSaveHistory").checked = currentConfig.autoSaveHistory !== false;
     $("systemPrompt").value = currentConfig.systemPrompt || DEFAULT_PROMPT;
 
     // 按 base url 反推服务商
@@ -63,6 +65,7 @@ function readForm() {
     maxLength: Number($("maxLength").value) || 500,
     autoExplain: $("autoExplain").checked,
     stream: $("stream").checked,
+    autoSaveHistory: $("autoSaveHistory").checked,
     systemPrompt: $("systemPrompt").value,
   };
 }
@@ -117,6 +120,10 @@ $("save").addEventListener("click", () => {
 $("resetPrompt").addEventListener("click", () => {
   $("systemPrompt").value = DEFAULT_PROMPT;
   setStatus("已恢复默认提示词，记得点「保存设置」生效。", true);
+});
+
+$("openHistory").addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("history.html") });
 });
 
 $("test").addEventListener("click", async () => {

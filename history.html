@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>划词AI释义 · 历史记录</title>
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-soft: rgba(99, 102, 241, 0.12);
+      --border: #e5e7eb;
+      --text: #1f2937;
+      --muted: #6b7280;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", Roboto, sans-serif;
+      color: var(--text);
+      background: linear-gradient(160deg, #f6f7ff, #eef2ff 60%, #f5f3ff);
+      min-height: 100vh;
+      padding: 32px 16px 60px;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 20px; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
+    h1 .dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+    }
+    .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+
+    .toolbar {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      background: rgba(255, 255, 255, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      border-radius: 16px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+    }
+    .search {
+      flex: 1 1 220px;
+      padding: 8px 12px;
+      font-size: 13px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+      min-width: 160px;
+    }
+    .search:focus { border-color: var(--primary); }
+    .count { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+    .opts {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      border-radius: 12px;
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+    .opts-title { color: var(--muted); font-size: 12px; }
+    .opts label {
+      display: inline-flex; align-items: center; gap: 5px;
+      color: var(--text); cursor: pointer; user-select: none;
+    }
+    .opts input { accent-color: var(--primary); cursor: pointer; }
+
+    button.primary, button.ghost, button.danger {
+      border: none; cursor: pointer; font-size: 13px;
+      padding: 9px 16px; border-radius: 9px; transition: 0.15s; white-space: nowrap;
+    }
+    button.primary { background: var(--primary); color: #fff; }
+    button.primary:hover { background: #4338ca; }
+    button.ghost { background: var(--primary-soft); color: var(--primary); }
+    button.ghost:hover { background: rgba(99, 102, 241, 0.2); }
+    button.danger { background: rgba(220, 38, 38, 0.1); color: #dc2626; }
+    button.danger:hover { background: rgba(220, 38, 38, 0.18); }
+
+    .card {
+      background: rgba(255, 255, 255, 0.88);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      border-radius: 16px;
+      padding: 16px 18px;
+      margin-bottom: 12px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
+    }
+    .item-head {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .item-time { font-size: 12px; color: var(--muted); flex: 1 1 auto; }
+    .item-src { font-size: 12px; color: var(--muted); }
+    .item-src a { color: var(--muted); text-decoration: none; }
+    .item-src a:hover { color: var(--primary); text-decoration: underline; }
+    .item-del { border: none; background: none; color: #9ca3af; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 6px; }
+    .item-del:hover { color: #dc2626; background: rgba(220,38,38,0.08); }
+
+    .item-text {
+      font-size: 13px; font-weight: 600; color: #374151;
+      background: var(--primary-soft);
+      border-radius: 8px; padding: 6px 10px;
+      margin-bottom: 8px;
+      word-break: break-word;
+    }
+    .item-answer { font-size: 13px; line-height: 1.65; color: #1f2937; }
+    .item-answer p { margin: 4px 0; }
+    .item-answer h1, .item-answer h2, .item-answer h3, .item-answer h4 { margin: 8px 0 4px; font-size: 14px; }
+    .item-answer ul, .item-answer ol { margin: 4px 0; padding-left: 20px; }
+    .item-answer li { margin: 2px 0; }
+    .item-answer code {
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace;
+      font-size: 12px; background: rgba(99,102,241,0.08); color: #4f46e5;
+      padding: 1px 4px; border-radius: 4px;
+    }
+    .item-answer pre { background: rgba(31,41,55,0.06); padding: 8px; border-radius: 8px; overflow-x: auto; margin: 6px 0; }
+    .item-answer pre code { background: transparent; color: inherit; padding: 0; }
+    .item-answer blockquote { margin: 6px 0; padding: 2px 10px; border-left: 3px solid #6366f1; color: #4b5563; }
+    .item-answer a { color: #4f46e5; text-decoration: none; }
+    .item-answer a:hover { text-decoration: underline; }
+
+    .empty { text-align: center; color: var(--muted); font-size: 13px; padding: 40px 0; }
+    #status { margin-top: 12px; font-size: 13px; min-height: 20px; }
+    #status.ok { color: #16a34a; }
+    #status.err { color: #dc2626; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1><span class="dot"></span>划词AI释义 · 历史记录</h1>
+    <p class="sub">这里保存了你每次划词释义的原文与 AI 结果，可搜索、删除，也可一键导出为 Markdown 文件。</p>
+
+    <div class="toolbar">
+      <input type="text" id="search" class="search" placeholder="搜索选中的文本或释义内容…" />
+      <span class="count" id="count"></span>
+      <button class="primary" id="export">导出为 MD</button>
+      <button class="danger" id="clear">清空记录</button>
+    </div>
+
+    <div class="opts">
+      <span class="opts-title">导出时包含：</span>
+      <label><input type="checkbox" id="optTime" checked />时间</label>
+      <label><input type="checkbox" id="optPageTitle" checked />来源页面</label>
+      <label><input type="checkbox" id="optPageUrl" checked />页面地址</label>
+    </div>
+
+    <div id="list"></div>
+    <div id="status"></div>
+  </div>
+
+  <script src="history.js"></script>
+</body>
+</html>

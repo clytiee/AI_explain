@@ -8,6 +8,7 @@ const DEFAULT_CONFIG = {
   temperature: 0.3,
   stream: true,
   autoExplain: true,
+  autoSaveHistory: true,
   maxLength: 500,
   systemPrompt:
     "你是一位博学的中文释义助手。用户选中了网页上的一段文本，请用简体中文进行解释。\n" +
@@ -189,13 +190,81 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
+// ---------- 历史记录存储 ----------
+const HISTORY_KEY = "history";
+const HISTORY_MAX = 1000; // 最多保留条数，超出则丢弃最旧
+
+async function getHistory() {
+  const res = await chrome.storage.local.get({ [HISTORY_KEY]: [] });
+  return Array.isArray(res[HISTORY_KEY]) ? res[HISTORY_KEY] : [];
+}
+
+// 追加一条释义记录（新的在最前），并做条数上限裁剪
+async function saveHistory({ text, answer, context, pageUrl, pageTitle }) {
+  if (!text || !answer || !String(answer).trim()) return null;
+  const list = await getHistory();
+  const entry = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    text: String(text),
+    answer: String(answer),
+    context: context ? String(context) : "",
+    pageUrl: pageUrl ? String(pageUrl) : "",
+    pageTitle: pageTitle ? String(pageTitle) : "",
+    time: Date.now(),
+  };
+  list.unshift(entry);
+  if (list.length > HISTORY_MAX) list.length = HISTORY_MAX;
+  await chrome.storage.local.set({ [HISTORY_KEY]: list });
+  return entry;
+}
+
+async function deleteHistory(id) {
+  const list = await getHistory();
+  const next = list.filter((e) => e.id !== id);
+  await chrome.storage.local.set({ [HISTORY_KEY]: next });
+  return next.length;
+}
+
+async function clearHistory() {
+  await chrome.storage.local.set({ [HISTORY_KEY]: [] });
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "open-options") {
     chrome.runtime.openOptionsPage();
+    return;
+  }
+  if (msg && msg.type === "open-history") {
+    chrome.tabs.create({ url: chrome.runtime.getURL("history.html") });
+    return;
+  }
+  if (msg && msg.type === "history-save") {
+    saveHistory(msg)
+      .then((entry) => sendResponse({ ok: true, entry }))
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message || err) }));
+    return true; // 异步响应
+  }
+  if (msg && msg.type === "history-list") {
+    getHistory()
+      .then((list) => sendResponse({ ok: true, list }))
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message || err) }));
+    return true;
+  }
+  if (msg && msg.type === "history-delete") {
+    deleteHistory(msg.id)
+      .then((count) => sendResponse({ ok: true, count }))
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message || err) }));
+    return true;
+  }
+  if (msg && msg.type === "history-clear") {
+    clearHistory()
+      .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message || err) }));
+    return true;
   }
 });
 
-// 右键菜单：把选中文本快速复制为「问句」发送（备用入口）
+// 右键菜单：复制选中文本 / 打开历史记录
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
@@ -203,11 +272,21 @@ chrome.runtime.onInstalled.addListener(() => {
       title: "复制选中文本到划词AI释义",
       contexts: ["selection"],
     });
+    chrome.contextMenus.create({
+      id: "ai-explain-history",
+      title: "打开划词AI释义 · 历史记录",
+      contexts: ["page", "selection"],
+    });
   });
   setActionState(); // 初始化图标状态（暂停/正常）
 });
 
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== "ai-explain-copy" || !tab?.id) return;
-  await chrome.tabs.sendMessage(tab.id, { type: "explain-selection" }).catch(() => {});
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === "ai-explain-history") {
+    chrome.tabs.create({ url: chrome.runtime.getURL("history.html") });
+    return;
+  }
+  if (info.menuItemId === "ai-explain-copy" && tab?.id) {
+    chrome.tabs.sendMessage(tab.id, { type: "explain-selection" }).catch(() => {});
+  }
 });
