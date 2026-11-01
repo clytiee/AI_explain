@@ -151,14 +151,14 @@ function load() {
 
 // 导出选项变更时即时生效并保存
 function bindExportOpts() {
-  const persist = () =>
-    chrome.storage.local.set({
-      [EXPORT_OPTS_KEY]: {
-        time: $("optTime").checked,
-        pageTitle: $("optPageTitle").checked,
-        pageUrl: $("optPageUrl").checked,
-      },
-    });
+  const persist = () => {
+    exportOpts = {
+      time: $("optTime").checked,
+      pageTitle: $("optPageTitle").checked,
+      pageUrl: $("optPageUrl").checked,
+    };
+    chrome.storage.local.set({ [EXPORT_OPTS_KEY]: exportOpts });
+  };
   $("optTime").addEventListener("change", persist);
   $("optPageTitle").addEventListener("change", persist);
   $("optPageUrl").addEventListener("change", persist);
