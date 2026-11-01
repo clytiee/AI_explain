@@ -7,7 +7,7 @@ const EXPORT_OPTS_KEY = "exportOpts"; // 导出选项：是否包含 时间/来�
 const $ = (id) => document.getElementById(id);
 
 let all = []; // 当前全部记录（新→旧）
-let exportOpts = { time: true, pageTitle: true, pageUrl: true, compact: false }; // 导出选项
+let exportOpts = { time: true, pageTitle: true, pageUrl: true, compact: false, noSplit: false }; // 导出选项
 
 // ---------- markdown → HTML（与浮层渲染一致） ----------
 function esc(s) {
@@ -146,6 +146,7 @@ function load() {
     $("optPageTitle").checked = exportOpts.pageTitle;
     $("optPageUrl").checked = exportOpts.pageUrl;
     $("optCompact").checked = exportOpts.compact;
+    $("optNoSplit").checked = exportOpts.noSplit;
     render();
   });
 }
@@ -158,6 +159,7 @@ function bindExportOpts() {
       pageTitle: $("optPageTitle").checked,
       pageUrl: $("optPageUrl").checked,
       compact: $("optCompact").checked,
+      noSplit: $("optNoSplit").checked,
     };
     chrome.storage.local.set({ [EXPORT_OPTS_KEY]: exportOpts });
   };
@@ -165,6 +167,7 @@ function bindExportOpts() {
   $("optPageTitle").addEventListener("change", persist);
   $("optPageUrl").addEventListener("change", persist);
   $("optCompact").addEventListener("change", persist);
+  $("optNoSplit").addEventListener("change", persist);
 }
 
 // ---------- 渲染 ----------
@@ -351,6 +354,9 @@ h1 .dot{width:12px;height:12px;border-radius:50%;background:linear-gradient(135d
 
 function buildCardsHtml(list) {
   const opts = exportOpts;
+  // 勾选「卡片不跨页拆分」时，每张卡片前插入透明占位 div：
+  // 打印时提供顶部空隙，并随卡片一起分页，不改动卡片自身样式
+  const gap = opts.noSplit ? '<div class="card-gap"></div>' : "";
   return list
     .map((e) => {
       const head = [];
@@ -367,6 +373,7 @@ function buildCardsHtml(list) {
         }
       }
       return (
+        gap +
         '<div class="card">' +
         '<div class="item-head">' + head.join("") + "</div>" +
         '<div class="item-text">「' + esc(e.text || "") + "」</div>" +
@@ -387,13 +394,20 @@ function exportHtml() {
     exportStatus("暂无记录可导出。", false);
     return;
   }
+  // 勾选「卡片不跨页拆分」时，额外追加打印规则（不改动现有卡片样式）：
+  // 卡片不跨页截断；每张卡片前的透明占位 div 提供 16px 顶部空隙
+  // （与左右留白一致、露出页面背景色），并用 break-after:avoid 使其
+  // 与下一张卡片同页，从而在被推到下一页顶部的卡片上方留出空白
+  const noSplitCss = exportOpts.noSplit
+    ? "\n@media print{.card{break-inside:avoid;page-break-inside:avoid}.card-gap{height:16px;break-after:avoid;page-break-after:avoid}}"
+    : "";
   const html =
     "<!DOCTYPE html>\n" +
     '<html lang="zh-CN">\n<head>\n' +
     '<meta charset="UTF-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n' +
     "<title>划词AI释义 · 历史记录</title>\n" +
-    "<style>\n" + CARD_CSS + "\n</style>\n" +
+    "<style>\n" + CARD_CSS + noSplitCss + "\n</style>\n" +
     "</head>\n<body>\n" +
     '<div class="wrap">\n' +
     '<h1><span class="dot"></span>划词AI释义 · 历史记录</h1>\n' +
