@@ -28,6 +28,7 @@ let currentConfig = {
   autoExplain: true,
   autoSaveHistory: true,
   maxLength: 500,
+  historyMax: 1000,
   systemPrompt: DEFAULT_PROMPT,
 };
 
@@ -43,6 +44,7 @@ function load() {
     $("autoExplain").checked = !!currentConfig.autoExplain;
     $("stream").checked = !!currentConfig.stream;
     $("autoSaveHistory").checked = currentConfig.autoSaveHistory !== false;
+    $("historyMax").value = currentConfig.historyMax ?? 1000;
     $("systemPrompt").value = currentConfig.systemPrompt || DEFAULT_PROMPT;
 
     // 按 base url 反推服务商
@@ -66,6 +68,7 @@ function readForm() {
     autoExplain: $("autoExplain").checked,
     stream: $("stream").checked,
     autoSaveHistory: $("autoSaveHistory").checked,
+    historyMax: Number($("historyMax").value) || 1000,
     systemPrompt: $("systemPrompt").value,
   };
 }

@@ -10,6 +10,7 @@ const DEFAULT_CONFIG = {
   autoExplain: true,
   autoSaveHistory: true,
   maxLength: 500,
+  historyMax: 1000,
   systemPrompt:
     "你是一位博学的中文释义助手。用户选中了网页上的一段文本，请用简体中文进行解释。\n" +
     "【输出格式要求，务必严格遵守】\n" +
@@ -192,14 +193,21 @@ chrome.runtime.onConnect.addListener((port) => {
 
 // ---------- 历史记录存储 ----------
 const HISTORY_KEY = "history";
-const HISTORY_MAX = 1000; // 最多保留条数，超出则丢弃最旧
+const HISTORY_DEFAULT_MAX = 1000; // 默认最多保留条数
+
+async function getHistoryMax() {
+  const cfg = await getConfig();
+  const max = Number(cfg.historyMax);
+  if (!Number.isFinite(max) || max < 1) return HISTORY_DEFAULT_MAX;
+  return Math.min(Math.floor(max), 1000000); // 上限 100 万条，防止误填过大
+}
 
 async function getHistory() {
   const res = await chrome.storage.local.get({ [HISTORY_KEY]: [] });
   return Array.isArray(res[HISTORY_KEY]) ? res[HISTORY_KEY] : [];
 }
 
-// 追加一条释义记录（新的在最前），并做条数上限裁剪
+// 追加一条释义记录（新的在最前），并做条数上限裁剪（超出覆盖最早）
 async function saveHistory({ text, answer, context, pageUrl, pageTitle }) {
   if (!text || !answer || !String(answer).trim()) return null;
   const list = await getHistory();
@@ -213,7 +221,8 @@ async function saveHistory({ text, answer, context, pageUrl, pageTitle }) {
     time: Date.now(),
   };
   list.unshift(entry);
-  if (list.length > HISTORY_MAX) list.length = HISTORY_MAX;
+  const max = await getHistoryMax();
+  if (list.length > max) list.length = max;
   await chrome.storage.local.set({ [HISTORY_KEY]: list });
   return entry;
 }
@@ -259,6 +268,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "history-clear") {
     clearHistory()
       .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message || err) }));
+    return true;
+  }
+  if (msg && msg.type === "history-count") {
+    Promise.all([getHistory(), getHistoryMax()])
+      .then(([list, max]) => sendResponse({ ok: true, count: list.length, max }))
       .catch((err) => sendResponse({ ok: false, error: String(err && err.message || err) }));
     return true;
   }

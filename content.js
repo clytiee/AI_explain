@@ -18,7 +18,7 @@
   let userH = null;               // 用户手动拉高后的高度
   let userMoved = false;          // 用户手动拖走浮层后为 true（滚动/重选不再弹回）
   let lastSelectedText = "";      // 最近一次选中的文本（供复制/重试/汉典链接使用）
-  let statusEl, bodyEl, resultEl, selEl, closeBtn, copyBtn, historyBtn, settingsBtn, retryBtn, header;
+  let statusEl, bodyEl, resultEl, selEl, closeBtn, copyBtn, historyBtn, warnEl, settingsBtn, retryBtn, header;
   let savedThisExplain = false; // 本次释义是否已写入历史（防止 result+done 重复保存）
 
   chrome.storage.local.get({ config: null, paused: false }, (res) => {
@@ -165,6 +165,29 @@
       retryBtn.hidden = false;
       retryBtn.textContent = "解释";
     }
+    checkHistoryWarn(); // 历史将满时，在标题提示去导出备份
+  }
+
+  // 历史条数接近上限（剩余 ≤200）时，在浮层标题显示提示，点击可去历史页导出备份
+  function checkHistoryWarn() {
+    if (!warnEl) return;
+    try {
+      chrome.runtime.sendMessage({ type: "history-count" }, (res) => {
+        if (!res || !res.ok || typeof res.count !== "number") {
+          warnEl.hidden = true;
+          return;
+        }
+        const remaining = res.max - res.count;
+        if (remaining <= 200) {
+          warnEl.textContent = "历史将满（剩 " + remaining + " 条）· 导出备份";
+          warnEl.hidden = false;
+        } else {
+          warnEl.hidden = true;
+        }
+      });
+    } catch (e) {
+      warnEl.hidden = true;
+    }
   }
 
   function ensurePopup() {
@@ -176,6 +199,7 @@
     root.innerHTML =
       '<div class="aie-header">' +
       '<span class="aie-label">划词释义</span>' +
+      '<span class="aie-warn" title="历史记录将满，点击去导出备份" hidden></span>' +
       '<div class="aie-actions">' +
       '<button class="aie-btn aie-copy" title="复制释义">复制</button>' +
       '<button class="aie-btn aie-history" title="查看历史记录并导出MD">历史</button>' +
@@ -198,6 +222,7 @@
     closeBtn = root.querySelector(".aie-close");
     copyBtn = root.querySelector(".aie-copy");
     historyBtn = root.querySelector(".aie-history");
+    warnEl = root.querySelector(".aie-warn");
     settingsBtn = root.querySelector(".aie-settings");
     retryBtn = root.querySelector(".aie-retry");
     selEl = root.querySelector(".aie-seltext");
@@ -237,6 +262,7 @@
     closeBtn.addEventListener("click", hidePopup);
     copyBtn.addEventListener("click", copyAnswer);
     historyBtn.addEventListener("click", openHistory);
+    warnEl.addEventListener("click", openHistory); // 历史将满提示：点击去导出备份
     settingsBtn.addEventListener("click", openSettings);
     retryBtn.addEventListener("click", () => {
       const sel = lastSelectedText || selEl.textContent.replace(/^「|」$/g, "").trim();

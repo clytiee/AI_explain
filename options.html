@@ -153,6 +153,9 @@
         </div>
         <label class="switch"><input type="checkbox" id="autoSaveHistory" checked /><span class="slider"></span></label>
       </div>
+      <label>历史记录最大条数（超出自动覆盖最早记录，默认 1000）</label>
+      <input type="number" id="historyMax" min="1" max="1000000" step="100" value="1000" />
+      <div class="hint">记录保存在本地浏览器。条数越大占用的本地存储越多。</div>
       <div class="switch-row">
         <div>
           <div class="switch-label">流式输出（逐字显示）</div>
