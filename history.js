@@ -334,9 +334,9 @@ h1{font-size:20px;margin:0 0 4px;display:flex;align-items:center;gap:10px}
 h1 .dot{width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a855f7)}
 .sub{color:var(--muted);font-size:13px;margin:0 0 20px}
 .card{background:rgba(255,255,255,0.88);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,0.6);border-radius:16px;padding:16px 18px;margin-bottom:12px;box-shadow:0 8px 30px rgba(0,0,0,0.05)}
-.item-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
-.item-time{font-size:12px;color:var(--muted);flex:1 1 auto}
-.item-src{font-size:12px;color:var(--muted)}
+.item-head{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;margin-bottom:8px}
+.item-time{font-size:12px;color:var(--muted);flex:1 0 auto;white-space:nowrap}
+.item-src{font-size:12px;color:var(--muted);flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .item-src a{color:var(--muted);text-decoration:none}
 .item-src a:hover{color:var(--primary);text-decoration:underline}
 .item-text{font-size:13px;font-weight:600;color:#374151;background:var(--primary-soft);border-radius:8px;padding:6px 10px;margin-bottom:8px;word-break:break-word}

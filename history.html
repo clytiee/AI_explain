@@ -95,14 +95,17 @@
       box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
     }
     .item-head {
-      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
       margin-bottom: 8px;
     }
-    .item-time { font-size: 12px; color: var(--muted); flex: 1 1 auto; }
-    .item-src { font-size: 12px; color: var(--muted); }
+    .item-time { font-size: 12px; color: var(--muted); flex: 1 0 auto; white-space: nowrap; }
+    .item-src {
+      font-size: 12px; color: var(--muted); flex: 0 1 auto;
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
     .item-src a { color: var(--muted); text-decoration: none; }
     .item-src a:hover { color: var(--primary); text-decoration: underline; }
-    .item-del { border: none; background: none; color: #9ca3af; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 6px; }
+    .item-del { border: none; background: none; color: #9ca3af; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 6px; flex: 0 0 auto; }
     .item-del:hover { color: #dc2626; background: rgba(220,38,38,0.08); }
 
     .item-text {
