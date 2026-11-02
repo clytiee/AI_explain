@@ -9,6 +9,7 @@ const SOURCE_TEXTS_KEY = "sourceTexts"; // 来源主文：{ srcKey: 文本 }
 const SHOW_MAIN_KEY = "showMainText"; // 是否显示来源主文
 const AGG_KEY = "aggregate"; // 是否按来源聚合
 const SETTINGS_HIDDEN_KEY = "settingsHidden"; // 是否隐藏所有设置
+const AGG_ORDER_KEY = "aggOrder"; // 聚合模式下每来源记录的手工排序（{ srcKey: [记录id] }）
 
 const $ = (id) => document.getElementById(id);
 
@@ -20,6 +21,7 @@ let mainModalKey = ""; // 当前正在编辑主文的 srcKey
 let showMainText = true; // 列表是否显示来源主文
 let aggregate = false; // 是否按来源聚合
 let settingsHidden = false; // 是否隐藏所有设置
+let aggOrder = {}; // 聚合模式下每来源记录的手工排序
 
 // 显示设置默认值
 const DEFAULT_DISPLAY = {
@@ -423,6 +425,7 @@ function load() {
       [SHOW_MAIN_KEY]: true,
       [AGG_KEY]: false,
       [SETTINGS_HIDDEN_KEY]: false,
+      [AGG_ORDER_KEY]: {},
     },
     (res) => {
       all = Array.isArray(res[HISTORY_KEY]) ? res[HISTORY_KEY] : [];
@@ -448,6 +451,7 @@ function load() {
       syncAggBtn();
       settingsHidden = res[SETTINGS_HIDDEN_KEY] === true;
       syncSettingsBtn();
+      aggOrder = (res[AGG_ORDER_KEY] && typeof res[AGG_ORDER_KEY] === "object") ? res[AGG_ORDER_KEY] : {};
 
       render();
     }
@@ -747,13 +751,38 @@ function groupRecords(list) {
   }
   const entries = [...groups.entries()];
   // 组内按时间升序；组间按最晚时间降序
-  entries.forEach(([, recs]) => recs.sort((a, b) => a.time - b.time));
+  entries.forEach(([key, recs]) => {
+    recs.sort((a, b) => a.time - b.time);
+    const srcKey = key.startsWith("__no_") ? "" : key;
+    const order = aggOrder[srcKey];
+    if (order && Array.isArray(order) && order.length) {
+      const byId = new Map(recs.map((r) => [r.id, r]));
+      const seen = new Set();
+      const ordered = [];
+      for (const id of order) {
+        const r = byId.get(id);
+        if (r && !seen.has(id)) { ordered.push(r); seen.add(id); }
+      }
+      for (const r of recs) if (!seen.has(r.id)) ordered.push(r);
+      recs.splice(0, recs.length, ...ordered);
+    }
+  });
   entries.sort((a, b) => {
     const ma = Math.max(...a[1].map((r) => r.time));
     const mb = Math.max(...b[1].map((r) => r.time));
     return mb - ma;
   });
   return entries;
+}
+
+// 聚合模式下移动某条记录在其来源内的位置，并持久化手工排序
+function moveInOrder(srcKey, index, dir, recs) {
+  const target = index + dir;
+  if (target < 0 || target >= recs.length) return;
+  [recs[index], recs[target]] = [recs[target], recs[index]];
+  aggOrder[srcKey] = recs.map((r) => r.id);
+  chrome.storage.local.set({ [AGG_ORDER_KEY]: aggOrder });
+  render();
 }
 
 function renderAggregated(list) {
@@ -831,7 +860,8 @@ function renderAggregated(list) {
     // 多个原文排列在一个卡片里
     const items = document.createElement("div");
     items.className = "agg-items";
-    for (const e of recs) {
+    for (let idx = 0; idx < recs.length; idx++) {
+      const e = recs[idx];
       const gi = document.createElement("div");
       gi.className = "agg-item";
 
@@ -841,6 +871,20 @@ function renderAggregated(list) {
       t.className = "agg-item-time";
       t.textContent = formatTime(e.time);
       giHead.appendChild(t);
+      const up = document.createElement("button");
+      up.className = "item-move";
+      up.title = "上移";
+      up.textContent = "↑";
+      up.disabled = idx === 0;
+      up.addEventListener("click", () => moveInOrder(srcKey, idx, -1, recs));
+      giHead.appendChild(up);
+      const down = document.createElement("button");
+      down.className = "item-move";
+      down.title = "下移";
+      down.textContent = "↓";
+      down.disabled = idx === recs.length - 1;
+      down.addEventListener("click", () => moveInOrder(srcKey, idx, 1, recs));
+      giHead.appendChild(down);
       const del = document.createElement("button");
       del.className = "item-del";
       del.title = "删除这条";
