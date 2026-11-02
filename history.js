@@ -5,12 +5,19 @@ const HISTORY_KEY = "history";
 const EXPORT_OPTS_KEY = "exportOpts"; // 导出选项：是否包含 时间/来源页面/页面地址
 const DISPLAY_OPTS_KEY = "displayOpts"; // 显示设置：页面背景色/原文背景色/字体颜色/字体大小/字体
 const DISPLAY_PRESETS_KEY = "displayPresets"; // 已保存的显示样式组列表
+const SOURCE_TEXTS_KEY = "sourceTexts"; // 来源主文：{ srcKey: 文本 }
+const SHOW_MAIN_KEY = "showMainText"; // 是否显示来源主文
+const AGG_KEY = "aggregate"; // 是否按来源聚合
 
 const $ = (id) => document.getElementById(id);
 
 let all = []; // 当前全部记录（新→旧）
 let exportOpts = { time: true, pageTitle: true, pageUrl: true, compact: false, noSplit: false }; // 导出选项
 let displayPresets = []; // [{ name, opts }] 已保存的样式组
+let sourceTexts = {}; // { srcKey: 主文 } 按来源保存的主文
+let mainModalKey = ""; // 当前正在编辑主文的 srcKey
+let showMainText = true; // 列表是否显示来源主文
+let aggregate = false; // 是否按来源聚合
 
 // 显示设置默认值
 const DEFAULT_DISPLAY = {
@@ -346,6 +353,9 @@ function load() {
       [EXPORT_OPTS_KEY]: {},
       [DISPLAY_OPTS_KEY]: {},
       [DISPLAY_PRESETS_KEY]: [],
+      [SOURCE_TEXTS_KEY]: {},
+      [SHOW_MAIN_KEY]: true,
+      [AGG_KEY]: false,
     },
     (res) => {
       all = Array.isArray(res[HISTORY_KEY]) ? res[HISTORY_KEY] : [];
@@ -362,6 +372,12 @@ function load() {
 
       displayPresets = Array.isArray(res[DISPLAY_PRESETS_KEY]) ? res[DISPLAY_PRESETS_KEY] : [];
       refreshPresetSelect();
+
+      sourceTexts = (res[SOURCE_TEXTS_KEY] && typeof res[SOURCE_TEXTS_KEY] === "object") ? res[SOURCE_TEXTS_KEY] : {};
+      showMainText = res[SHOW_MAIN_KEY] !== false;
+      syncMainBtn();
+      aggregate = res[AGG_KEY] === true;
+      syncAggBtn();
 
       render();
     }
@@ -462,7 +478,10 @@ function render() {
   $("searchClear").style.display = q ? "flex" : "none";
   const list = filteredList();
 
-  $("count").textContent = "共 " + list.length + " 条" + (q ? "（已筛选）" : "");
+  $("count").textContent =
+    "共 " + list.length + " 条" +
+    (aggregate ? " / " + new Set(list.map((e) => e.pageUrl || e.pageTitle || e.id)).size + " 组" : "") +
+    (q ? "（已筛选）" : "");
 
   const box = $("list");
   if (!list.length) {
@@ -475,70 +494,155 @@ function render() {
     return;
   }
 
+  if (aggregate) {
+    renderAggregated(list);
+    return;
+  }
+
   box.innerHTML = "";
   for (const e of list) {
-    const item = document.createElement("div");
-    item.className = "card";
-
-    const srcKey = e.pageUrl || e.pageTitle || "";
-
-    const head = document.createElement("div");
-    head.className = "item-head";
-
-    const timeEl = document.createElement("span");
-    timeEl.className = "item-time";
-    timeEl.textContent = formatTime(e.time);
-    head.appendChild(timeEl);
-
-    // 来源左侧的搜索图标：点击筛选同来源记录
-    if (srcKey) {
-      const srcBtn = document.createElement("button");
-      srcBtn.type = "button";
-      srcBtn.className = "item-src-search";
-      srcBtn.title = "搜索同来源记录";
-      srcBtn.innerHTML =
-        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
-      srcBtn.addEventListener("click", () => {
-        $("search").value = srcKey;
-        render();
-      });
-      head.appendChild(srcBtn);
-
-      const src = document.createElement("span");
-      src.className = "item-src";
-      if (e.pageUrl) {
-        src.innerHTML =
-          '来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
-          esc(e.pageTitle || safeHost(e.pageUrl)) + "</a>";
-      } else {
-        src.textContent = "来源：" + e.pageTitle;
-      }
-      head.appendChild(src);
-    }
-
-    const del = document.createElement("button");
-    del.className = "item-del";
-    del.title = "删除这条";
-    del.textContent = "✕";
-    del.addEventListener("click", () => removeOne(e.id));
-    head.appendChild(del);
-
-    const textEl = document.createElement("div");
-    textEl.className = "item-text";
-    textEl.textContent = "「" + (e.text || "") + "」";
-
-    const ans = document.createElement("div");
-    ans.className = "item-answer";
-    ans.innerHTML = renderMarkdown(e.answer || "");
-
-    item.appendChild(head);
-    item.appendChild(textEl);
-    item.appendChild(ans);
-    box.appendChild(item);
+    box.appendChild(buildItemCard(e));
   }
 }
 
+// 普通卡片（非聚合）：第一行 时间 + 来源按钮 + 来源 + 删除
+function buildItemCard(e) {
+  const item = document.createElement("div");
+  item.className = "card";
+
+  const srcKey = e.pageUrl || e.pageTitle || "";
+
+  const head = document.createElement("div");
+  head.className = "item-head";
+
+  const timeEl = document.createElement("span");
+  timeEl.className = "item-time";
+  timeEl.textContent = formatTime(e.time);
+  head.appendChild(timeEl);
+
+  // 来源左侧的搜索图标：点击筛选同来源记录
+  if (srcKey) {
+    const srcBtn = document.createElement("button");
+    srcBtn.type = "button";
+    srcBtn.className = "item-src-search";
+    srcBtn.title = "搜索同来源记录";
+    srcBtn.innerHTML =
+      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+    srcBtn.addEventListener("click", () => {
+      $("search").value = srcKey;
+      render();
+    });
+    head.appendChild(srcBtn);
+
+    // 来源主文按钮：编辑/查看该来源的主文
+    const mainBtn = document.createElement("button");
+    mainBtn.type = "button";
+    mainBtn.className = "item-main-btn";
+    mainBtn.title = "来源主文：为这个来源填写一段主文";
+    mainBtn.textContent = "主文";
+    mainBtn.addEventListener("click", () => openMainModal(srcKey));
+    head.appendChild(mainBtn);
+
+    const src = document.createElement("span");
+    src.className = "item-src";
+    if (e.pageUrl) {
+      src.innerHTML =
+        '来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+        esc(e.pageTitle || safeHost(e.pageUrl)) + "</a>";
+    } else {
+      src.textContent = "来源：" + e.pageTitle;
+    }
+    head.appendChild(src);
+  }
+
+  const del = document.createElement("button");
+  del.className = "item-del";
+  del.title = "删除这条";
+  del.textContent = "✕";
+  del.addEventListener("click", () => removeOne(e.id));
+  head.appendChild(del);
+
+  const textEl = document.createElement("div");
+  textEl.className = "item-text";
+  textEl.textContent = "「" + (e.text || "") + "」";
+
+  const ans = document.createElement("div");
+  ans.className = "item-answer";
+  ans.innerHTML = renderMarkdown(e.answer || "");
+
+  item.appendChild(head);
+
+  // 同源主文：该来源保存过主文时，同源所有卡片都显示（受“显示/隐藏主文”开关控制）
+  if (showMainText && sourceTexts[srcKey]) {
+    const main = document.createElement("div");
+    main.className = "item-main";
+    main.textContent = sourceTexts[srcKey];
+    item.appendChild(main);
+  }
+
+  item.appendChild(textEl);
+  item.appendChild(ans);
+  return item;
+}
+
 // ---------- 删除 / 清空 ----------
+// ---------- 来源主文弹窗 ----------
+function openMainModal(srcKey) {
+  mainModalKey = srcKey;
+  $("mainModalSrc").textContent = "来源：" + srcKey;
+  $("mainModalText").value = sourceTexts[srcKey] || "";
+  $("mainModal").hidden = false;
+  $("mainModalText").focus();
+}
+function closeMainModal() {
+  $("mainModal").hidden = true;
+  mainModalKey = "";
+}
+function saveMainText() {
+  const v = $("mainModalText").value.trim();
+  if (v) sourceTexts[mainModalKey] = v;
+  else delete sourceTexts[mainModalKey];
+  chrome.storage.local.set({ [SOURCE_TEXTS_KEY]: sourceTexts }, () => {
+    closeMainModal();
+    render();
+  });
+}
+function clearMainText() {
+  if (!sourceTexts[mainModalKey]) {
+    closeMainModal();
+    return;
+  }
+  if (!window.confirm("确定清除该来源的主文吗？")) return;
+  delete sourceTexts[mainModalKey];
+  chrome.storage.local.set({ [SOURCE_TEXTS_KEY]: sourceTexts }, () => {
+    closeMainModal();
+    render();
+  });
+}
+function bindMainModal() {
+  $("mainModalSave").addEventListener("click", saveMainText);
+  $("mainModalCancel").addEventListener("click", closeMainModal);
+  $("mainModalClose").addEventListener("click", closeMainModal);
+  $("mainModalClear").addEventListener("click", clearMainText);
+  $("mainModal").addEventListener("click", (ev) => {
+    if (ev.target === $("mainModal")) closeMainModal(); // 点击遮罩关闭
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && !$("mainModal").hidden) closeMainModal();
+  });
+}
+
+function syncMainBtn() {
+  $("toggleMain").textContent = showMainText ? "隐藏主文" : "显示主文";
+}
+
+function toggleMain() {
+  showMainText = !showMainText;
+  chrome.storage.local.set({ [SHOW_MAIN_KEY]: showMainText });
+  syncMainBtn();
+  render();
+}
+
 function removeOne(id) {
   chrome.runtime.sendMessage({ type: "history-delete", id }, (res) => {
     if (res && res.ok) {
@@ -549,6 +653,147 @@ function removeOne(id) {
       setStatus("删除失败：" + ((res && res.error) || "未知错误"), false);
     }
   });
+}
+
+// ---------- 按来源聚合 ----------
+function groupRecords(list) {
+  // 按来源分组：pageUrl 优先，其次 pageTitle，均无则按记录自身成组
+  const groups = new Map();
+  for (const e of list) {
+    const key = e.pageUrl || e.pageTitle || "__no_" + e.id;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
+  const entries = [...groups.entries()];
+  // 组内按时间升序；组间按最晚时间降序
+  entries.forEach(([, recs]) => recs.sort((a, b) => a.time - b.time));
+  entries.sort((a, b) => {
+    const ma = Math.max(...a[1].map((r) => r.time));
+    const mb = Math.max(...b[1].map((r) => r.time));
+    return mb - ma;
+  });
+  return entries;
+}
+
+function renderAggregated(list) {
+  const box = $("list");
+  box.innerHTML = "";
+  const entries = groupRecords(list);
+
+  for (const [key, recs] of entries) {
+    // 来源只有一条记录时，保持普通卡片样式（时间 + 来源按钮 + 关闭）
+    if (recs.length === 1) {
+      box.appendChild(buildItemCard(recs[0]));
+      continue;
+    }
+    const srcKey = key.startsWith("__no_") ? "" : key;
+    const item = document.createElement("div");
+    item.className = "card card-agg";
+
+    // 头部：左记录数，右来源及按钮
+    const head = document.createElement("div");
+    head.className = "item-head item-head-agg";
+
+    const countEl = document.createElement("span");
+    countEl.className = "item-count";
+    countEl.textContent = recs.length + " 条";
+    head.appendChild(countEl);
+
+    if (srcKey) {
+      const group = document.createElement("span");
+      group.className = "item-src-group";
+
+      const srcBtn = document.createElement("button");
+      srcBtn.type = "button";
+      srcBtn.className = "item-src-search";
+      srcBtn.title = "搜索同来源记录";
+      srcBtn.innerHTML =
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+      srcBtn.addEventListener("click", () => {
+        $("search").value = srcKey;
+        render();
+      });
+      group.appendChild(srcBtn);
+
+      const mainBtn = document.createElement("button");
+      mainBtn.type = "button";
+      mainBtn.className = "item-main-btn";
+      mainBtn.title = "来源主文：为这个来源填写一段主文";
+      mainBtn.textContent = "主文";
+      mainBtn.addEventListener("click", () => openMainModal(srcKey));
+      group.appendChild(mainBtn);
+
+      const src = document.createElement("span");
+      src.className = "item-src";
+      const first = recs[0];
+      if (first.pageUrl) {
+        src.innerHTML =
+          '来源：<a href="' + esc(first.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+          esc(first.pageTitle || safeHost(first.pageUrl)) + "</a>";
+      } else {
+        src.textContent = "来源：" + first.pageTitle;
+      }
+      group.appendChild(src);
+
+      head.appendChild(group);
+    }
+    item.appendChild(head);
+
+    // 主文只显示一次
+    if (showMainText && sourceTexts[srcKey]) {
+      const main = document.createElement("div");
+      main.className = "item-main";
+      main.textContent = sourceTexts[srcKey];
+      item.appendChild(main);
+    }
+
+    // 多个原文排列在一个卡片里
+    const items = document.createElement("div");
+    items.className = "agg-items";
+    for (const e of recs) {
+      const gi = document.createElement("div");
+      gi.className = "agg-item";
+
+      const giHead = document.createElement("div");
+      giHead.className = "agg-item-head";
+      const t = document.createElement("span");
+      t.className = "agg-item-time";
+      t.textContent = formatTime(e.time);
+      giHead.appendChild(t);
+      const del = document.createElement("button");
+      del.className = "item-del";
+      del.title = "删除这条";
+      del.textContent = "✕";
+      del.addEventListener("click", () => removeOne(e.id));
+      giHead.appendChild(del);
+      gi.appendChild(giHead);
+
+      const textEl = document.createElement("div");
+      textEl.className = "item-text";
+      textEl.textContent = "「" + (e.text || "") + "」";
+      gi.appendChild(textEl);
+
+      const ans = document.createElement("div");
+      ans.className = "item-answer";
+      ans.innerHTML = renderMarkdown(e.answer || "");
+      gi.appendChild(ans);
+
+      items.appendChild(gi);
+    }
+    item.appendChild(items);
+    box.appendChild(item);
+  }
+}
+
+function syncAggBtn() {
+  $("toggleAgg").classList.toggle("active", aggregate);
+}
+
+function toggleAgg() {
+  aggregate = !aggregate;
+  chrome.storage.local.set({ [AGG_KEY]: aggregate });
+  syncAggBtn();
+  render();
 }
 
 function clearAll() {
@@ -602,6 +847,39 @@ function buildMarkdown(list) {
   return lines.join("\n");
 }
 
+// 聚合模式的 Markdown：每个来源一节，主文只出现一次，多条原文并列
+function buildMarkdownAggregated(list) {
+  const opts = exportOpts;
+  const lines = [];
+  lines.push("# 划词AI释义 · 历史记录（按来源聚合）");
+  lines.push("");
+  lines.push("共 " + list.length + " 条 / " + groupRecords(list).length + " 组 · 导出时间：" + formatTime(Date.now()));
+  groupRecords(list).forEach(([key, recs], g) => {
+    const srcKey = key.startsWith("__no_") ? "" : key;
+    const first = recs[0];
+    const title = first.pageTitle || first.pageUrl || "未命名来源";
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+    lines.push("## " + (g + 1) + ". " + title);
+    lines.push("");
+    if (opts.pageUrl && first.pageUrl) lines.push("- **页面地址**：" + first.pageUrl);
+    if (showMainText && sourceTexts[srcKey]) {
+      lines.push("");
+      lines.push(sourceTexts[srcKey]);
+      lines.push("");
+    }
+    recs.forEach((e, j) => {
+      lines.push("### " + (j + 1) + ". 「" + (e.text || "") + "」");
+      if (opts.time) lines.push("- **时间**：" + formatTime(e.time));
+      lines.push("");
+      lines.push(e.answer || "");
+      lines.push("");
+    });
+  });
+  return lines.join("\n");
+}
+
 function exportMd() {
   // 导出反馈显示在「导出为 MD」按钮下方
   const statusEl = $("exportStatus");
@@ -614,7 +892,7 @@ function exportMd() {
     return;
   }
   const list = filteredList();
-  const md = buildMarkdown(list);
+  const md = aggregate ? buildMarkdownAggregated(list) : buildMarkdown(list);
   const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -643,6 +921,9 @@ h1 .dot{width:12px;height:12px;border-radius:50%;background:linear-gradient(135d
 .sub{color:var(--muted);font-size:13px;margin:0 0 20px}
 .card{background:rgba(255,255,255,0.88);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,0.6);border-radius:16px;padding:16px 18px;margin-bottom:12px;box-shadow:0 8px 30px rgba(0,0,0,0.05)}
 .item-head{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;margin-bottom:8px}
+.item-head-agg{justify-content:space-between}
+.item-count{font-size:12px;color:var(--muted);flex:0 0 auto;white-space:nowrap}
+.item-src-group{display:inline-flex;align-items:center;gap:10px;flex:0 1 auto;min-width:0}
 .item-time{font-size:12px;color:var(--muted);flex:1 0 auto;white-space:nowrap}
 .item-src{font-size:12px;color:var(--muted);flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .item-src a{color:var(--muted);text-decoration:none}
@@ -658,34 +939,95 @@ h1 .dot{width:12px;height:12px;border-radius:50%;background:linear-gradient(135d
 .item-answer pre code{background:transparent;color:inherit;padding:0}
 .item-answer blockquote{margin:6px 0;padding:2px 10px;border-left:3px solid #6366f1;color:#4b5563}
 .item-answer a{color:#4f46e5;text-decoration:none}
-.item-answer a:hover{text-decoration:underline}`;
+.item-answer a:hover{text-decoration:underline}
+.item-main{font-size:13px;color:#1f2937;background:rgba(99,102,241,0.07);border-left:3px solid #6366f1;border-radius:6px;padding:6px 10px;margin-bottom:8px;white-space:pre-wrap;word-break:break-word}
+.item-main-label{font-size:11px;color:var(--muted);margin-bottom:2px}
+.agg-items{display:flex;flex-direction:column;gap:10px}
+.agg-item{border-top:1px dashed rgba(99,102,241,0.28);padding-top:10px}
+.agg-item:first-child{border-top:none;padding-top:0}
+.agg-item-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.agg-item-time{font-size:12px;color:var(--muted)}`;
 
 function buildCardsHtml(list) {
   const opts = exportOpts;
   // 勾选「卡片不跨页拆分」时，每张卡片前插入透明占位 div：
   // 打印时提供顶部空隙，并随卡片一起分页，不改动卡片自身样式
   const gap = opts.noSplit ? '<div class="card-gap"></div>' : "";
-  return list
-    .map((e) => {
+  return list.map((e) => gap + cardHtml(e)).join("\n");
+}
+
+// 普通单条卡片的 HTML（与页面非聚合卡片一致：时间 + 来源）
+function cardHtml(e) {
+  const opts = exportOpts;
+  const head = [];
+  if (opts.time) head.push('<span class="item-time">' + esc(formatTime(e.time)) + "</span>");
+  // 来源：勾选「来源页面」才显示；「页面地址」决定是否带超链接
+  if (opts.pageTitle && e.pageTitle) {
+    if (opts.pageUrl && e.pageUrl) {
+      head.push(
+        '<span class="item-src">来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+          esc(e.pageTitle) + "</a></span>"
+      );
+    } else {
+      head.push('<span class="item-src">来源：' + esc(e.pageTitle) + "</span>");
+    }
+  }
+  return (
+    '<div class="card">' +
+    '<div class="item-head">' + head.join("") + "</div>" +
+    '<div class="item-text">「' + esc(e.text || "") + "」</div>" +
+    '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>" +
+    "</div>"
+  );
+}
+
+// 聚合模式的 HTML：一个来源一张卡片，主文只出现一次，多条原文并列
+function buildCardsHtmlAggregated(list) {
+  const opts = exportOpts;
+  const gap = opts.noSplit ? '<div class="card-gap"></div>' : "";
+  return groupRecords(list)
+    .map(([key, recs]) => {
+      // 来源只有一条记录时，保持普通卡片样式
+      if (recs.length === 1) return gap + cardHtml(recs[0]);
+      const srcKey = key.startsWith("__no_") ? "" : key;
+      const first = recs[0];
       const head = [];
-      if (opts.time) head.push('<span class="item-time">' + esc(formatTime(e.time)) + "</span>");
+      head.push('<span class="item-count">' + recs.length + " 条</span>");
       // 来源：勾选「来源页面」才显示；「页面地址」决定是否带超链接
-      if (opts.pageTitle && e.pageTitle) {
-        if (opts.pageUrl && e.pageUrl) {
+      if (opts.pageTitle && first.pageTitle) {
+        if (opts.pageUrl && first.pageUrl) {
           head.push(
-            '<span class="item-src">来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
-              esc(e.pageTitle) + "</a></span>"
+            '<span class="item-src-group"><span class="item-src">来源：<a href="' + esc(first.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+              esc(first.pageTitle) + "</a></span></span>"
           );
         } else {
-          head.push('<span class="item-src">来源：' + esc(e.pageTitle) + "</span>");
+          head.push('<span class="item-src-group"><span class="item-src">来源：' + esc(first.pageTitle) + "</span></span>");
         }
       }
+      const main =
+        showMainText && sourceTexts[srcKey]
+          ? '<div class="item-main">' + esc(sourceTexts[srcKey]) + "</div>"
+          : "";
+      const items = recs
+        .map((e) => {
+          const itemHead = opts.time
+            ? '<div class="agg-item-head"><span class="agg-item-time">' + esc(formatTime(e.time)) + "</span></div>"
+            : "";
+          return (
+            '<div class="agg-item">' +
+            itemHead +
+            '<div class="item-text">「' + esc(e.text || "") + "」</div>" +
+            '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>" +
+            "</div>"
+          );
+        })
+        .join("\n");
       return (
         gap +
-        '<div class="card">' +
-        '<div class="item-head">' + head.join("") + "</div>" +
-        '<div class="item-text">「' + esc(e.text || "") + "」</div>" +
-        '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>" +
+        '<div class="card card-agg">' +
+        '<div class="item-head item-head-agg">' + head.join("") + "</div>" +
+        main +
+        '<div class="agg-items">' + items + "</div>" +
         "</div>"
       );
     })
@@ -723,7 +1065,7 @@ function exportHtml() {
     '<div class="wrap">\n' +
     '<h1><span class="dot"></span>划词AI释义 · 历史记录</h1>\n' +
     '<p class="sub">共 ' + list.length + " 条 · 导出时间：" + formatTime(Date.now()) + "</p>\n" +
-    buildCardsHtml(list) +
+    (aggregate ? buildCardsHtmlAggregated(list) : buildCardsHtml(list)) +
     "\n</div>\n</body>\n</html>";
 
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -767,5 +1109,8 @@ bindDisplay();
 $("saveDisplay").addEventListener("click", saveDisplay);
 $("presetSelect").addEventListener("change", applyPreset);
 $("deletePreset").addEventListener("click", deletePreset);
+$("toggleMain").addEventListener("click", toggleMain);
+$("toggleAgg").addEventListener("click", toggleAgg);
+bindMainModal();
 
 document.addEventListener("DOMContentLoaded", load);

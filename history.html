@@ -93,6 +93,12 @@
       font-size: 12px; padding: 4px 10px; border-radius: 7px; cursor: pointer;
     }
     .opts .reset-btn:hover { color: var(--primary); border-color: var(--primary); }
+    .opts .reset-btn.active { color: var(--primary); border-color: var(--primary); background: rgba(99, 102, 241, 0.08); }
+    .agg-items { display: flex; flex-direction: column; gap: 10px; }
+    .agg-item { border-top: 1px dashed rgba(99, 102, 241, 0.28); padding-top: 10px; }
+    .agg-item:first-child { border-top: none; padding-top: 0; }
+    .agg-item-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .agg-item-time { font-size: 12px; color: var(--muted); flex: 1 1 auto; white-space: nowrap; }
     .bg-swatches { display: inline-flex; gap: 4px; align-items: center; }
     .bg-swatch {
       width: 16px; height: 16px; padding: 0; border-radius: 4px; cursor: pointer;
@@ -145,6 +151,23 @@
       color: var(--muted); border-radius: 5px; flex: 0 0 auto;
     }
     .item-src-search:hover { color: var(--primary); background: rgba(99, 102, 241, 0.1); }
+    .item-head-agg { justify-content: space-between; }
+    .item-count { font-size: 12px; color: var(--muted); flex: 0 0 auto; white-space: nowrap; }
+    .item-src-group { display: inline-flex; align-items: center; gap: 10px; flex: 0 1 auto; min-width: 0; }
+    .item-main-btn {
+      border: 1px solid var(--border); background: #fff; color: var(--muted);
+      font-size: 12px; padding: 1px 6px; border-radius: 5px; cursor: pointer;
+      flex: 0 0 auto; line-height: 16px;
+    }
+    .item-main-btn:hover { color: var(--primary); border-color: var(--primary); }
+    .item-main {
+      font-size: 13px; color: var(--font-color);
+      background: rgba(99, 102, 241, 0.07);
+      border-left: 3px solid #6366f1;
+      border-radius: 6px; padding: 6px 10px; margin-bottom: 8px;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .item-main-label { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
     .item-del { border: none; background: none; color: #9ca3af; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 6px; flex: 0 0 auto; }
     .item-del:hover { color: #dc2626; background: rgba(220,38,38,0.08); }
 
@@ -178,6 +201,35 @@
     #status { margin-top: 12px; font-size: 13px; min-height: 20px; }
     #status.ok { color: #16a34a; }
     #status.err { color: #dc2626; }
+
+    /* 来源主文编辑弹窗 */
+    .modal-mask {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(15, 23, 42, 0.35);
+      align-items: center; justify-content: center;
+      padding: 20px;
+      display: none;
+    }
+    .modal-mask:not([hidden]) { display: flex; }
+    .modal {
+      width: min(560px, 100%);
+      background: #fff; border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+      padding: 16px 18px;
+    }
+    .modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .modal-title { font-weight: 600; color: var(--text); font-size: 15px; }
+    .modal-src { font-size: 12px; color: var(--muted); flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .modal-close { border: none; background: none; color: #9ca3af; font-size: 14px; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+    .modal-close:hover { color: #dc2626; background: rgba(220, 38, 38, 0.08); }
+    .modal textarea {
+      width: 100%; min-height: 140px; resize: vertical;
+      border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+      font-size: 14px; line-height: 1.6; color: var(--text);
+      box-sizing: border-box;
+    }
+    .modal textarea:focus { outline: none; border-color: var(--primary); }
+    .modal-foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+    .modal-spacer { flex: 1; }
   </style>
 </head>
 <body>
@@ -230,10 +282,29 @@
       <label>样式组 <select id="presetSelect"></select></label>
       <button type="button" id="deletePreset" class="reset-btn">删除</button>
       <button type="button" id="resetDisplay" class="reset-btn">恢复默认</button>
+      <button type="button" id="toggleMain" class="reset-btn">隐藏主文</button>
+      <button type="button" id="toggleAgg" class="reset-btn">按来源聚合</button>
     </div>
 
     <div id="list"></div>
     <div id="status"></div>
+  </div>
+
+  <div class="modal-mask" id="mainModal" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <span class="modal-title">来源主文</span>
+        <span class="modal-src" id="mainModalSrc"></span>
+        <button type="button" class="modal-close" id="mainModalClose" title="关闭">✕</button>
+      </div>
+      <textarea id="mainModalText" spellcheck="false" placeholder="为这个来源填写一段主文，保存后该来源的所有历史记录都会显示它…"></textarea>
+      <div class="modal-foot">
+        <button type="button" class="danger" id="mainModalClear">清除</button>
+        <span class="modal-spacer"></span>
+        <button type="button" class="ghost" id="mainModalCancel">取消</button>
+        <button type="button" class="primary" id="mainModalSave">保存</button>
+      </div>
+    </div>
   </div>
 
   <script src="history.js"></script>
