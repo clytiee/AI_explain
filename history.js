@@ -729,6 +729,9 @@ function toggleMain() {
 }
 
 function removeOne(id) {
+  const rec = all.find((e) => e.id === id);
+  const hint = rec && rec.text ? rec.text.slice(0, 24) : "该条记录";
+  if (!window.confirm("确定删除这条记录吗？「" + hint + "…」")) return;
   chrome.runtime.sendMessage({ type: "history-delete", id }, (res) => {
     if (res && res.ok) {
       all = all.filter((e) => e.id !== id);
