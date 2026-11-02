@@ -8,6 +8,7 @@ const DISPLAY_PRESETS_KEY = "displayPresets"; // 已保存的显示样式组列�
 const SOURCE_TEXTS_KEY = "sourceTexts"; // 来源主文：{ srcKey: 文本 }
 const SHOW_MAIN_KEY = "showMainText"; // 是否显示来源主文
 const AGG_KEY = "aggregate"; // 是否按来源聚合
+const SETTINGS_HIDDEN_KEY = "settingsHidden"; // 是否隐藏所有设置
 
 const $ = (id) => document.getElementById(id);
 
@@ -18,6 +19,7 @@ let sourceTexts = {}; // { srcKey: 主文 } 按来源保存的主文
 let mainModalKey = ""; // 当前正在编辑主文的 srcKey
 let showMainText = true; // 列表是否显示来源主文
 let aggregate = false; // 是否按来源聚合
+let settingsHidden = false; // 是否隐藏所有设置
 
 // 显示设置默认值
 const DEFAULT_DISPLAY = {
@@ -356,6 +358,7 @@ function load() {
       [SOURCE_TEXTS_KEY]: {},
       [SHOW_MAIN_KEY]: true,
       [AGG_KEY]: false,
+      [SETTINGS_HIDDEN_KEY]: false,
     },
     (res) => {
       all = Array.isArray(res[HISTORY_KEY]) ? res[HISTORY_KEY] : [];
@@ -378,6 +381,8 @@ function load() {
       syncMainBtn();
       aggregate = res[AGG_KEY] === true;
       syncAggBtn();
+      settingsHidden = res[SETTINGS_HIDDEN_KEY] === true;
+      syncSettingsBtn();
 
       render();
     }
@@ -796,6 +801,17 @@ function toggleAgg() {
   render();
 }
 
+function syncSettingsBtn() {
+  $("toggleSettings").textContent = settingsHidden ? "显示设置" : "隐藏设置";
+  $("settingsArea").style.display = settingsHidden ? "none" : "";
+}
+
+function toggleSettings() {
+  settingsHidden = !settingsHidden;
+  chrome.storage.local.set({ [SETTINGS_HIDDEN_KEY]: settingsHidden });
+  syncSettingsBtn();
+}
+
 function clearAll() {
   if (!all.length) {
     setStatus("当前没有可清空的记录。", true);
@@ -1111,6 +1127,7 @@ $("presetSelect").addEventListener("change", applyPreset);
 $("deletePreset").addEventListener("click", deletePreset);
 $("toggleMain").addEventListener("click", toggleMain);
 $("toggleAgg").addEventListener("click", toggleAgg);
+$("toggleSettings").addEventListener("click", toggleSettings);
 bindMainModal();
 
 document.addEventListener("DOMContentLoaded", load);

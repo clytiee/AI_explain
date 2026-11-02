@@ -30,6 +30,11 @@
     }
     .wrap { max-width: 720px; margin: 0 auto; }
     h1 { font-size: 20px; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
+    h1 .clear-link {
+      margin-left: auto; font-size: 12px; font-weight: 400; color: var(--muted);
+      border: none; background: none; cursor: pointer; padding: 3px 8px; border-radius: 6px;
+    }
+    h1 .clear-link:hover { color: #dc2626; background: rgba(220, 38, 38, 0.08); }
     h1 .dot {
       width: 12px; height: 12px; border-radius: 50%;
       background: linear-gradient(135deg, #6366f1, #a855f7);
@@ -178,7 +183,7 @@
       margin-bottom: 8px;
       word-break: break-word;
     }
-    .item-answer { font-size: var(--font-size); line-height: 1.65; color: var(--font-color); }
+    .item-answer { font-size: var(--font-size); line-height: 1.2; color: var(--font-color); }
     .item-answer p { margin: 4px 0; }
     .item-answer h1, .item-answer h2, .item-answer h3, .item-answer h4 { margin: 8px 0 4px; font-size: 14px; }
     .item-answer ul, .item-answer ol { margin: 4px 0; padding-left: 20px; }
@@ -234,7 +239,7 @@
 </head>
 <body>
   <div class="wrap">
-    <h1><span class="dot"></span>划词AI释义 · 历史记录</h1>
+    <h1><span class="dot"></span>划词AI释义 · 历史记录<button type="button" class="clear-link" id="clear">清空记录</button></h1>
     <p class="sub">这里保存了你每次划词释义的原文与 AI 结果，可搜索、删除，也可一键导出为 HTML 或 Markdown 文件。</p>
 
     <div class="toolbar">
@@ -243,12 +248,13 @@
         <button type="button" class="search-clear" id="searchClear" title="清空搜索" aria-label="清空搜索">✕</button>
       </div>
       <span class="count" id="count"></span>
-      <button class="primary" id="exportHtml">导出为 HTML</button>
-      <button class="ghost" id="export">导出为 MD</button>
-      <button class="danger" id="clear">清空记录</button>
+      <button class="primary" id="exportHtml">导出 HTML</button>
+      <button class="ghost" id="export">导出 MD</button>
+      <button class="ghost" id="toggleSettings">隐藏设置</button>
     </div>
     <div id="exportStatus" class="export-status"></div>
 
+    <div id="settingsArea">
     <div class="opts">
       <span class="opts-title">导出时包含：</span>
       <label><input type="checkbox" id="optTime" checked />时间</label>
@@ -284,6 +290,7 @@
       <button type="button" id="resetDisplay" class="reset-btn">恢复默认</button>
       <button type="button" id="toggleMain" class="reset-btn">隐藏主文</button>
       <button type="button" id="toggleAgg" class="reset-btn">按来源聚合</button>
+    </div>
     </div>
 
     <div id="list"></div>
