@@ -3,11 +3,128 @@
 
 const HISTORY_KEY = "history";
 const EXPORT_OPTS_KEY = "exportOpts"; // 导出选项：是否包含 时间/来源页面/页面地址
+const DISPLAY_OPTS_KEY = "displayOpts"; // 显示设置：页面背景色/原文背景色/字体颜色/字体大小/字体
+const DISPLAY_PRESETS_KEY = "displayPresets"; // 已保存的显示样式组列表
 
 const $ = (id) => document.getElementById(id);
 
 let all = []; // 当前全部记录（新→旧）
 let exportOpts = { time: true, pageTitle: true, pageUrl: true, compact: false, noSplit: false }; // 导出选项
+let displayPresets = []; // [{ name, opts }] 已保存的样式组
+
+// 显示设置默认值
+const DEFAULT_DISPLAY = {
+  pageBg: "#eef2ff",
+  quoteBg: "#e0e7ff",
+  fontColor: "#1f2937",
+  fontSize: 13,
+  fontFamily:
+    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif",
+};
+let displayOpts = { ...DEFAULT_DISPLAY };
+
+// 字体预设选项（value 为空表示自定义）
+const FONT_OPTIONS = [
+  { label: "默认", value: DEFAULT_DISPLAY.fontFamily },
+  { label: "无衬线", value: "sans-serif" },
+  { label: "衬线", value: "Georgia, 'Times New Roman', serif" },
+  { label: "微软雅黑", value: "'Microsoft YaHei', sans-serif" },
+  { label: "宋体", value: "'SimSun', serif" },
+  { label: "楷体", value: "'KaiTi', 'KaiTi_GB2312', serif" },
+  { label: "等宽", value: "ui-monospace, SFMono-Regular, Consolas, 'Courier New', monospace" },
+  { label: "自定义…", value: "" },
+];
+
+// 若字体与某个预设一致返回其值，否则返回 ""（表示自定义）
+function matchFontPreset(font) {
+  const f = (font || "").trim();
+  const hit = FONT_OPTIONS.find((o) => o.value && o.value.trim() === f);
+  return hit ? hit.value : "";
+}
+
+// 字体名用于 CSS font-family：含空格且未加引号的单字体名需加引号；
+// 含逗号的字体栈（如下拉建议）原样保留
+function toFontFamilyCss(v) {
+  v = (v || "").trim();
+  if (!v) return v;
+  if (!v.includes(",") && !/^['"]/.test(v) && v.includes(" ")) return '"' + v + '"';
+  return v;
+}
+
+// 推荐页面背景色（浅色、柔和、适合阅读）
+const BG_RECOMMEND = [
+  "#f6f7ff", // 极浅蓝紫
+  "#eef2ff", // 浅蓝
+  "#f0f9ff", // 极浅天蓝
+  "#ecfdf5", // 极浅薄荷绿
+  "#fefce8", // 极浅米黄
+  "#fff7ed", // 极浅暖橙
+  "#fdf2f8", // 极浅粉
+  "#f5f5f4", // 中性暖灰
+  "#f8fafc", // 冷白浅灰
+  "#ffffff", // 纯白
+];
+
+// 推荐原文背景色（比页面背景更深，突出被选原文）
+const QUOTE_RECOMMEND = [
+  "#e0e7ff", // 浅靛（默认）
+  "#dbeafe", // 浅蓝
+  "#c7d2fe", // 靛蓝
+  "#bae6fd", // 天蓝
+  "#bbf7d0", // 薄荷绿
+  "#fef08a", // 米黄
+  "#fed7aa", // 暖橙
+  "#fbcfe8", // 粉
+  "#e2e8f0", // 冷灰
+  "#ddd6fe", // 浅紫
+];
+
+function initColorSwatches(containerId, inputId, colors) {
+  const box = $(containerId);
+  colors.forEach((c) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "bg-swatch";
+    b.style.background = c;
+    b.title = c;
+    b.addEventListener("click", () => {
+      $(inputId).value = c;
+      $(inputId).dispatchEvent(new Event("input", { bubbles: true })); // 复用已有持久化逻辑
+    });
+    box.appendChild(b);
+  });
+}
+
+// 让色块高亮与当前对应取色器值一致的那块
+function syncColorSwatches(containerId, inputId) {
+  const cur = ($(inputId).value || "").toLowerCase();
+  document.querySelectorAll("#" + containerId + " .bg-swatch").forEach((b) => {
+    b.classList.toggle("active", b.title.toLowerCase() === cur);
+  });
+}
+
+// 将显示设置写入 CSS 变量
+function applyDisplay(d) {
+  const s = document.documentElement.style;
+  s.setProperty("--page-bg", d.pageBg);
+  s.setProperty("--quote-bg", d.quoteBg);
+  s.setProperty("--font-color", d.fontColor);
+  s.setProperty("--font-size", d.fontSize + "px");
+  s.setProperty("--font-family", toFontFamilyCss(d.fontFamily));
+  $("optFontSizeVal").textContent = d.fontSize;
+}
+
+// 导出 HTML 时，把显示设置写成覆盖规则追加到样式末尾
+function buildDisplayCss(d) {
+  const ff = toFontFamilyCss(d.fontFamily);
+  return (
+    "body{background:" + d.pageBg + ";color:" + d.fontColor +
+      ";font-family:" + ff + ";font-size:" + d.fontSize + "px}" +
+    ".item-text{background:" + d.quoteBg + ";color:" + d.fontColor +
+      ";font-size:" + d.fontSize + "px}" +
+    ".item-answer{color:" + d.fontColor + ";font-size:" + d.fontSize + "px}"
+  );
+}
 
 // ---------- markdown → HTML（与浮层渲染一致） ----------
 function esc(s) {
@@ -138,17 +255,117 @@ function safeHost(u) {
 }
 
 // ---------- 加载 ----------
-function load() {
-  chrome.storage.local.get({ [HISTORY_KEY]: [], [EXPORT_OPTS_KEY]: {} }, (res) => {
-    all = Array.isArray(res[HISTORY_KEY]) ? res[HISTORY_KEY] : [];
-    exportOpts = { ...exportOpts, ...(res[EXPORT_OPTS_KEY] || {}) };
-    $("optTime").checked = exportOpts.time;
-    $("optPageTitle").checked = exportOpts.pageTitle;
-    $("optPageUrl").checked = exportOpts.pageUrl;
-    $("optCompact").checked = exportOpts.compact;
-    $("optNoSplit").checked = exportOpts.noSplit;
-    render();
+function initFontSelect() {
+  const sel = $("optFontPreset");
+  FONT_OPTIONS.forEach((f) => {
+    const o = document.createElement("option");
+    o.value = f.value;
+    o.textContent = f.label;
+    sel.appendChild(o);
   });
+}
+
+// 按当前 displayOpts 同步各显示控件
+function syncDisplayControls() {
+  $("optPageBg").value = displayOpts.pageBg;
+  $("optQuoteBg").value = displayOpts.quoteBg;
+  $("optFontColor").value = displayOpts.fontColor;
+  $("optFontSize").value = displayOpts.fontSize;
+  const storedFont = displayOpts.fontFamily || DEFAULT_DISPLAY.fontFamily;
+  if (matchFontPreset(storedFont)) {
+    $("optFontPreset").value = matchFontPreset(storedFont);
+    $("optFontFamily").value = "";
+  } else {
+    $("optFontPreset").value = ""; // 自定义…
+    $("optFontFamily").value = storedFont;
+  }
+  syncColorSwatches("bgSwatches", "optPageBg");
+  syncColorSwatches("quoteSwatches", "optQuoteBg");
+}
+
+function refreshPresetSelect() {
+  const sel = $("presetSelect");
+  sel.innerHTML = "";
+  const none = document.createElement("option");
+  none.value = "";
+  none.textContent = "（选择样式组）";
+  sel.appendChild(none);
+  displayPresets.forEach((p, i) => {
+    const o = document.createElement("option");
+    o.value = String(i);
+    o.textContent = p.name;
+    sel.appendChild(o);
+  });
+  sel.value = ""; // 默认回到「（选择样式组）」
+}
+
+// 保存当前显示设置为命名样式组
+function saveDisplay() {
+  const name = window.prompt("为当前显示设置命名，保存为样式组：", "");
+  if (name === null) return; // 取消
+  const n = name.trim();
+  if (!n) {
+    window.alert("名称不能为空。");
+    return;
+  }
+  displayPresets.push({ name: n, opts: { ...displayOpts } });
+  chrome.storage.local.set({ [DISPLAY_PRESETS_KEY]: displayPresets });
+  refreshPresetSelect();
+  $("presetSelect").value = String(displayPresets.length - 1);
+}
+
+// 套用选中的样式组
+function applyPreset() {
+  const v = $("presetSelect").value;
+  if (v === "") return; // 未选择
+  const i = Number(v);
+  if (!Number.isInteger(i) || i < 0 || i >= displayPresets.length) return;
+  displayOpts = { ...DEFAULT_DISPLAY, ...displayPresets[i].opts };
+  syncDisplayControls();
+  applyDisplay(displayOpts);
+  chrome.storage.local.set({ [DISPLAY_OPTS_KEY]: displayOpts });
+}
+
+// 删除选中的样式组
+function deletePreset() {
+  const i = Number($("presetSelect").value);
+  if (!Number.isInteger(i) || i < 0 || i >= displayPresets.length) {
+    window.alert("请先选择一个样式组。");
+    return;
+  }
+  if (!window.confirm("确定删除样式组「" + displayPresets[i].name + "」吗？")) return;
+  displayPresets.splice(i, 1);
+  chrome.storage.local.set({ [DISPLAY_PRESETS_KEY]: displayPresets });
+  refreshPresetSelect();
+}
+
+function load() {
+  chrome.storage.local.get(
+    {
+      [HISTORY_KEY]: [],
+      [EXPORT_OPTS_KEY]: {},
+      [DISPLAY_OPTS_KEY]: {},
+      [DISPLAY_PRESETS_KEY]: [],
+    },
+    (res) => {
+      all = Array.isArray(res[HISTORY_KEY]) ? res[HISTORY_KEY] : [];
+      exportOpts = { ...exportOpts, ...(res[EXPORT_OPTS_KEY] || {}) };
+      $("optTime").checked = exportOpts.time;
+      $("optPageTitle").checked = exportOpts.pageTitle;
+      $("optPageUrl").checked = exportOpts.pageUrl;
+      $("optCompact").checked = exportOpts.compact;
+      $("optNoSplit").checked = exportOpts.noSplit;
+
+      displayOpts = { ...DEFAULT_DISPLAY, ...(res[DISPLAY_OPTS_KEY] || {}) };
+      syncDisplayControls();
+      applyDisplay(displayOpts);
+
+      displayPresets = Array.isArray(res[DISPLAY_PRESETS_KEY]) ? res[DISPLAY_PRESETS_KEY] : [];
+      refreshPresetSelect();
+
+      render();
+    }
+  );
 }
 
 // 导出选项变更时即时生效并保存
@@ -168,6 +385,60 @@ function bindExportOpts() {
   $("optPageUrl").addEventListener("change", persist);
   $("optCompact").addEventListener("change", persist);
   $("optNoSplit").addEventListener("change", persist);
+}
+
+// 显示设置变更时即时生效并保存
+function bindDisplay() {
+  const persist = () => {
+    displayOpts = {
+      pageBg: $("optPageBg").value,
+      quoteBg: $("optQuoteBg").value,
+      fontColor: $("optFontColor").value,
+      fontSize: Number($("optFontSize").value),
+      fontFamily: $("optFontFamily").value,
+    };
+    applyDisplay(displayOpts);
+    $("presetSelect").value = ""; // 手动调整后，样式组下拉不再指向任何已存组
+    syncColorSwatches("bgSwatches", "optPageBg");
+    syncColorSwatches("quoteSwatches", "optQuoteBg");
+    chrome.storage.local.set({ [DISPLAY_OPTS_KEY]: displayOpts });
+  };
+  $("optPageBg").addEventListener("input", persist);
+  $("optQuoteBg").addEventListener("input", persist);
+  $("optFontColor").addEventListener("input", persist);
+  $("optFontSize").addEventListener("input", persist);
+  // 字体：预设下拉 + 自定义输入框
+  $("optFontPreset").addEventListener("change", () => {
+    const v = $("optFontPreset").value;
+    if (v === "") {
+      // 选中「自定义…」：保持现有字体，聚焦输入框让用户手输
+      $("optFontFamily").focus();
+      return;
+    }
+    $("optFontFamily").value = "";
+    displayOpts.fontFamily = v;
+    persist();
+  });
+  $("optFontFamily").addEventListener("input", () => {
+    const raw = $("optFontFamily").value.trim();
+    displayOpts.fontFamily = raw || DEFAULT_DISPLAY.fontFamily;
+    $("optFontPreset").value = matchFontPreset(displayOpts.fontFamily);
+    persist();
+  });
+  // 恢复默认显示样式（带确认）
+  $("resetDisplay").addEventListener("click", () => {
+    if (!window.confirm("确定恢复默认显示样式吗？当前自定义设置将被清除。")) return;
+    displayOpts = { ...DEFAULT_DISPLAY };
+    $("optPageBg").value = displayOpts.pageBg;
+    $("optQuoteBg").value = displayOpts.quoteBg;
+    $("optFontColor").value = displayOpts.fontColor;
+    $("optFontSize").value = displayOpts.fontSize;
+    $("optFontPreset").value = FONT_OPTIONS[0].value; // 默认
+    $("optFontFamily").value = "";
+    $("presetSelect").value = ""; // 恢复默认后不再指向已存样式组
+    applyDisplay(displayOpts);
+    chrome.storage.local.set({ [DISPLAY_OPTS_KEY]: displayOpts });
+  });
 }
 
 // ---------- 渲染 ----------
@@ -439,13 +710,15 @@ function exportHtml() {
   const noSplitCss = exportOpts.noSplit
     ? "\n@media print{.card{break-inside:avoid;page-break-inside:avoid}.card-gap{height:16px;break-after:avoid;page-break-after:avoid}}"
     : "";
+  // 将显示设置（页面背景/原文背景/字体颜色/字号/字体）写入导出样式
+  const displayCss = buildDisplayCss(displayOpts);
   const html =
     "<!DOCTYPE html>\n" +
     '<html lang="zh-CN">\n<head>\n' +
     '<meta charset="UTF-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n' +
     "<title>划词AI释义 · 历史记录</title>\n" +
-    "<style>\n" + CARD_CSS + noSplitCss + "\n</style>\n" +
+    "<style>\n" + CARD_CSS + noSplitCss + displayCss + "\n</style>\n" +
     "</head>\n<body>\n" +
     '<div class="wrap">\n' +
     '<h1><span class="dot"></span>划词AI释义 · 历史记录</h1>\n' +
@@ -486,6 +759,13 @@ $("searchClear").addEventListener("click", () => {
 $("export").addEventListener("click", exportMd);
 $("exportHtml").addEventListener("click", exportHtml);
 $("clear").addEventListener("click", clearAll);
+initFontSelect();
+initColorSwatches("bgSwatches", "optPageBg", BG_RECOMMEND);
+initColorSwatches("quoteSwatches", "optQuoteBg", QUOTE_RECOMMEND);
 bindExportOpts();
+bindDisplay();
+$("saveDisplay").addEventListener("click", saveDisplay);
+$("presetSelect").addEventListener("change", applyPreset);
+$("deletePreset").addEventListener("click", deletePreset);
 
 document.addEventListener("DOMContentLoaded", load);
