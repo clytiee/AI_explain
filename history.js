@@ -25,8 +25,10 @@ let settingsHidden = false; // 是否隐藏所有设置
 const DEFAULT_DISPLAY = {
   pageBg: "#eef2ff",
   quoteBg: "#e0e7ff",
+  mainBg: "#f4f4fe",
   fontColor: "#1f2937",
   fontSize: 13,
+  lineHeight: 1.2,
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif",
 };
@@ -60,32 +62,83 @@ function toFontFamilyCss(v) {
   return v;
 }
 
-// 推荐页面背景色（浅色、柔和、适合阅读）
-const BG_RECOMMEND = [
-  "#f6f7ff", // 极浅蓝紫
-  "#eef2ff", // 浅蓝
-  "#f0f9ff", // 极浅天蓝
-  "#ecfdf5", // 极浅薄荷绿
-  "#fefce8", // 极浅米黄
-  "#fff7ed", // 极浅暖橙
-  "#fdf2f8", // 极浅粉
-  "#f5f5f4", // 中性暖灰
-  "#f8fafc", // 冷白浅灰
-  "#ffffff", // 纯白
+// 当前有效字体：优先预设下拉，否则自定义输入框，最后回退默认
+function currentFontFamily() {
+  const p = $("optFontPreset").value;
+  if (p) return p;
+  const c = $("optFontFamily").value.trim();
+  return c || DEFAULT_DISPLAY.fontFamily;
+}
+
+// 把 hex 颜色按 HSL 降低明度 amt（0~1），返回同色相的加深色
+function darken(hex, amt) {
+  hex = (hex || "#fff").replace("#", "");
+  if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+  const r = parseInt(hex.slice(0, 2), 16) / 255;
+  const g = parseInt(hex.slice(2, 4), 16) / 255;
+  const b = parseInt(hex.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+    else if (max === g) h = ((b - r) / d + 2) * 60;
+    else h = ((r - g) / d + 4) * 60;
+  }
+  const L = Math.max(0.04, l - amt);
+  const c = (1 - Math.abs(2 * L - 1)) * s;
+  const hh = ((h % 360) + 360) % 360 / 60;
+  const x = c * (1 - Math.abs((hh % 2) - 1));
+  let r1 = 0, g1 = 0, b1 = 0;
+  if (hh < 1) { r1 = c; g1 = x; }
+  else if (hh < 2) { r1 = x; g1 = c; }
+  else if (hh < 3) { g1 = c; b1 = x; }
+  else if (hh < 4) { g1 = x; b1 = c; }
+  else if (hh < 5) { r1 = x; b1 = c; }
+  else { r1 = c; b1 = x; }
+  const m = L - c / 2;
+  const toHex = (n) =>
+    Math.round(Math.min(255, Math.max(0, (n + m) * 255)))
+      .toString(16).padStart(2, "0");
+  return "#" + toHex(r1) + toHex(g1) + toHex(b1);
+}
+
+// 三个背景色共用的推荐调色盘（25 色，浅色柔和、适合背景；按色相环排列）
+const BG_PALETTE = [
+  "#fef2f2", // 极浅红（红）
+  "#fff7ed", // 极浅暖橙（橙）
+  "#ffedd5", // 浅暖橙（橙）
+  "#fefce8", // 极浅米黄（黄）
+  "#fef9c3", // 浅黄（黄）
+  "#f0fdf4", // 极浅绿（绿）
+  "#ecfdf5", // 极浅薄荷（绿/青）
+  "#d1fae5", // 薄荷（青）
+  "#f0f9ff", // 极浅天蓝（青/蓝）
+  "#e0f2fe", // 浅天蓝（蓝）
+  "#eff6ff", // 极浅蓝（蓝）
+  "#eef2ff", // 浅蓝靛（蓝/靛）
+  "#e0e7ff", // 浅靛（靛）
+  "#ddd6fe", // 靛（靛/紫）
+  "#ede9fe", // 极浅薰衣草（紫）
+  "#f3e8ff", // 浅薰衣草（紫）
+  "#fae8ff", // 浅粉紫（紫/品红）
+  "#fdf2f8", // 极浅粉（品红）
+  "#fce7f3", // 浅粉（品红）
+  "#faf5ff", // 极浅紫白（紫白）
+  "#f5f5f4", // 中性暖灰（灰）
+  "#f1f5f9", // 浅灰蓝（灰蓝）
+  "#f8fafc", // 冷白浅灰（灰）
+  "#fafafa", // 暖白（白）
+  "#ffffff", // 纯白（白）
 ];
 
-// 推荐原文背景色（比页面背景更深，突出被选原文）
-const QUOTE_RECOMMEND = [
-  "#e0e7ff", // 浅靛（默认）
-  "#dbeafe", // 浅蓝
-  "#c7d2fe", // 靛蓝
-  "#bae6fd", // 天蓝
-  "#bbf7d0", // 薄荷绿
-  "#fef08a", // 米黄
-  "#fed7aa", // 暖橙
-  "#fbcfe8", // 粉
-  "#e2e8f0", // 冷灰
-  "#ddd6fe", // 浅紫
+// 推荐字体颜色（深色、适合正文阅读）
+const FONT_RECOMMEND = [
+  "#000000", // 纯黑
+  "#374151", // 深灰
+  "#1e3a8a", // 深蓝
 ];
 
 function initColorSwatches(containerId, inputId, colors) {
@@ -117,10 +170,14 @@ function applyDisplay(d) {
   const s = document.documentElement.style;
   s.setProperty("--page-bg", d.pageBg);
   s.setProperty("--quote-bg", d.quoteBg);
+  s.setProperty("--main-bg", d.mainBg);
+  s.setProperty("--main-border", darken(d.mainBg, 0.12));
   s.setProperty("--font-color", d.fontColor);
   s.setProperty("--font-size", d.fontSize + "px");
   s.setProperty("--font-family", toFontFamilyCss(d.fontFamily));
+  s.setProperty("--line-height", d.lineHeight);
   $("optFontSizeVal").textContent = d.fontSize;
+  $("optLineHeightVal").textContent = d.lineHeight;
 }
 
 // 导出 HTML 时，把显示设置写成覆盖规则追加到样式末尾
@@ -131,7 +188,10 @@ function buildDisplayCss(d) {
       ";font-family:" + ff + ";font-size:" + d.fontSize + "px}" +
     ".item-text{background:" + d.quoteBg + ";color:" + d.fontColor +
       ";font-size:" + d.fontSize + "px}" +
-    ".item-answer{color:" + d.fontColor + ";font-size:" + d.fontSize + "px}"
+    ".item-answer{color:" + d.fontColor + ";font-size:" + d.fontSize +
+      "px;line-height:" + d.lineHeight + "}" +
+    ".item-main{background:" + d.mainBg + ";color:" + d.fontColor +
+      ";border-left:3px solid " + darken(d.mainBg, 0.12) + "}"
   );
 }
 
@@ -278,8 +338,10 @@ function initFontSelect() {
 function syncDisplayControls() {
   $("optPageBg").value = displayOpts.pageBg;
   $("optQuoteBg").value = displayOpts.quoteBg;
+  $("optMainBg").value = displayOpts.mainBg;
   $("optFontColor").value = displayOpts.fontColor;
   $("optFontSize").value = displayOpts.fontSize;
+  $("optLineHeight").value = displayOpts.lineHeight;
   const storedFont = displayOpts.fontFamily || DEFAULT_DISPLAY.fontFamily;
   if (matchFontPreset(storedFont)) {
     $("optFontPreset").value = matchFontPreset(storedFont);
@@ -290,6 +352,8 @@ function syncDisplayControls() {
   }
   syncColorSwatches("bgSwatches", "optPageBg");
   syncColorSwatches("quoteSwatches", "optQuoteBg");
+  syncColorSwatches("mainSwatches", "optMainBg");
+  syncColorSwatches("fontSwatches", "optFontColor");
 }
 
 function refreshPresetSelect() {
@@ -414,36 +478,39 @@ function bindDisplay() {
     displayOpts = {
       pageBg: $("optPageBg").value,
       quoteBg: $("optQuoteBg").value,
+      mainBg: $("optMainBg").value,
       fontColor: $("optFontColor").value,
       fontSize: Number($("optFontSize").value),
-      fontFamily: $("optFontFamily").value,
+      lineHeight: Number($("optLineHeight").value),
+      fontFamily: currentFontFamily(),
     };
     applyDisplay(displayOpts);
     $("presetSelect").value = ""; // 手动调整后，样式组下拉不再指向任何已存组
     syncColorSwatches("bgSwatches", "optPageBg");
     syncColorSwatches("quoteSwatches", "optQuoteBg");
+    syncColorSwatches("mainSwatches", "optMainBg");
+    syncColorSwatches("fontSwatches", "optFontColor");
     chrome.storage.local.set({ [DISPLAY_OPTS_KEY]: displayOpts });
   };
   $("optPageBg").addEventListener("input", persist);
   $("optQuoteBg").addEventListener("input", persist);
+  $("optMainBg").addEventListener("input", persist);
   $("optFontColor").addEventListener("input", persist);
   $("optFontSize").addEventListener("input", persist);
+  $("optLineHeight").addEventListener("input", persist);
   // 字体：预设下拉 + 自定义输入框
   $("optFontPreset").addEventListener("change", () => {
-    const v = $("optFontPreset").value;
-    if (v === "") {
+    if ($("optFontPreset").value === "") {
       // 选中「自定义…」：保持现有字体，聚焦输入框让用户手输
       $("optFontFamily").focus();
       return;
     }
     $("optFontFamily").value = "";
-    displayOpts.fontFamily = v;
     persist();
   });
   $("optFontFamily").addEventListener("input", () => {
     const raw = $("optFontFamily").value.trim();
-    displayOpts.fontFamily = raw || DEFAULT_DISPLAY.fontFamily;
-    $("optFontPreset").value = matchFontPreset(displayOpts.fontFamily);
+    $("optFontPreset").value = matchFontPreset(raw || DEFAULT_DISPLAY.fontFamily);
     persist();
   });
   // 恢复默认显示样式（带确认）
@@ -452,11 +519,17 @@ function bindDisplay() {
     displayOpts = { ...DEFAULT_DISPLAY };
     $("optPageBg").value = displayOpts.pageBg;
     $("optQuoteBg").value = displayOpts.quoteBg;
+    $("optMainBg").value = displayOpts.mainBg;
     $("optFontColor").value = displayOpts.fontColor;
     $("optFontSize").value = displayOpts.fontSize;
+    $("optLineHeight").value = displayOpts.lineHeight;
     $("optFontPreset").value = FONT_OPTIONS[0].value; // 默认
     $("optFontFamily").value = "";
     $("presetSelect").value = ""; // 恢复默认后不再指向已存样式组
+    syncColorSwatches("bgSwatches", "optPageBg");
+    syncColorSwatches("quoteSwatches", "optQuoteBg");
+    syncColorSwatches("mainSwatches", "optMainBg");
+    syncColorSwatches("fontSwatches", "optFontColor");
     applyDisplay(displayOpts);
     chrome.storage.local.set({ [DISPLAY_OPTS_KEY]: displayOpts });
   });
@@ -847,6 +920,10 @@ function buildMarkdown(list) {
       lines.push("");
       lines.push(e.answer || "");
       lines.push("");
+      if (showMainText && sourceTexts[e.pageUrl || e.pageTitle || ""]) {
+        lines.push(sourceTexts[e.pageUrl || e.pageTitle || ""]);
+        lines.push("");
+      }
     } else {
       lines.push("---");
       lines.push("");
@@ -858,6 +935,10 @@ function buildMarkdown(list) {
       lines.push("");
       lines.push(e.answer || ""); // 去掉「释义：」标题行，释义内容直接跟在其后
       lines.push("");
+      if (showMainText && sourceTexts[e.pageUrl || e.pageTitle || ""]) {
+        lines.push(sourceTexts[e.pageUrl || e.pageTitle || ""]);
+        lines.push("");
+      }
     }
   });
   return lines.join("\n");
@@ -988,9 +1069,15 @@ function cardHtml(e) {
       head.push('<span class="item-src">来源：' + esc(e.pageTitle) + "</span>");
     }
   }
+  const srcKey = e.pageUrl || e.pageTitle || "";
+  const main =
+    showMainText && sourceTexts[srcKey]
+      ? '<div class="item-main">' + esc(sourceTexts[srcKey]) + "</div>"
+      : "";
   return (
     '<div class="card">' +
     '<div class="item-head">' + head.join("") + "</div>" +
+    main +
     '<div class="item-text">「' + esc(e.text || "") + "」</div>" +
     '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>" +
     "</div>"
@@ -1118,8 +1205,10 @@ $("export").addEventListener("click", exportMd);
 $("exportHtml").addEventListener("click", exportHtml);
 $("clear").addEventListener("click", clearAll);
 initFontSelect();
-initColorSwatches("bgSwatches", "optPageBg", BG_RECOMMEND);
-initColorSwatches("quoteSwatches", "optQuoteBg", QUOTE_RECOMMEND);
+initColorSwatches("bgSwatches", "optPageBg", BG_PALETTE);
+initColorSwatches("quoteSwatches", "optQuoteBg", BG_PALETTE);
+initColorSwatches("mainSwatches", "optMainBg", BG_PALETTE);
+initColorSwatches("fontSwatches", "optFontColor", FONT_RECOMMEND);
 bindExportOpts();
 bindDisplay();
 $("saveDisplay").addEventListener("click", saveDisplay);
