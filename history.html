@@ -205,6 +205,11 @@
     .item-move { border: none; background: none; color: #9ca3af; cursor: pointer; font-size: 12px; padding: 2px 5px; border-radius: 6px; flex: 0 0 auto; line-height: 1; }
     .item-move:hover:not(:disabled) { color: var(--primary); background: rgba(99, 102, 241, 0.08); }
     .item-move:disabled { opacity: 0.35; cursor: default; }
+    .pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 16px 0; }
+    .page-btn { border: 1px solid var(--border); background: #fff; color: var(--text); cursor: pointer; font-size: 13px; padding: 5px 14px; border-radius: 7px; }
+    .page-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+    .page-btn:disabled { opacity: 0.4; cursor: default; }
+    .page-info { font-size: 13px; color: var(--muted); margin: 0 10px;}
     .item-del:hover { color: #dc2626; background: rgba(220,38,38,0.08); }
 
     .item-text {
@@ -335,6 +340,7 @@
     </div>
 
     <div id="list"></div>
+    <div id="pager"></div>
     <div id="status"></div>
   </div>
 

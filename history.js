@@ -22,6 +22,8 @@ let showMainText = true; // 列表是否显示来源主文
 let aggregate = false; // 是否按来源聚合
 let settingsHidden = false; // 是否隐藏所有设置
 let aggOrder = {}; // 聚合模式下每来源记录的手工排序
+const PAGE_SIZE = 10; // 历史页分页：每页记录/组数
+let page = 1; // 当前页码
 
 // 显示设置默认值
 const DEFAULT_DISPLAY = {
@@ -576,6 +578,7 @@ function render() {
         ? "没有匹配「" + esc(q) + "」的记录。"
         : "暂无历史记录。在网页上划词释义后，结果会自动保存在这里。") +
       "</div>";
+    renderPager(0);
     return;
   }
 
@@ -585,9 +588,13 @@ function render() {
   }
 
   box.innerHTML = "";
-  for (const e of list) {
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (page > pages) page = pages;
+  const slice = list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  for (const e of slice) {
     box.appendChild(buildItemCard(e));
   }
+  renderPager(list.length);
 }
 
 // 普通卡片（非聚合）：第一行 时间 + 来源按钮 + 来源 + 删除
@@ -788,12 +795,46 @@ function moveInOrder(srcKey, index, dir, recs) {
   render();
 }
 
+// 翻页后跳转到列表顶部
+function jumpTop() {
+  const list = $("list");
+  if (list && list.scrollIntoView) list.scrollIntoView({ block: "start" });
+}
+
+// 渲染分页条，超过一页时显示「上一页 / 第 x / N 页 / 下一页」
+function renderPager(total) {
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (page > pages) page = pages;
+  const pager = $("pager");
+  pager.innerHTML = "";
+  if (pages <= 1) return;
+  const prev = document.createElement("button");
+  prev.className = "page-btn";
+  prev.textContent = "‹ 上一页";
+  prev.disabled = page <= 1;
+  prev.addEventListener("click", () => { if (page > 1) { page--; render(); jumpTop(); } });
+  pager.appendChild(prev);
+  const info = document.createElement("span");
+  info.className = "page-info";
+  info.textContent = "第 " + page + " / " + pages + " 页";
+  pager.appendChild(info);
+  const next = document.createElement("button");
+  next.className = "page-btn";
+  next.textContent = "下一页 ›";
+  next.disabled = page >= pages;
+  next.addEventListener("click", () => { if (page < pages) { page++; render(); jumpTop(); } });
+  pager.appendChild(next);
+}
+
 function renderAggregated(list) {
   const box = $("list");
   box.innerHTML = "";
   const entries = groupRecords(list);
+  const pages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
+  if (page > pages) page = pages;
+  const slice = entries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  for (const [key, recs] of entries) {
+  for (const [key, recs] of slice) {
     // 来源只有一条记录时，保持普通卡片样式（时间 + 来源按钮 + 关闭）
     if (recs.length === 1) {
       box.appendChild(buildItemCard(recs[0]));
@@ -911,6 +952,7 @@ function renderAggregated(list) {
     item.appendChild(items);
     box.appendChild(item);
   }
+  renderPager(entries.length);
 }
 
 function syncAggBtn() {
@@ -924,6 +966,7 @@ function toggleAgg() {
   aggregate = !aggregate;
   chrome.storage.local.set({ [AGG_KEY]: aggregate });
   syncAggBtn();
+  page = 1;
   render();
 }
 
@@ -943,7 +986,7 @@ function clearAll() {
     setStatus("当前没有可清空的记录。", true);
     return;
   }
-  if (!window.confirm("确定清空全部 " + all.length + " 条历史记录吗？此操作不可恢复。")) return;
+  if (window.prompt('清空全部历史记录不可恢复。请输入"清空全部"以确认：') !== "清空全部") return;
   chrome.runtime.sendMessage({ type: "history-clear" }, (res) => {
     if (res && res.ok) {
       all = [];
@@ -1250,9 +1293,10 @@ function setStatus(text, ok) {
 }
 
 // 事件
-$("search").addEventListener("input", render);
+$("search").addEventListener("input", () => { page = 1; render(); });
 $("searchClear").addEventListener("click", () => {
   $("search").value = "";
+  page = 1;
   render();
 });
 $("export").addEventListener("click", exportMd);
