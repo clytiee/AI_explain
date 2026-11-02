@@ -90,6 +90,11 @@
       width: 88px; flex-shrink: 0;
     }
     .opts-br { flex-basis: 100%; width: 100%; height: 0; }
+    .opts-sep { border-top: 1px dashed var(--border); margin: 5px 0;}
+    .opts-toggle-row {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 14px; flex-basis: 100%;
+    }
     .opts label {
       display: inline-flex; align-items: center; gap: 5px;
       color: var(--text); cursor: pointer; user-select: none;
@@ -283,6 +288,7 @@
       <label><input type="checkbox" id="optTime" checked />时间</label>
       <label><input type="checkbox" id="optPageTitle" checked />来源页面</label>
       <label><input type="checkbox" id="optPageUrl" checked />页面地址</label>
+      <label><input type="checkbox" id="optCount" checked />条数</label>
       <span class="opts-br"></span>
       <span class="opts-title">导出为HTML：</span>
       <label><input type="checkbox" id="optNoSplit" />卡片不跨页拆分</label>
@@ -317,8 +323,11 @@
       <label>样式组 <select id="presetSelect"></select></label>
       <button type="button" id="deletePreset" class="reset-btn">删除</button>
       <button type="button" id="resetDisplay" class="reset-btn">恢复默认</button>
-      <button type="button" id="toggleMain" class="reset-btn">隐藏主文</button>
-      <button type="button" id="toggleAgg" class="reset-btn">按来源聚合</button>
+      <span class="opts-br opts-sep"></span>
+      <span class="opts-toggle-row">
+        <button type="button" id="toggleMain" class="reset-btn">隐藏主文</button>
+        <button type="button" id="toggleAgg" class="reset-btn">按来源聚合</button>
+      </span>
     </div>
     </div>
 

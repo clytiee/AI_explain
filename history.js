@@ -13,7 +13,7 @@ const SETTINGS_HIDDEN_KEY = "settingsHidden"; // 是否隐藏所有设置
 const $ = (id) => document.getElementById(id);
 
 let all = []; // 当前全部记录（新→旧）
-let exportOpts = { time: true, pageTitle: true, pageUrl: true, compact: false, noSplit: false }; // 导出选项
+let exportOpts = { time: true, pageTitle: true, pageUrl: true, count: true, compact: false, noSplit: false }; // 导出选项
 let displayPresets = []; // [{ name, opts }] 已保存的样式组
 let sourceTexts = {}; // { srcKey: 主文 } 按来源保存的主文
 let mainModalKey = ""; // 当前正在编辑主文的 srcKey
@@ -430,6 +430,7 @@ function load() {
       $("optTime").checked = exportOpts.time;
       $("optPageTitle").checked = exportOpts.pageTitle;
       $("optPageUrl").checked = exportOpts.pageUrl;
+      $("optCount").checked = exportOpts.count;
       $("optCompact").checked = exportOpts.compact;
       $("optNoSplit").checked = exportOpts.noSplit;
 
@@ -460,6 +461,7 @@ function bindExportOpts() {
       time: $("optTime").checked,
       pageTitle: $("optPageTitle").checked,
       pageUrl: $("optPageUrl").checked,
+      count: $("optCount").checked,
       compact: $("optCompact").checked,
       noSplit: $("optNoSplit").checked,
     };
@@ -468,6 +470,7 @@ function bindExportOpts() {
   $("optTime").addEventListener("change", persist);
   $("optPageTitle").addEventListener("change", persist);
   $("optPageUrl").addEventListener("change", persist);
+  $("optCount").addEventListener("change", persist);
   $("optCompact").addEventListener("change", persist);
   $("optNoSplit").addEventListener("change", persist);
 }
@@ -865,6 +868,9 @@ function renderAggregated(list) {
 
 function syncAggBtn() {
   $("toggleAgg").classList.toggle("active", aggregate);
+  // 条数仅聚合模式有意义：关闭聚合时隐藏该复选框
+  const cntWrap = $("optCount").closest("label");
+  if (cntWrap) cntWrap.style.display = aggregate ? "" : "none";
 }
 
 function toggleAgg() {
@@ -959,6 +965,7 @@ function buildMarkdownAggregated(list) {
     lines.push("---");
     lines.push("");
     lines.push("## " + (g + 1) + ". " + title);
+    if (opts.count) lines.push("- **条数**：" + recs.length);
     lines.push("");
     if (opts.pageUrl && first.pageUrl) lines.push("- **页面地址**：" + first.pageUrl);
     if (showMainText && sourceTexts[srcKey]) {
@@ -1095,7 +1102,7 @@ function buildCardsHtmlAggregated(list) {
       const srcKey = key.startsWith("__no_") ? "" : key;
       const first = recs[0];
       const head = [];
-      head.push('<span class="item-count">' + recs.length + " 条</span>");
+      if (opts.count) head.push('<span class="item-count">' + recs.length + " 条</span>");
       // 来源：勾选「来源页面」才显示；「页面地址」决定是否带超链接
       if (opts.pageTitle && first.pageTitle) {
         if (opts.pageUrl && first.pageUrl) {
