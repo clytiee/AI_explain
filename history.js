@@ -14,7 +14,7 @@ const AGG_ORDER_KEY = "aggOrder"; // 聚合模式下每来源记录的手工排�
 const $ = (id) => document.getElementById(id);
 
 let all = []; // 当前全部记录（新→旧）
-let exportOpts = { time: true, pageTitle: true, pageUrl: true, count: true, compact: false, noSplit: false }; // 导出选项
+let exportOpts = { time: true, pageTitle: true, pageUrl: true, count: true, sep: true, compact: false, noSplit: false }; // 导出选项
 let displayPresets = []; // [{ name, opts }] 已保存的样式组
 let sourceTexts = {}; // { srcKey: 主文 } 按来源保存的主文
 let mainModalKey = ""; // 当前正在编辑主文的 srcKey
@@ -436,6 +436,7 @@ function load() {
       $("optPageTitle").checked = exportOpts.pageTitle;
       $("optPageUrl").checked = exportOpts.pageUrl;
       $("optCount").checked = exportOpts.count;
+      $("optSep").checked = exportOpts.sep;
       $("optCompact").checked = exportOpts.compact;
       $("optNoSplit").checked = exportOpts.noSplit;
 
@@ -468,6 +469,7 @@ function bindExportOpts() {
       pageTitle: $("optPageTitle").checked,
       pageUrl: $("optPageUrl").checked,
       count: $("optCount").checked,
+      sep: $("optSep").checked,
       compact: $("optCompact").checked,
       noSplit: $("optNoSplit").checked,
     };
@@ -477,6 +479,7 @@ function bindExportOpts() {
   $("optPageTitle").addEventListener("change", persist);
   $("optPageUrl").addEventListener("change", persist);
   $("optCount").addEventListener("change", persist);
+  $("optSep").addEventListener("change", persist);
   $("optCompact").addEventListener("change", persist);
   $("optNoSplit").addEventListener("change", persist);
 }
@@ -957,9 +960,11 @@ function renderAggregated(list) {
 
 function syncAggBtn() {
   $("toggleAgg").classList.toggle("active", aggregate);
-  // 条数仅聚合模式有意义：关闭聚合时隐藏该复选框
-  const cntWrap = $("optCount").closest("label");
-  if (cntWrap) cntWrap.style.display = aggregate ? "" : "none";
+  // 条数、分隔线仅聚合模式有意义：关闭聚合时隐藏对应复选框
+  ["optCount", "optSep"].forEach((id) => {
+    const w = $(id).closest("label");
+    if (w) w.style.display = aggregate ? "" : "none";
+  });
 }
 
 function toggleAgg() {
@@ -1064,6 +1069,7 @@ function buildMarkdownAggregated(list) {
       lines.push("");
     }
     recs.forEach((e, j) => {
+      if (opts.sep && j > 0) lines.push("---");
       lines.push("### " + (j + 1) + ". 「" + (e.text || "") + "」");
       if (opts.time) lines.push("- **时间**：" + formatTime(e.time));
       lines.push("");
@@ -1135,7 +1141,7 @@ h1 .dot{width:12px;height:12px;border-radius:50%;background:linear-gradient(135d
 .item-answer a{color:#4f46e5;text-decoration:none}
 .item-answer a:hover{text-decoration:underline}
 .item-main{font-size:13px;color:#1f2937;background:rgba(99,102,241,0.07);border-left:3px solid #6366f1;border-radius:6px;padding:6px 10px;margin-bottom:8px;white-space:pre-wrap;word-break:break-word}
-.item-main-label{font-size:11px;color:var(--muted);margin-bottom:2px}
+.item-main-label{font-size:11px;color:var(--muted);margin-bottom:2px}.agg-items.no-sep .agg-item{border-top:none;padding-top:0}
 .agg-items{display:flex;flex-direction:column;gap:10px}
 .agg-item{border-top:1px dashed rgba(99,102,241,0.28);padding-top:10px}
 .agg-item:first-child{border-top:none;padding-top:0}
@@ -1227,7 +1233,7 @@ function buildCardsHtmlAggregated(list) {
         '<div class="card card-agg">' +
         '<div class="item-head item-head-agg">' + head.join("") + "</div>" +
         main +
-        '<div class="agg-items">' + items + "</div>" +
+        '<div class="agg-items' + (opts.sep ? "" : " no-sep") + '">' + items + "</div>" +
         "</div>"
       );
     })
