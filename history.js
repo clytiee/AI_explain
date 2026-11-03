@@ -564,18 +564,6 @@ function hasTimeFilter() {
   return !!$("timeStart").value || !!$("timeEnd").value;
 }
 
-// 时间筛选行右侧的提示文字
-function updateTimeHint() {
-  const s = $("timeStart").value;
-  const e = $("timeEnd").value;
-  const fmt = (v) => (v ? v.replace("T", " ") : "");
-  const hint = $("timeRangeHint");
-  if (s && e) hint.textContent = "筛选：" + fmt(s) + " 至 " + fmt(e);
-  else if (s) hint.textContent = "筛选：" + fmt(s) + " 起";
-  else if (e) hint.textContent = "筛选：至 " + fmt(e);
-  else hint.textContent = "";
-}
-
 // 把本地时间戳写入起止输入框（datetime-local 本地值，精确到秒）
 function setTimeRange(startTs, endTs) {
   const toLocal = (ts) => {
@@ -627,7 +615,6 @@ function render() {
     "共 " + list.length + " 条" +
     (aggregate ? " / " + new Set(list.map((e) => e.pageUrl || e.pageTitle || e.id)).size + " 组" : "") +
     ((q || hasTimeFilter()) ? "（已筛选）" : "");
-  updateTimeHint();
 
   const box = $("list");
   if (!list.length) {
