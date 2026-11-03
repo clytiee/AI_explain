@@ -551,18 +551,70 @@ function bindDisplay() {
 }
 
 // ---------- 渲染 ----------
-// 按当前搜索框返回筛选后的记录；无关键字时返回全部
+// 把 datetime-local 的本地时间值（YYYY-MM-DDTHH:MM[:SS]）解析为本地时间戳
+function parseLocal(s) {
+  if (!s) return NaN;
+  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!m) return NaN;
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)).getTime();
+}
+
+// 当前是否设置了时间范围筛选
+function hasTimeFilter() {
+  return !!$("timeStart").value || !!$("timeEnd").value;
+}
+
+// 时间筛选行右侧的提示文字
+function updateTimeHint() {
+  const s = $("timeStart").value;
+  const e = $("timeEnd").value;
+  const fmt = (v) => (v ? v.replace("T", " ") : "");
+  const hint = $("timeRangeHint");
+  if (s && e) hint.textContent = "筛选：" + fmt(s) + " 至 " + fmt(e);
+  else if (s) hint.textContent = "筛选：" + fmt(s) + " 起";
+  else if (e) hint.textContent = "筛选：至 " + fmt(e);
+  else hint.textContent = "";
+}
+
+// 把本地时间戳写入起止输入框（datetime-local 本地值，精确到秒）
+function setTimeRange(startTs, endTs) {
+  const toLocal = (ts) => {
+    const d = new Date(ts);
+    const p = (n) => String(n).padStart(2, "0");
+    return (
+      d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) +
+      "T" + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds())
+    );
+  };
+  $("timeStart").value = toLocal(startTs);
+  $("timeEnd").value = toLocal(endTs);
+  page = 1;
+  render();
+}
+
+// 按当前搜索框 + 时间范围返回筛选后的记录
 function filteredList() {
   const q = ($("search").value || "").trim().toLowerCase();
-  return q
-    ? all.filter(
-        (e) =>
-          (e.text || "").toLowerCase().includes(q) ||
-          (e.answer || "").toLowerCase().includes(q) ||
-          (e.pageTitle || "").toLowerCase().includes(q) ||
-          (e.pageUrl || "").toLowerCase().includes(q)
-      )
-    : all;
+  const startTs = parseLocal($("timeStart").value);
+  const endTs = parseLocal($("timeEnd").value);
+  const hasStart = Number.isFinite(startTs);
+  const hasEnd = Number.isFinite(endTs);
+  let list = all;
+  if (hasStart || hasEnd) {
+    const lo = hasStart ? startTs : -Infinity;
+    const hi = hasEnd ? endTs : Infinity;
+    list = list.filter((e) => (e.time || 0) >= lo && (e.time || 0) <= hi);
+  }
+  if (q) {
+    list = list.filter(
+      (e) =>
+        (e.text || "").toLowerCase().includes(q) ||
+        (e.answer || "").toLowerCase().includes(q) ||
+        (e.pageTitle || "").toLowerCase().includes(q) ||
+        (e.pageUrl || "").toLowerCase().includes(q)
+    );
+  }
+  return list;
 }
 
 function render() {
@@ -574,7 +626,8 @@ function render() {
   $("count").textContent =
     "共 " + list.length + " 条" +
     (aggregate ? " / " + new Set(list.map((e) => e.pageUrl || e.pageTitle || e.id)).size + " 组" : "") +
-    (q ? "（已筛选）" : "");
+    ((q || hasTimeFilter()) ? "（已筛选）" : "");
+  updateTimeHint();
 
   const box = $("list");
   if (!list.length) {
@@ -1520,6 +1573,30 @@ function setStatus(text, ok) {
 
 // 事件
 $("search").addEventListener("input", () => { page = 1; render(); });
+$("timeStart").addEventListener("change", () => { page = 1; render(); });
+$("timeEnd").addEventListener("change", () => { page = 1; render(); });
+$("timeClear").addEventListener("click", () => {
+  $("timeStart").value = "";
+  $("timeEnd").value = "";
+  page = 1;
+  render();
+});
+document.querySelectorAll(".quick-link[data-range]").forEach((b) => {
+  b.addEventListener("click", () => {
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+    let start = now;
+    const r = b.dataset.range;
+    if (r === "today") {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      start = d.getTime();
+    } else if (r === "1d") start = now - DAY;
+    else if (r === "1w") start = now - 7 * DAY;
+    else if (r === "1m") start = now - 30 * DAY;
+    setTimeRange(start, now);
+  });
+});
 $("searchClear").addEventListener("click", () => {
   $("search").value = "";
   page = 1;

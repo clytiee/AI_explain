@@ -85,6 +85,12 @@
       margin-bottom: 16px;
       font-size: 13px;
     }
+    .opts.timebar { overflow: visible; }
+    .opts.timebar .opts-hint { flex: 0 0 auto; color: var(--primary); font-size: 12px; }
+    .opts.timebar .quick-links { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
+    .opts.timebar .quick-link { cursor: pointer; color: var(--muted); text-decoration: none; }
+    .opts.timebar .quick-link:hover { color: var(--primary); }
+    .opts.timebar .quick-sep { color: var(--border); }
     .opts-title {
       color: var(--muted); font-size: 12px;
       width: 88px; flex-shrink: 0;
@@ -102,7 +108,8 @@
     .opts input { accent-color: var(--primary); cursor: pointer; }
     /* 设置控件：与搜索框一致的浅色外观 */
     .opts select,
-    .opts input[type="text"] {
+    .opts input[type="text"],
+    .opts input[type="datetime-local"] {
       background: #fff;
       border: 1px solid var(--border);
       border-radius: 7px;
@@ -113,7 +120,8 @@
       cursor: pointer;
     }
     .opts select:focus,
-    .opts input[type="text"]:focus { border-color: var(--primary); }
+    .opts input[type="text"]:focus,
+    .opts input[type="datetime-local"]:focus { border-color: var(--primary); }
     .opts input[type="color"] {
       width: 40px; height: 26px; padding: 2px;
       background: #fff;
@@ -128,6 +136,11 @@
     }
     .opts .reset-btn:hover { color: var(--primary); border-color: var(--primary); }
     .opts .reset-btn.active { color: var(--primary); border-color: var(--primary); background: rgba(99, 102, 241, 0.08); }
+    .opts .btn-mini {
+      border: 1px solid var(--border); background: #fff; color: var(--muted);
+      font-size: 11px; padding: 1px 7px; border-radius: 6px; cursor: pointer; line-height: 1.6;
+    }
+    .opts .btn-mini:hover { color: var(--primary); border-color: var(--primary); }
     .agg-items { display: flex; flex-direction: column; gap: 10px; }
     .agg-item { border-top: 1px dashed rgba(99, 102, 241, 0.28); padding-top: 10px; }
     .agg-item:first-child { border-top: none; padding-top: 0; }
@@ -294,11 +307,25 @@
       <span class="count" id="count"></span>
       <button class="primary" id="exportHtml">导出 HTML</button>
       <button class="ghost" id="export">导出 MD</button>
-      <button class="ghost" id="import">导入</button>
       <button class="ghost" id="toggleSettings">隐藏设置</button>
       <input type="file" id="importFile" accept=".html,.htm,text/html" hidden />
     </div>
     <div id="exportStatus" class="export-status"></div>
+
+    <div class="opts timebar">
+      <span class="opts-title">时间范围：</span>
+      <label><input type="datetime-local" id="timeStart" step="1" title="筛选起始时间（精确到秒）" /></label>
+      <label><input type="datetime-local" id="timeEnd" step="1" title="筛选结束时间（精确到秒）" /></label>
+      <span class="quick-links">
+        <a class="quick-link" data-range="today">当天</a><span class="quick-sep">|</span>
+        <a class="quick-link" data-range="1d">1天</a><span class="quick-sep">|</span>
+        <a class="quick-link" data-range="1w">1周</a><span class="quick-sep">|</span>
+        <a class="quick-link" data-range="1m">1月</a>
+      </span>
+      <button type="button" class="reset-btn" id="timeClear">清除</button>
+      
+    </div>
+    <span class="opts-hint" id="timeRangeHint"></span>
 
     <div id="settingsArea">
     <div class="opts">
@@ -309,6 +336,7 @@
       <label><input type="checkbox" id="optCount" checked />条数</label>
       <label><input type="checkbox" id="optSep" checked />分隔线</label>
       <label><input type="checkbox" id="optBackup" title="勾选后，导出的 HTML 文件末尾会内嵌一份完整 JSON 备份，可在另一台电脑用「导入」精确还原历史记录" />备份数据</label>
+      <button type="button" class="btn-mini" id="import">导入</button>
       <span class="opts-br"></span>
       <span class="opts-title">导出为HTML：</span>
       <label><input type="checkbox" id="optNoSplit" />卡片不跨页拆分</label>
