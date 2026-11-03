@@ -8,6 +8,7 @@
   const POPUP_ID = "ai-explain-popup";
   let config = { autoExplain: true, autoSaveHistory: true, maxLength: 500, stream: true };
   let paused = false;             // 是否暂停划词（点击插件图标切换）
+  let extractMode = false;        // 摘录模式：划词仅存为历史摘录，不释义（图标右键切换）
   let currentRange = null;        // 当前选中 Range，用于滚动后重定位
   let currentSignature = "";      // 去重标记
   let port = null;
@@ -21,9 +22,10 @@
   let statusEl, bodyEl, resultEl, selEl, closeBtn, copyBtn, historyBtn, warnEl, settingsBtn, retryBtn, header;
   let savedThisExplain = false; // 本次释义是否已写入历史（防止 result+done 重复保存）
 
-  chrome.storage.local.get({ config: null, paused: false }, (res) => {
+  chrome.storage.local.get({ config: null, paused: false, extractMode: false }, (res) => {
     if (res.config) config = { ...config, ...res.config };
     paused = !!res.paused;
+    extractMode = !!res.extractMode;
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
@@ -31,6 +33,11 @@
     if (changes.paused !== undefined) {
       paused = !!changes.paused.newValue;
       if (paused) hidePopup(); // 暂停时收起当前浮层
+    }
+    if (changes.extractMode !== undefined) {
+      extractMode = !!changes.extractMode.newValue;
+      // 摘录模式状态变化时，若浮层在等待释义（loading），关闭重开以应用新模式
+      if (statusEl && statusEl.textContent === "正在解析…") hidePopup();
     }
   });
 
@@ -158,7 +165,12 @@
     bodyEl.style.display = "";
     reposition(rect);
 
-    if (config.autoExplain) {
+    if (extractMode) {
+      // 摘录模式：只把选中文本存为历史摘录，不调用 AI 释义
+      saveExtract(text);
+      setStatus("idle", "摘录模式：已摘录，未释义");
+      retryBtn.hidden = true;
+    } else if (config.autoExplain) {
       startExplain(text);
     } else {
       setStatus("idle", "已选中，点击「解释」发起释义");
@@ -166,6 +178,23 @@
       retryBtn.textContent = "解释";
     }
     checkHistoryWarn(); // 历史将满时，在标题提示去导出备份
+  }
+
+  // 摘录模式：把选中文本保存为一条历史摘录记录（不释义）
+  function saveExtract(text) {
+    if (savedThisExplain) return;
+    if (!text || !String(text).trim()) return;
+    savedThisExplain = true;
+    chrome.runtime
+      .sendMessage({
+        type: "history-save",
+        text,
+        answer: "（摘录模式，未释义）",
+        context: "",
+        pageUrl: location.href,
+        pageTitle: document.title,
+      })
+      .catch(() => {});
   }
 
   // 历史条数接近上限（剩余 ≤200）时，在浮层标题显示提示，点击可去历史页导出备份

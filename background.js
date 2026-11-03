@@ -34,7 +34,24 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.config) configCache = null;
   if (changes.paused) setActionState();
+  if (changes.extractMode) { updateExtractMenu(); setActionState(); }
 });
+
+// ---------- 摘录模式（图标右键菜单切换） ----------
+const EXTRACT_MODE_KEY = "extractMode";
+
+async function getExtractMode() {
+  const res = await chrome.storage.local.get({ [EXTRACT_MODE_KEY]: false });
+  return !!res[EXTRACT_MODE_KEY];
+}
+
+// 同步图标右键菜单标题，显示当前摘录模式开关状态
+async function updateExtractMenu() {
+  const on = await getExtractMode();
+  chrome.contextMenus
+    .update("ai-explain-extract", { title: on ? "摘录模式（开）" : "摘录模式（关）" })
+    .catch(() => {});
+}
 
 // ---------- 暂停/恢复（点击插件图标切换） ----------
 const NORMAL_ICON = {
@@ -49,6 +66,13 @@ const PAUSED_ICON = {
   48: "icon-paused-48.png",
   128: "icon-paused-128.png",
 };
+// 摘录模式图标：左上角带绿点（基于正常图标生成）
+const EXTRACT_ICON = {
+  16: "icon-extract-16.png",
+  32: "icon-extract-32.png",
+  48: "icon-extract-48.png",
+  128: "icon-extract-128.png",
+};
 
 async function getPaused() {
   const res = await chrome.storage.local.get({ paused: false });
@@ -57,11 +81,19 @@ async function getPaused() {
 
 async function setActionState() {
   const paused = await getPaused();
-  await chrome.action.setIcon({ path: paused ? PAUSED_ICON : NORMAL_ICON }).catch(() => {});
+  const extract = await getExtractMode();
+  let path = NORMAL_ICON;
+  let title = "划词AI释义（点击暂停）";
+  if (paused) {
+    path = PAUSED_ICON;
+    title = "划词AI释义（已暂停，点击恢复）";
+  } else if (extract) {
+    path = EXTRACT_ICON;
+    title = "划词AI释义（摘录模式，点击暂停）";
+  }
+  await chrome.action.setIcon({ path }).catch(() => {});
   await chrome.action
-    .setTitle({
-      title: paused ? "划词AI释义（已暂停，点击恢复）" : "划词AI释义（点击暂停）",
-    })
+    .setTitle({ title })
     .catch(() => {});
 }
 
@@ -292,13 +324,27 @@ chrome.runtime.onInstalled.addListener(() => {
       title: "打开划词AI释义 · 历史记录",
       contexts: ["page", "selection"],
     });
+    chrome.contextMenus.create({
+      id: "ai-explain-extract",
+      title: "摘录模式（关）",
+      contexts: ["action"],
+    });
   });
   setActionState(); // 初始化图标状态（暂停/正常）
+  updateExtractMenu(); // 初始化摘录模式菜单标题
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "ai-explain-history") {
     chrome.tabs.create({ url: chrome.runtime.getURL("history.html") });
+    return;
+  }
+  if (info.menuItemId === "ai-explain-extract") {
+    (async () => {
+      const next = !(await getExtractMode());
+      await chrome.storage.local.set({ [EXTRACT_MODE_KEY]: next });
+      updateExtractMenu();
+    })();
     return;
   }
   if (info.menuItemId === "ai-explain-copy" && tab?.id) {
