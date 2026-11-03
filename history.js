@@ -14,7 +14,7 @@ const AGG_ORDER_KEY = "aggOrder"; // 聚合模式下每来源记录的手工排�
 const $ = (id) => document.getElementById(id);
 
 let all = []; // 当前全部记录（新→旧）
-let exportOpts = { time: true, pageTitle: true, pageUrl: true, count: true, sep: true, compact: false, noSplit: false }; // 导出选项
+let exportOpts = { time: true, pageTitle: true, pageUrl: true, count: true, sep: true, compact: false, noSplit: false, backup: true }; // 导出选项
 let displayPresets = []; // [{ name, opts }] 已保存的样式组
 let sourceTexts = {}; // { srcKey: 主文 } 按来源保存的主文
 let mainModalKey = ""; // 当前正在编辑主文的 srcKey
@@ -439,6 +439,7 @@ function load() {
       $("optSep").checked = exportOpts.sep;
       $("optCompact").checked = exportOpts.compact;
       $("optNoSplit").checked = exportOpts.noSplit;
+      $("optBackup").checked = exportOpts.backup;
 
       displayOpts = { ...DEFAULT_DISPLAY, ...(res[DISPLAY_OPTS_KEY] || {}) };
       syncDisplayControls();
@@ -472,6 +473,7 @@ function bindExportOpts() {
       sep: $("optSep").checked,
       compact: $("optCompact").checked,
       noSplit: $("optNoSplit").checked,
+      backup: $("optBackup").checked,
     };
     chrome.storage.local.set({ [EXPORT_OPTS_KEY]: exportOpts });
   };
@@ -482,6 +484,7 @@ function bindExportOpts() {
   $("optSep").addEventListener("change", persist);
   $("optCompact").addEventListener("change", persist);
   $("optNoSplit").addEventListener("change", persist);
+  $("optBackup").addEventListener("change", persist);
 }
 
 // 显示设置变更时即时生效并保存
@@ -723,7 +726,9 @@ function bindMainModal() {
     if (ev.target === $("mainModal")) closeMainModal(); // 点击遮罩关闭
   });
   document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape" && !$("mainModal").hidden) closeMainModal();
+    if (ev.key !== "Escape") return;
+    if (!$("mainModal").hidden) closeMainModal();
+    if (!$("importModal").hidden) closeImportModal();
   });
 }
 
@@ -1272,6 +1277,16 @@ function exportHtml() {
     '<h1><span class="dot"></span>划词AI释义 · 历史记录</h1>\n' +
     '<p class="sub">共 ' + list.length + " 条 · 导出时间：" + formatTime(Date.now()) + "</p>\n" +
     (aggregate ? buildCardsHtmlAggregated(list) : buildCardsHtml(list)) +
+    // 内嵌完整备份数据（JSON 数据区，仅勾选「备份数据」时输出）：
+    // 页面可视卡片仅按导出选项渲染，数据区始终包含全部字段，
+    // 供「导入」功能在另一台电脑上精确还原。
+    // 用 \u003c 转义 "<"，避免 JSON 中出现 </script> 截断脚本。
+    (exportOpts.backup
+      ? "\n" +
+        '<script type="application/json" id="aie-history-data">' +
+        JSON.stringify({ version: 1, exportedAt: Date.now(), records: list }).replace(/</g, "\\u003c") +
+        "</script>"
+      : "") +
     "\n</div>\n</body>\n</html>";
 
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -1292,6 +1307,206 @@ function exportHtml() {
   exportStatus("已导出 " + list.length + " 条记录为 HTML 文件：" + name, true);
 }
 
+// ---------- 导入历史记录（跨电脑同步） ----------
+const IMPORT_SCRIPT_RE = /<script[^>]*id=["']aie-history-data["'][^>]*>([\s\S]*?)<\/script>/i;
+const IMPORT_ANY_JSON_RE = /<script[^>]*type=["']application\/json["'][^>]*>([\s\S]*?)<\/script>/i;
+let importRecords = []; // 待导入的临时记录（导入弹窗打开期间）
+
+function normalizeTime(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+// 规整一条导入记录：字段转字符串、time 归一、缺失 id 时补一个新 id（保证去重与删除可用）
+function sanitizeRecord(r) {
+  const rec = {
+    id: String(r && r.id ? r.id : ""),
+    text: String(r && r.text ? r.text : ""),
+    answer: String(r && r.answer ? r.answer : ""),
+    context: String(r && r.context ? r.context : ""),
+    pageUrl: String(r && r.pageUrl ? r.pageUrl : ""),
+    pageTitle: String(r && r.pageTitle ? r.pageTitle : ""),
+    time: normalizeTime(r && r.time),
+  };
+  if (!rec.id) rec.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  return rec;
+}
+
+// 解析导出的 HTML：优先读取内嵌的 aie-history-data JSON（完整保真）；
+// 数据区缺失或损坏时退化为从卡片 DOM 解析基本字段（answer 为纯文本，排版会丢失）
+function parseImportFile(text) {
+  const m = text.match(IMPORT_SCRIPT_RE) || text.match(IMPORT_ANY_JSON_RE);
+  if (m) {
+    try {
+      const data = JSON.parse(m[1].replace(/\\u003c/g, "<"));
+      if (data && Array.isArray(data.records) && data.records.length) {
+        return { records: data.records.map(sanitizeRecord), degraded: false };
+      }
+    } catch (e) {
+      /* 数据区损坏则继续尝试 DOM 解析 */
+    }
+  }
+  const records = parseFromDom(text);
+  return records.length
+    ? { records, degraded: true }
+    : { records: [], degraded: false };
+}
+
+// 去掉 .item-text 文本两端的「」
+function stripQuote(node) {
+  if (!node) return "";
+  return node.textContent.replace(/^「|」$/g, "").trim();
+}
+
+// "YYYY-MM-DD HH:mm:ss" → 时间戳
+function parseTimeText(s) {
+  const m = String(s).match(/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return 0;
+  const d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+  return d.getTime() || 0;
+}
+
+// 退化：从导出 HTML 的卡片 DOM 提取基本字段
+function parseFromDom(text) {
+  const doc = new DOMParser().parseFromString(text, "text/html");
+  const cards = doc.querySelectorAll(".card");
+  const records = [];
+  cards.forEach((card) => {
+    const srcEl = card.querySelector(".item-src");
+    let pageTitle = "", pageUrl = "";
+    if (srcEl) {
+      const a = srcEl.querySelector("a");
+      pageTitle = srcEl.textContent.replace(/^来源：/, "").trim();
+      if (a) pageUrl = a.getAttribute("href") || "";
+    }
+    const items = card.querySelectorAll(".agg-item");
+    if (items.length) {
+      items.forEach((it) => {
+        const t = it.querySelector(".item-time");
+        records.push(
+          sanitizeRecord({
+            text: stripQuote(it.querySelector(".item-text")),
+            answer: it.querySelector(".item-answer") ? it.querySelector(".item-answer").textContent.trim() : "",
+            pageUrl,
+            pageTitle,
+            time: t ? parseTimeText(t.textContent) : 0,
+          })
+        );
+      });
+    } else {
+      const t = card.querySelector(".item-time");
+      records.push(
+        sanitizeRecord({
+          text: stripQuote(card.querySelector(".item-text")),
+          answer: card.querySelector(".item-answer") ? card.querySelector(".item-answer").textContent.trim() : "",
+          pageUrl,
+          pageTitle,
+          time: t ? parseTimeText(t.textContent) : 0,
+        })
+      );
+    }
+  });
+  return records;
+}
+
+// 读历史上限（来自 config.historyMax，默认 1000，上限 100 万）
+function getHistoryMax(config) {
+  const max = Number(config && config.historyMax);
+  if (!Number.isFinite(max) || max < 1) return 1000;
+  return Math.min(Math.floor(max), 1000000);
+}
+
+function handleImportFile(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = ""; // 允许再次选择同一文件
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const { records, degraded } = parseImportFile(String(reader.result));
+      if (!records.length) {
+        setStatus("未在文件中找到可导入的历史记录。", false);
+        return;
+      }
+      importRecords = records;
+      $("importModalInfo").innerHTML =
+        "检测到 <b>" + records.length + "</b> 条历史记录可导入。" +
+        (degraded
+          ? '<div class="dim">该文件为早期导出版本，缺少完整备份数据，仅能恢复原文、来源与纯文本释义，排版可能丢失。</div>'
+          : "") +
+        '<div class="dim">合并导入：保留本机现有记录并按 id 去重；覆盖导入：先清空本机现有记录再导入。</div>';
+      $("importModal").hidden = false;
+    } catch (e) {
+      setStatus("导入失败：" + (e && e.message ? e.message : e), false);
+    }
+  };
+  reader.onerror = () => setStatus("读取文件失败。", false);
+  reader.readAsText(file);
+}
+
+function closeImportModal() {
+  $("importModal").hidden = true;
+  importRecords = [];
+}
+
+// 执行导入：mode = "merge"（合并，按 id 去重）| "replace"（覆盖，先清空本机）
+function doImport(mode) {
+  const records = importRecords;
+  if (!records.length) {
+    closeImportModal();
+    return;
+  }
+  // 文件内部按 id 去重（重复 id 保留首条）
+  const seen = new Set();
+  const dedup = records.filter((r) => {
+    if (seen.has(r.id)) return false;
+    seen.add(r.id);
+    return true;
+  });
+  if (!dedup.length) {
+    setStatus("文件中没有可导入的有效记录。", false);
+    closeImportModal();
+    return;
+  }
+
+  chrome.storage.local.get({ [HISTORY_KEY]: [], config: {} }, (res) => {
+    const local = Array.isArray(res[HISTORY_KEY]) ? res[HISTORY_KEY] : [];
+    let next;
+    let added = 0;
+    if (mode === "replace") {
+      next = dedup.slice();
+    } else {
+      const byId = new Map(local.map((e) => [e.id, e]));
+      next = local.slice();
+      for (const r of dedup) {
+        if (byId.has(r.id)) continue;
+        next.push(r);
+        byId.set(r.id, true);
+        added++;
+      }
+    }
+    // 统一按时间新→旧排序（无有效时间的排最后）
+    next.sort((a, b) => (b.time || 0) - (a.time || 0));
+    // 按历史上限裁剪（保留最新）
+    const max = getHistoryMax(res.config);
+    if (next.length > max) next.length = max;
+
+    chrome.storage.local.set({ [HISTORY_KEY]: next }, () => {
+      all = next;
+      page = 1;
+      render();
+      closeImportModal();
+      if (mode === "replace") {
+        setStatus("已覆盖导入 " + next.length + " 条记录。", true);
+      } else if (added) {
+        setStatus("已合并导入，新增 " + added + " 条记录（现有 " + next.length + " 条）。", true);
+      } else {
+        setStatus("已合并导入，本机已包含全部记录（共 " + next.length + " 条，无新增）。", true);
+      }
+    });
+  });
+}
+
 function setStatus(text, ok) {
   const el = $("status");
   el.textContent = text;
@@ -1307,6 +1522,15 @@ $("searchClear").addEventListener("click", () => {
 });
 $("export").addEventListener("click", exportMd);
 $("exportHtml").addEventListener("click", exportHtml);
+$("import").addEventListener("click", () => $("importFile").click());
+$("importFile").addEventListener("change", handleImportFile);
+$("importMerge").addEventListener("click", () => doImport("merge"));
+$("importReplace").addEventListener("click", () => doImport("replace"));
+$("importCancel").addEventListener("click", closeImportModal);
+$("importModalClose").addEventListener("click", closeImportModal);
+$("importModal").addEventListener("click", (ev) => {
+  if (ev.target === $("importModal")) closeImportModal();
+});
 $("clear").addEventListener("click", clearAll);
 initFontSelect();
 initColorSwatches("bgSwatches", "optPageBg", BG_PALETTE);

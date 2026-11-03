@@ -271,6 +271,13 @@
     .modal textarea:focus { outline: none; border-color: var(--primary); }
     .modal-foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
     .modal-spacer { flex: 1; }
+    .modal-import-info {
+      font-size: 13px; color: var(--text); line-height: 1.7;
+      background: var(--main-bg); border-radius: 10px; padding: 10px 12px;
+      word-break: break-word;
+    }
+    .modal-import-info b { color: var(--primary); }
+    .modal-import-info .dim { color: var(--muted); font-size: 12px; margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -286,7 +293,9 @@
       <span class="count" id="count"></span>
       <button class="primary" id="exportHtml">导出 HTML</button>
       <button class="ghost" id="export">导出 MD</button>
+      <button class="ghost" id="import">导入</button>
       <button class="ghost" id="toggleSettings">隐藏设置</button>
+      <input type="file" id="importFile" accept=".html,.htm,text/html" hidden />
     </div>
     <div id="exportStatus" class="export-status"></div>
 
@@ -298,6 +307,7 @@
       <label><input type="checkbox" id="optPageUrl" checked />页面地址</label>
       <label><input type="checkbox" id="optCount" checked />条数</label>
       <label><input type="checkbox" id="optSep" checked />分隔线</label>
+      <label><input type="checkbox" id="optBackup" title="勾选后，导出的 HTML 文件末尾会内嵌一份完整 JSON 备份，可在另一台电脑用「导入」精确还原历史记录" />备份数据</label>
       <span class="opts-br"></span>
       <span class="opts-title">导出为HTML：</span>
       <label><input type="checkbox" id="optNoSplit" />卡片不跨页拆分</label>
@@ -358,6 +368,22 @@
         <span class="modal-spacer"></span>
         <button type="button" class="ghost" id="mainModalCancel">取消</button>
         <button type="button" class="primary" id="mainModalSave">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-mask" id="importModal" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <span class="modal-title">导入历史记录</span>
+        <button type="button" class="modal-close" id="importModalClose" title="关闭">✕</button>
+      </div>
+      <div class="modal-import-info" id="importModalInfo"></div>
+      <div class="modal-foot">
+        <button type="button" class="danger" id="importReplace">覆盖导入</button>
+        <span class="modal-spacer"></span>
+        <button type="button" class="ghost" id="importCancel">取消</button>
+        <button type="button" class="primary" id="importMerge">合并导入</button>
       </div>
     </div>
   </div>
