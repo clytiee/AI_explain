@@ -603,6 +603,11 @@ function render() {
   renderPager(list.length);
 }
 
+// 「主文」按钮图标：双引号（用户提供的 quote.svg），配合 title 提示表示“该来源的一段主文说明”
+const MAIN_BTN_ICON =
+  '<svg width="12" height="12" viewBox="0 0 1024 1024" fill="currentColor" aria-hidden="true">' +
+  '<path d="M408.547 205.584c12.15-7.798 21.15-8.255 30.545 3.948l21.631 28.093c5.588 7.26 3.38 16.83-2.424 21.763-87.482 56.125-187.06 176.64-194.526 220.106-7.466 43.468 35.337 32.139 105.328 64.668 69.991 32.527 127.933 151.522 31.273 245.272-96.66 93.75-287.427-10.591-259.637-223.763 17.85-136.933 107.12-256.962 267.81-360.087z m423.043 0c12.152-7.798 21.152-8.255 30.547 3.948l21.629 28.093c5.59 7.26 3.382 16.83-2.422 21.763-87.483 56.125-187.06 176.64-194.526 220.106-7.468 43.468 35.336 32.139 105.328 64.668 69.991 32.527 127.933 151.522 31.273 245.272-96.66 93.75-287.428-10.591-259.639-223.763 17.852-136.933 107.122-256.962 267.81-360.087z"/></svg>';
+
 // 普通卡片（非聚合）：第一行 时间 + 来源按钮 + 来源 + 删除
 function buildItemCard(e) {
   const item = document.createElement("div");
@@ -637,7 +642,7 @@ function buildItemCard(e) {
     mainBtn.type = "button";
     mainBtn.className = "item-main-btn";
     mainBtn.title = "来源主文：为这个来源填写一段主文";
-    mainBtn.textContent = "主文";
+    mainBtn.innerHTML = MAIN_BTN_ICON;
     mainBtn.addEventListener("click", () => openMainModal(srcKey));
     head.appendChild(mainBtn);
 
@@ -881,7 +886,7 @@ function renderAggregated(list) {
       mainBtn.type = "button";
       mainBtn.className = "item-main-btn";
       mainBtn.title = "来源主文：为这个来源填写一段主文";
-      mainBtn.textContent = "主文";
+      mainBtn.innerHTML = MAIN_BTN_ICON;
       mainBtn.addEventListener("click", () => openMainModal(srcKey));
       group.appendChild(mainBtn);
 
