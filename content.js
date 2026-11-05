@@ -25,7 +25,9 @@
   let hoverShowTimer = null;      // 悬停显示延迟计时器
   let hoverHideTimer = null;      // 悬停离开后延迟关闭计时器
   let mouseDown = false;          // 是否正在按下鼠标（选择文字过程中不触发悬停浮层）
+  let pinned = false;             // 浮层是否被钉住（钉住后不自动消失）
   let statusEl, bodyEl, resultEl, selEl, closeBtn, copyBtn, historyBtn, warnEl, settingsBtn, retryBtn, header;
+  let pinBtn;
   let savedThisExplain = false; // 本次释义是否已写入历史（防止 result+done 重复保存）
 
   chrome.storage.local.get({ config: null, paused: false, extractMode: false, highlightMode: false }, (res) => {
@@ -107,8 +109,8 @@
         selectionWasInPopup = false;
         return;
       }
-      // 普通点击页面：关闭旧浮层，并可能为新选择重新弹出
-      hidePopup();
+      // 普通点击页面：关闭旧浮层（钉住时保留），并可能为新选择重新弹出
+      if (!pinned) hidePopup();
       setTimeout(handleSelection, 0);
     },
     true
@@ -151,12 +153,12 @@
       clearTimeout(hoverHideTimer);
       clearTimeout(hoverShowTimer);
       hoverShowTimer = setTimeout(() => showHoverPopup(hl), 150); // 轻微防抖
-    } else if (hoverPopup) {
-      // 移出划线且不在浮层内：延迟关闭，给移动到浮层留时间
+    } else if (hoverPopup && !pinned) {
+      // 移出划线且不在浮层内：延迟关闭，给移动到浮层留时间（钉住时不自动关）
       clearTimeout(hoverShowTimer);
       clearTimeout(hoverHideTimer);
       hoverHideTimer = setTimeout(() => {
-        if (hoverPopup && isVisible()) hidePopup();
+        if (hoverPopup && !pinned && isVisible()) hidePopup();
       }, 250);
     }
   });
@@ -166,6 +168,7 @@
     const text = (hlSpan.textContent || "").trim();
     if (!text) return;
     hoverPopup = true;
+    setPinned(false); // 新悬停弹出的浮层默认不钉住
     ensurePopup();
     userMoved = false;
     savedThisExplain = true; // 悬停不产生新释义，禁止写入历史
@@ -237,6 +240,7 @@
   function openPopup(text, rect, range) {
     ensurePopup();
     hoverPopup = false; // 普通划词流程接管浮层
+    setPinned(false); // 新划词弹出的浮层默认不钉住
     clearTimeout(hoverShowTimer);
     clearTimeout(hoverHideTimer);
     userMoved = false; // 换选新文本时重新锚定到选中处
@@ -552,6 +556,9 @@
       '<button class="aie-btn aie-copy" title="复制释义">复制</button>' +
       '<button class="aie-btn aie-history" title="查看历史记录并导出MD">历史</button>' +
       '<button class="aie-btn aie-settings" title="设置">设置</button>' +
+      '<button class="aie-btn aie-pin" title="钉住浮层（不自动消失）">' +
+      '<svg viewBox="0 0 1024 1024" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M648.728381 130.779429a73.142857 73.142857 0 0 1 22.674286 15.433142l191.561143 191.756191a73.142857 73.142857 0 0 1-22.137905 118.564571l-67.876572 30.061715-127.341714 127.488-10.093714 140.239238a73.142857 73.142857 0 0 1-124.684191 46.445714l-123.66019-123.782095-210.724572 211.699809-51.833904-51.614476 210.846476-211.821714-127.926857-128.024381a73.142857 73.142857 0 0 1 46.299428-124.635429l144.237715-10.776381 125.074285-125.220571 29.379048-67.779048a73.142857 73.142857 0 0 1 96.207238-38.034285z m-29.086476 67.120761l-34.913524 80.530286-154.087619 154.331429-171.398095 12.751238 303.323428 303.542857 12.044191-167.399619 156.233143-156.428191 80.384-35.59619-191.585524-191.73181z"/></svg>' +
+      "</button>" +
       '<button class="aie-btn aie-close" title="关闭">×</button>' +
       "</div>" +
       "</div>" +
@@ -568,6 +575,7 @@
     document.documentElement.appendChild(root);
 
     closeBtn = root.querySelector(".aie-close");
+    pinBtn = root.querySelector(".aie-pin");
     copyBtn = root.querySelector(".aie-copy");
     historyBtn = root.querySelector(".aie-history");
     warnEl = root.querySelector(".aie-warn");
@@ -608,6 +616,8 @@
     });
 
     closeBtn.addEventListener("click", hidePopup);
+    // 钉住/取消钉住：钉住后点击页面、悬停移开都不自动关闭
+    pinBtn.addEventListener("click", () => setPinned(!pinned));
     copyBtn.addEventListener("click", copyAnswer);
     historyBtn.addEventListener("click", openHistory);
     warnEl.addEventListener("click", openHistory); // 历史将满提示：点击去导出备份
@@ -676,6 +686,15 @@
     root.addEventListener("mousedown", (e) => e.stopPropagation());
   }
 
+  // 设置钉住状态并同步按钮外观
+  function setPinned(v) {
+    pinned = !!v;
+    if (pinBtn) {
+      pinBtn.classList.toggle("active", pinned);
+      pinBtn.title = pinned ? "已钉住，点击取消" : "钉住浮层（不自动消失）";
+    }
+  }
+
   function reposition(rect) {
     if (!rect) return;
     const root = document.getElementById(POPUP_ID);
@@ -733,6 +752,7 @@
     const root = document.getElementById(POPUP_ID);
     if (root) root.remove();
     hoverPopup = false;
+    setPinned(false);
     clearTimeout(hoverShowTimer);
     clearTimeout(hoverHideTimer);
     if (port) {
