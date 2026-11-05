@@ -35,6 +35,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.config) configCache = null;
   if (changes.paused) setActionState();
   if (changes.extractMode) { updateExtractMenu(); setActionState(); }
+  if (changes.highlightMode) updateHighlightMenu();
 });
 
 // ---------- 摘录模式（图标右键菜单切换） ----------
@@ -50,6 +51,22 @@ async function updateExtractMenu() {
   const on = await getExtractMode();
   chrome.contextMenus
     .update("ai-explain-extract", { title: on ? "摘录模式（开）" : "摘录模式（关）" })
+    .catch(() => {});
+}
+
+// ---------- 高亮划词（图标右键菜单切换） ----------
+const HIGHLIGHT_KEY = "highlightMode";
+
+async function getHighlightMode() {
+  const res = await chrome.storage.local.get({ [HIGHLIGHT_KEY]: false });
+  return !!res[HIGHLIGHT_KEY];
+}
+
+// 同步图标右键菜单标题，显示当前高亮划词开关状态
+async function updateHighlightMenu() {
+  const on = await getHighlightMode();
+  chrome.contextMenus
+    .update("ai-explain-highlight", { title: on ? "高亮划词（开）" : "高亮划词（关）" })
     .catch(() => {});
 }
 
@@ -274,7 +291,56 @@ async function clearHistory() {
   await chrome.storage.local.set({ [HISTORY_KEY]: [] });
 }
 
+// ---------- 高亮划词：取本页历史记录（划词+摘录）原文，供 content 恢复荧光笔 ----------
+const HIGHLIGHT_HISTORY_MAX = 200; // 每页最多恢复的历史划线数
+
+function urlKeyOf(urlStr) {
+  try {
+    const u = new URL(urlStr);
+    return u.origin + u.pathname + u.search;
+  } catch {
+    return "";
+  }
+}
+
+async function getHighlightHistoryTexts(pageUrl) {
+  const key = urlKeyOf(pageUrl);
+  if (!key) return [];
+  const list = await getHistory();
+  const seen = new Set();
+  const texts = [];
+  for (const e of list) {
+    if (urlKeyOf(e.pageUrl) !== key) continue;
+    const t = String(e.text || "").trim();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    texts.push(t);
+    if (texts.length >= HIGHLIGHT_HISTORY_MAX) break;
+  }
+  return texts;
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg && msg.type === "highlight-history") {
+    getHighlightHistoryTexts(msg.pageUrl)
+      .then((texts) => sendResponse({ ok: true, texts }))
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message || err) }));
+    return true;
+  }
+  // 悬停划线时查这条划词的历史释义（取同页面、同原文的最新一条）
+  if (msg && msg.type === "highlight-lookup") {
+    const key = urlKeyOf(msg.pageUrl);
+    const text = String(msg.text || "").trim();
+    getHistory()
+      .then((list) => {
+        const entry = list.find(
+          (e) => key && urlKeyOf(e.pageUrl) === key && String(e.text || "").trim() === text
+        );
+        sendResponse({ ok: true, entry: entry || null });
+      })
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message || err) }));
+    return true;
+  }
   if (msg && msg.type === "open-options") {
     chrome.runtime.openOptionsPage();
     return;
@@ -333,9 +399,15 @@ chrome.runtime.onInstalled.addListener(() => {
       title: "摘录模式（关）",
       contexts: ["action"],
     });
+    chrome.contextMenus.create({
+      id: "ai-explain-highlight",
+      title: "高亮划词（关）",
+      contexts: ["action"],
+    });
   });
   setActionState(); // 初始化图标状态（暂停/正常）
   updateExtractMenu(); // 初始化摘录模式菜单标题
+  updateHighlightMenu(); // 初始化高亮划词菜单标题
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
@@ -348,6 +420,14 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       const next = !(await getExtractMode());
       await chrome.storage.local.set({ [EXTRACT_MODE_KEY]: next });
       updateExtractMenu();
+    })();
+    return;
+  }
+  if (info.menuItemId === "ai-explain-highlight") {
+    (async () => {
+      const next = !(await getHighlightMode());
+      await chrome.storage.local.set({ [HIGHLIGHT_KEY]: next });
+      updateHighlightMenu();
     })();
     return;
   }

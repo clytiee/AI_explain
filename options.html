@@ -97,6 +97,21 @@
     #testStatus.err { color: #dc2626; }
     .test-box { margin-top: 8px; padding: 10px 12px; background: rgba(31,41,55,0.05); border-radius: 8px; font-size: 13px; white-space: pre-wrap; word-break: break-word; display: none; }
     .test-box.show { display: block; }
+    /* 高亮划词：常用荧光笔色 */
+    .hl-colors { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
+    .hl-swatch {
+      width: 34px; height: 26px; border-radius: 7px; cursor: pointer;
+      border: 2px solid rgba(0,0,0,0.08); padding: 0; transition: 0.12s;
+    }
+    .hl-swatch:hover { transform: translateY(-1px); }
+    .hl-swatch.active { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
+    .hl-palette-row { display: flex; align-items: center; gap: 10px; }
+    .hl-palette-label { font-size: 13px; color: #374151; }
+    input[type="color"] {
+      width: 44px; height: 30px; padding: 2px; border: 1px solid var(--border);
+      border-radius: 8px; background: #fff; cursor: pointer;
+    }
+    .hl-current { font-size: 12px; color: var(--muted); font-family: ui-monospace, Consolas, monospace; }
   </style>
 </head>
 <body>
@@ -188,6 +203,25 @@
         <button class="ghost" id="resetPrompt" type="button">恢复默认提示词</button>
       </div>
       <div class="hint">默认风格会兼顾外文翻译、专业术语通俗讲解、文言文与汉字的本字及造字原意考证，并强制 AI 按「分板块 + 逐词列表」的规范格式输出，避免把整句翻译并进逐词解释里。改过提示词导致排版乱时，可一键恢复。</div>
+    </div>
+
+    <div class="card">
+      <h2>③ 高亮划词</h2>
+      <div class="switch-row">
+        <div>
+          <div class="switch-label">高亮划词</div>
+          <div class="hint">开启后，网页上的划词与摘录会用荧光笔在文字下半部分划线标记，划线按页面保存，刷新后自动恢复；也可右键点击工具栏图标，用「高亮划词」菜单随时开关。关闭时会清除本页已划的线及其保存记录。</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="highlightSwitch" /><span class="slider"></span></label>
+      </div>
+      <label>荧光笔颜色</label>
+      <div class="hl-colors" id="hlColors"></div>
+      <div class="hl-palette-row">
+        <span class="hl-palette-label">调色盘：</span>
+        <input type="color" id="highlightColor" value="#fef08a" />
+        <span class="hl-current" id="hlCurrent">#fef08a</span>
+      </div>
+      <div class="hint">点击常用色快速选择，或用调色盘自定义。点「保存设置」后生效，页面上已划线的文字会同步更新颜色。</div>
     </div>
 
     <div class="btns">

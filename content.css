@@ -336,3 +336,19 @@
 #ai-explain-popup .aie-retry-row:has(.aie-btn[hidden]) {
   display: none;
 }
+
+/* ---------- 荧光笔高亮（高亮划词模式） ----------
+   用渐变把背景色限制在文字盒的下半部分，模拟荧光笔在字下方划线；
+   box-decoration-break: clone 让跨行选区的每一行都完整画出下半线 */
+.aie-hl {
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  background-image: linear-gradient(
+    to top,
+    var(--aie-hl, #fef08a) 0,
+    var(--aie-hl, #fef08a) 42%,
+    transparent 42%
+  );
+  background-repeat: no-repeat;
+  color: inherit;
+}

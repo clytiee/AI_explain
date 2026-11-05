@@ -9,6 +9,7 @@
   let config = { autoExplain: true, autoSaveHistory: true, maxLength: 500, stream: true };
   let paused = false;             // 是否暂停划词（点击插件图标切换）
   let extractMode = false;        // 摘录模式：划词仅存为历史摘录，不释义（图标右键切换）
+  let highlightMode = false;      // 高亮划词：划词/摘录用荧光笔在文字下半部分划线（图标右键切换）
   let currentRange = null;        // 当前选中 Range，用于滚动后重定位
   let currentSignature = "";      // 去重标记
   let port = null;
@@ -19,17 +20,27 @@
   let userH = null;               // 用户手动拉高后的高度
   let userMoved = false;          // 用户手动拖走浮层后为 true（滚动/重选不再弹回）
   let lastSelectedText = "";      // 最近一次选中的文本（供复制/重试/汉典链接使用）
+  let lastContext = "";           // 最近一次选中处的上下文（高亮包裹会使 range 失效，需提前取出）
+  let hoverPopup = false;         // 当前浮层是否为「悬停划线读历史」弹出的
+  let hoverShowTimer = null;      // 悬停显示延迟计时器
+  let hoverHideTimer = null;      // 悬停离开后延迟关闭计时器
+  let mouseDown = false;          // 是否正在按下鼠标（选择文字过程中不触发悬停浮层）
   let statusEl, bodyEl, resultEl, selEl, closeBtn, copyBtn, historyBtn, warnEl, settingsBtn, retryBtn, header;
   let savedThisExplain = false; // 本次释义是否已写入历史（防止 result+done 重复保存）
 
-  chrome.storage.local.get({ config: null, paused: false, extractMode: false }, (res) => {
+  chrome.storage.local.get({ config: null, paused: false, extractMode: false, highlightMode: false }, (res) => {
     if (res.config) config = { ...config, ...res.config };
     paused = !!res.paused;
     extractMode = !!res.extractMode;
+    highlightMode = !!res.highlightMode;
+    if (highlightMode) restoreHighlights(); // 页面加载时恢复本页持久化的荧光笔划线
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
-    if (changes.config?.newValue) config = { ...config, ...changes.config.newValue };
+    if (changes.config?.newValue) {
+      config = { ...config, ...changes.config.newValue };
+      syncHighlightColors(); // 荧光笔颜色变化时，同步已划线的颜色
+    }
     if (changes.paused !== undefined) {
       paused = !!changes.paused.newValue;
       if (paused) hidePopup(); // 暂停时收起当前浮层
@@ -38,6 +49,17 @@
       extractMode = !!changes.extractMode.newValue;
       // 摘录模式状态变化时，若浮层在等待释义（loading），关闭重开以应用新模式
       if (statusEl && statusEl.textContent === "正在解析…") hidePopup();
+    }
+    if (changes.highlightMode !== undefined) {
+      highlightMode = !!changes.highlightMode.newValue;
+      if (!highlightMode) {
+        clearHighlights(); // 关闭时清除本页所有荧光笔划线
+        clearPageHighlightRecords(); // 并删除本页的持久化记录，刷新后不再显示
+        if (hoverPopup) hidePopup(); // 关闭时收起悬停浮层
+      } else {
+        highlightExistingSelection(); // 开启时立即补划页面上已有的选区
+        restoreHighlights(); // 并恢复本页持久化的划线
+      }
     }
   });
 
@@ -111,6 +133,77 @@
     { capture: true, passive: true }
   );
 
+  // ---------- 悬停划线：直接显示历史释义（不调用 AI） ----------
+  document.addEventListener("mousedown", () => { mouseDown = true; }, true);
+  document.addEventListener("mouseup", () => { mouseDown = false; }, true);
+
+  document.addEventListener("mouseover", (e) => {
+    if (!highlightMode) return;
+    const t = e.target;
+    if (!t || !t.closest) return;
+    if (isInsidePopup(t)) {
+      clearTimeout(hoverHideTimer); // 移入浮层：不关闭，方便阅读/复制
+      return;
+    }
+    const hl = t.closest(".aie-hl");
+    if (hl) {
+      if (mouseDown) return; // 正在拖选文字时不弹
+      clearTimeout(hoverHideTimer);
+      clearTimeout(hoverShowTimer);
+      hoverShowTimer = setTimeout(() => showHoverPopup(hl), 150); // 轻微防抖
+    } else if (hoverPopup) {
+      // 移出划线且不在浮层内：延迟关闭，给移动到浮层留时间
+      clearTimeout(hoverShowTimer);
+      clearTimeout(hoverHideTimer);
+      hoverHideTimer = setTimeout(() => {
+        if (hoverPopup && isVisible()) hidePopup();
+      }, 250);
+    }
+  });
+
+  // 悬停弹出的浮层：直接读取历史记录里这条划词的释义，不调 AI
+  function showHoverPopup(hlSpan) {
+    const text = (hlSpan.textContent || "").trim();
+    if (!text) return;
+    hoverPopup = true;
+    ensurePopup();
+    userMoved = false;
+    savedThisExplain = true; // 悬停不产生新释义，禁止写入历史
+    lastSelectedText = text;
+    selEl.textContent = text.length > 40 ? "「" + text.slice(0, 40) + "…」" : "「" + text + "」";
+    selEl.title = text;
+    resultEl.innerHTML = "";
+    rawAnswer = "";
+    resultEl.hidden = true;
+    retryBtn.hidden = true;
+    bodyEl.style.display = "";
+    setStatus("loading", "正在查找历史释义…");
+    reposition(hlSpan.getBoundingClientRect());
+
+    try {
+      chrome.runtime.sendMessage(
+        { type: "highlight-lookup", pageUrl: location.href, text },
+        (resp) => {
+          if (!hoverPopup || !isVisible()) return; // 浮层已被关闭/替换
+          if (resp && resp.ok && resp.entry) {
+            if (resp.entry.answer && String(resp.entry.answer).trim()) {
+              rawAnswer = resp.entry.answer;
+              render();
+              setStatus("idle", "历史释义"); // render 会隐藏状态栏，这里重新显示
+              statusEl.hidden = false;
+            } else {
+              setStatus("idle", "摘录 · 该划词未释义");
+            }
+          } else {
+            setStatus("idle", "未在历史中找到这条划词的释义");
+          }
+        }
+      );
+    } catch (e) {
+      setStatus("error", "查找历史释义失败");
+    }
+  }
+
   // ---------- 主流程 ----------
   function handleSelection() {
     if (paused) return; // 暂停时不再触发划词
@@ -131,7 +224,7 @@
     }
     currentSignature = sig;
     currentRange = info.range;
-    openPopup(info.text, rect);
+    openPopup(info.text, rect, info.range);
   }
 
   // 转义 HTML 特殊字符，防止所选文本注入破坏浮层
@@ -141,11 +234,15 @@
     })[c]);
   }
 
-  function openPopup(text, rect) {
+  function openPopup(text, rect, range) {
     ensurePopup();
+    hoverPopup = false; // 普通划词流程接管浮层
+    clearTimeout(hoverShowTimer);
+    clearTimeout(hoverHideTimer);
     userMoved = false; // 换选新文本时重新锚定到选中处
     savedThisExplain = false; // 新一轮释义可重新写入历史
     lastSelectedText = text;
+    lastContext = range ? buildContext(range) : "";
     // 单个汉字时，在字右侧附带汉典链接
     if (text.length === 1) {
       selEl.innerHTML =
@@ -164,6 +261,9 @@
     retryBtn.hidden = true;
     bodyEl.style.display = "";
     reposition(rect);
+
+    // 高亮划词：用荧光笔在选区文字下半部分划线（划词与摘录均生效）
+    if (highlightMode && range) applyHighlight(range);
 
     if (extractMode) {
       // 摘录模式：只把选中文本存为历史摘录，不调用 AI 释义
@@ -196,6 +296,224 @@
         extract: true,
       })
       .catch(() => {});
+  }
+
+  // ---------- 荧光笔高亮（高亮划词模式） ----------
+  // 把选区内容包裹进 <span class="aie-hl">，CSS 用渐变在文字下半部分画出荧光笔线
+  function applyHighlight(range) {
+    try {
+      const popup = document.getElementById(POPUP_ID);
+      if (popup && range.intersectsNode(popup)) return; // 不高亮浮层内部
+      const startEl = range.startContainer.parentElement;
+      if (startEl && startEl.closest && startEl.closest(".aie-hl")) return; // 已划过线的不重复包
+      const span = makeHlSpan(config.highlightColor);
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+      // 原节点被替换后 range 失效（rect 变为 0），停止滚动跟随，避免浮层跳位
+      currentRange = null;
+      // 持久化划线内容，刷新页面后自动恢复
+      saveHighlightRecord(span.textContent);
+    } catch (e) {
+      // 跨节点等异常选区：跳过高亮，不影响释义流程
+    }
+  }
+
+  function makeHlSpan(color) {
+    const span = document.createElement("span");
+    span.className = "aie-hl";
+    span.style.setProperty("--aie-hl", color || config.highlightColor || "#fef08a");
+    return span;
+  }
+
+  // ---------- 荧光笔持久化（按页面 URL 存储划线文本，刷新后检索原文重新包裹） ----------
+  function pageKey() {
+    return location.origin + location.pathname + location.search;
+  }
+
+  const HL_PAGES_MAX = 200; // 最多保留最近 200 个页面的划线
+  const HL_ITEMS_MAX = 500; // 每页最多 500 条划线
+
+  function saveHighlightRecord(text) {
+    if (!text || !text.trim()) return;
+    try {
+      chrome.storage.local.get({ highlights: {} }, (res) => {
+        const all = res.highlights;
+        const key = pageKey();
+        const page = all[key] && Array.isArray(all[key].items) ? all[key] : { t: 0, items: [] };
+        if (page.items.some((it) => it && it.text === text)) return; // 去重
+        page.items.push({ text });
+        page.items = page.items.slice(-HL_ITEMS_MAX);
+        page.t = Date.now();
+        all[key] = page;
+        // 超出页面数上限时，删掉最久未更新的页面
+        const keys = Object.keys(all);
+        if (keys.length > HL_PAGES_MAX) {
+          keys
+            .sort((a, b) => (all[a] && all[a].t ? all[a].t : 0) - (all[b] && all[b].t ? all[b].t : 0))
+            .slice(0, keys.length - HL_PAGES_MAX)
+            .forEach((k) => delete all[k]);
+        }
+        chrome.storage.local.set({ highlights: all });
+      });
+    } catch (e) {
+      /* 存储失败不影响划线显示 */
+    }
+  }
+
+  // 删除本页的持久化划线记录（关闭高亮划词时一并清除）
+  function clearPageHighlightRecords() {
+    try {
+      chrome.storage.local.get({ highlights: {} }, (res) => {
+        const all = res.highlights;
+        if (all[pageKey()]) {
+          delete all[pageKey()];
+          chrome.storage.local.set({ highlights: all });
+        }
+      });
+    } catch (e) {}
+  }
+
+  // 页面加载（或重新开启）时，恢复荧光笔划线：
+  // ① 本功能保存的划线记录；② 历史记录里本页的划词与摘录原文（以前的记录同样生效）
+  function restoreHighlights() {
+    const color = config.highlightColor || "#fef08a";
+    try {
+      chrome.storage.local.get({ highlights: {} }, (res) => {
+        const page = res.highlights[pageKey()];
+        const items = page && Array.isArray(page.items) ? page.items : [];
+        for (const it of items) {
+          if (it && it.text) wrapFirstMatch(it.text, color);
+        }
+        // 历史记录（划词释义 + 摘录）里本页的原文本，同样补上荧光笔
+        try {
+          chrome.runtime.sendMessage({ type: "highlight-history", pageUrl: location.href }, (resp) => {
+            if (resp && resp.ok && Array.isArray(resp.texts)) {
+              for (const t of resp.texts) wrapFirstMatch(t, color);
+            }
+          });
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
+  // 收集正文文本节点（跳过脚本/样式/浮层/已划线部分）
+  function collectTextNodes() {
+    const root = document.body || document.documentElement;
+    if (!root) return [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(n) {
+        if (!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        const el = n.parentElement;
+        if (!el) return NodeFilter.FILTER_REJECT;
+        if (el.closest("script,style,noscript,textarea,.aie-hl,#" + POPUP_ID)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    return nodes;
+  }
+
+  // 在页面文本中找到 text 的第一处出现，把对应文字重新用荧光笔包住
+  function wrapFirstMatch(text, color) {
+    try {
+      const nodes = collectTextNodes();
+      if (!nodes.length) return false;
+      let acc = ""; // 已累积的文本
+      const meta = []; // { node, start } 每个节点在 acc 中的起始偏移
+      for (const node of nodes) {
+        const full = acc + node.nodeValue;
+        const idx = full.indexOf(text);
+        if (idx >= 0) {
+          // 匹配必须结束于当前节点（更早的匹配在之前迭代已处理过）
+          const end = idx + text.length;
+          if (end <= full.length) {
+            // 收集与 [idx, end) 重叠的节点片段（meta 为文档序，倒序收集后连同当前节点）
+            const portions = [];
+            for (let i = meta.length - 1; i >= 0; i--) {
+              const m = meta[i];
+              const nodeEnd = m.start + m.node.nodeValue.length;
+              if (nodeEnd <= idx) break;
+              portions.push({
+                node: m.node,
+                s: Math.max(idx, m.start) - m.start,
+                e: Math.min(end, nodeEnd) - m.start,
+              });
+            }
+            portions.push({
+              node,
+              s: Math.max(idx, acc.length) - acc.length,
+              e: Math.min(end, acc.length + node.nodeValue.length) - acc.length,
+            });
+            // 从文档末尾往前包裹，避免拆分节点影响前面的引用
+            for (let i = portions.length - 1; i >= 0; i--) wrapNodePortion(portions[i], color);
+            return true;
+          }
+        }
+        meta.push({ node, start: acc.length });
+        acc = full;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  // 把单个文本节点的一段文字包进高亮 span
+  function wrapNodePortion(p, color) {
+    try {
+      const node = p.node;
+      if (!node.parentNode || !node.nodeValue) return;
+      if (node.parentElement && node.parentElement.closest(".aie-hl")) return;
+      if (p.s === 0 && p.e === node.nodeValue.length) {
+        // 整个节点都在选区内，直接包裹
+        const span = makeHlSpan(color);
+        node.parentNode.insertBefore(span, node);
+        span.appendChild(node);
+        return;
+      }
+      const range = document.createRange();
+      range.setStart(node, p.s);
+      range.setEnd(node, p.e);
+      const span = makeHlSpan(color);
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+    } catch (e) {}
+  }
+
+  // 开启高亮划词时，立即高亮页面上当前已有的选区（右键菜单/选项页切换后补划）
+  function highlightExistingSelection() {
+    if (paused) return;
+    try {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+      if (!sel.toString().trim()) return;
+      const popup = document.getElementById(POPUP_ID);
+      const range = sel.getRangeAt(0);
+      if (popup && (isInsidePopup(range.startContainer) || range.intersectsNode(popup))) return;
+      applyHighlight(range);
+    } catch (e) {
+      /* 异常选区静默跳过 */
+    }
+  }
+
+  // 清除本页所有荧光笔划线（关闭高亮划词时调用）
+  function clearHighlights() {
+    document.querySelectorAll("span.aie-hl").forEach((span) => {
+      const parent = span.parentNode;
+      if (!parent) return;
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      span.remove();
+      parent.normalize(); // 合并被拆开的相邻文本节点，尽量还原 DOM
+    });
+  }
+
+  // 荧光笔颜色变化时，同步已划线文字的颜色
+  function syncHighlightColors() {
+    const color = config.highlightColor || "#fef08a";
+    document.querySelectorAll("span.aie-hl").forEach((span) => {
+      span.style.setProperty("--aie-hl", color);
+    });
   }
 
   // 历史条数接近上限（剩余 ≤200）时，在浮层标题显示提示，点击可去历史页导出备份
@@ -414,6 +732,9 @@
   function hidePopup() {
     const root = document.getElementById(POPUP_ID);
     if (root) root.remove();
+    hoverPopup = false;
+    clearTimeout(hoverShowTimer);
+    clearTimeout(hoverHideTimer);
     if (port) {
       try {
         port.disconnect();
@@ -423,6 +744,7 @@
     currentRange = null;
     currentSignature = "";
     rawAnswer = "";
+    lastContext = "";
   }
 
   // ---------- AI 调用 ----------
@@ -456,7 +778,7 @@
     port.postMessage({
       type: "explain",
       text,
-      context: buildContext(currentRange),
+      context: lastContext || buildContext(currentRange),
     });
   }
 
@@ -511,7 +833,7 @@
         type: "history-save",
         text,
         answer: rawAnswer,
-        context: buildContext(currentRange) || "",
+        context: lastContext || buildContext(currentRange) || "",
         pageUrl: location.href,
         pageTitle: document.title,
       })

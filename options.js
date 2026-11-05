@@ -17,6 +17,13 @@ const DEFAULT_PROMPT =
   "4. 不要用 ``` 代码块把全文包起来。\n" +
   "【解释原则】若是外文，先给准确翻译再简要解释；若是文言文或单个汉字，考证其本字、造字原意与字形演变；若是专业术语或缩写，用通俗语言讲解。回答简洁，条理清楚。";
 
+// 常用荧光笔色（黄/绿/蓝/粉/橙/紫/红/青）
+const HL_PRESET_COLORS = [
+  "#fef08a", "#bbf7d0", "#bae6fd", "#fbcfe8",
+  "#fed7aa", "#ddd6fe", "#fecaca", "#99f6e4",
+];
+const HL_DEFAULT_COLOR = "#fef08a";
+
 const $ = (id) => document.getElementById(id);
 
 let currentConfig = {
@@ -30,12 +37,40 @@ let currentConfig = {
   maxLength: 500,
   historyMax: 1000,
   systemPrompt: DEFAULT_PROMPT,
+  highlightColor: HL_DEFAULT_COLOR,
 };
 
+// 渲染常用荧光笔色一排
+function renderHlColors() {
+  const wrap = $("hlColors");
+  wrap.innerHTML = "";
+  HL_PRESET_COLORS.forEach((color) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "hl-swatch";
+    btn.style.background = color;
+    btn.title = color;
+    btn.dataset.color = color;
+    btn.addEventListener("click", () => {
+      $("highlightColor").value = color;
+      markActiveSwatch(color);
+    });
+    wrap.appendChild(btn);
+  });
+}
+
+function markActiveSwatch(color) {
+  $("hlCurrent").textContent = color;
+  document.querySelectorAll(".hl-swatch").forEach((el) => {
+    el.classList.toggle("active", el.dataset.color.toLowerCase() === String(color).toLowerCase());
+  });
+}
+
 function load() {
-  chrome.storage.local.get({ config: null, paused: false }, (res) => {
+  chrome.storage.local.get({ config: null, paused: false, highlightMode: false }, (res) => {
     if (res.config) currentConfig = { ...currentConfig, ...res.config };
     $("pausedSwitch").checked = !!res.paused;
+    $("highlightSwitch").checked = !!res.highlightMode;
     $("apiBaseUrl").value = currentConfig.apiBaseUrl || "";
     $("model").value = currentConfig.model || "";
     $("apiKey").value = currentConfig.apiKey || "";
@@ -46,6 +81,9 @@ function load() {
     $("autoSaveHistory").checked = currentConfig.autoSaveHistory !== false;
     $("historyMax").value = currentConfig.historyMax ?? 1000;
     $("systemPrompt").value = currentConfig.systemPrompt || DEFAULT_PROMPT;
+    const hlColor = currentConfig.highlightColor || HL_DEFAULT_COLOR;
+    $("highlightColor").value = hlColor;
+    markActiveSwatch(hlColor);
 
     // 按 base url 反推服务商
     const base = (currentConfig.apiBaseUrl || "").replace(/\/+$/, "");
@@ -70,6 +108,7 @@ function readForm() {
     autoSaveHistory: $("autoSaveHistory").checked,
     historyMax: Number($("historyMax").value) || 1000,
     systemPrompt: $("systemPrompt").value,
+    highlightColor: $("highlightColor").value,
   };
 }
 
@@ -102,6 +141,18 @@ $("pausedSwitch").addEventListener("change", (e) => {
   chrome.storage.local.set({ paused: e.target.checked }, () => {
     setStatus(e.target.checked ? "已暂停划词（图标变为带红斜杠）" : "已恢复划词", true);
   });
+});
+
+// 高亮划词开关：立即生效（与图标右键菜单同一开关）
+$("highlightSwitch").addEventListener("change", (e) => {
+  chrome.storage.local.set({ highlightMode: e.target.checked }, () => {
+    setStatus(e.target.checked ? "已开启高亮划词，去网页选中文字试试。" : "已关闭高亮划词，本页已划的线会自动清除。", true);
+  });
+});
+
+// 调色盘选色时同步高亮当前常用色块
+$("highlightColor").addEventListener("input", (e) => {
+  markActiveSwatch(e.target.value);
 });
 
 $("save").addEventListener("click", () => {
@@ -180,4 +231,7 @@ $("test").addEventListener("click", async () => {
   }
 });
 
-document.addEventListener("DOMContentLoaded", load);
+document.addEventListener("DOMContentLoaded", () => {
+  renderHlColors();
+  load();
+});
