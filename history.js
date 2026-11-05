@@ -1474,6 +1474,12 @@ function buildCardsHtmlAggregated(list) {
     .join("\n");
 }
 
+// 导出 HTML 右上角的打印按钮：仅用于屏幕，打印时隐藏
+const PRINT_BTN_CSS =
+  "\n.print-btn{margin-left:auto;flex:0 0 auto;border:none;cursor:pointer;font-size:13px;font-weight:400;font-family:inherit;padding:9px 16px;border-radius:9px;transition:0.15s;white-space:nowrap;background:var(--primary-soft);color:var(--primary)}" +
+  "\n.print-btn:hover{background:rgba(99,102,241,0.2)}" +
+  "\n@media print{.print-btn{display:none}}";
+
 function exportHtml() {
   const statusEl = $("exportStatus");
   const exportStatus = (text, ok) => {
@@ -1500,10 +1506,11 @@ function exportHtml() {
     '<meta charset="UTF-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n' +
     "<title>划词AI释义 · 历史记录</title>\n" +
-    "<style>\n" + CARD_CSS + noSplitCss + displayCss + "\n</style>\n" +
+    "<style>\n" + CARD_CSS + noSplitCss + displayCss + PRINT_BTN_CSS + "\n</style>\n" +
     "</head>\n<body>\n" +
     '<div class="wrap">\n' +
-    '<h1><span class="dot"></span>划词AI释义 · 历史记录</h1>\n' +
+    '<h1><span class="dot"></span>划词AI释义 · 历史记录' +
+    '<button type="button" class="print-btn" onclick="window.print()">打印</button></h1>\n' +
     '<p class="sub">共 ' + list.length + " 条 · 导出时间：" + formatTime(Date.now()) + "</p>\n" +
     (aggregate ? buildCardsHtmlAggregated(list) : buildCardsHtml(list)) +
     // 内嵌完整备份数据（JSON 数据区，仅勾选「备份数据」时输出）：
