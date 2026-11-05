@@ -66,7 +66,8 @@
       padding: 8px 0;
     }
     .switch-label { font-size: 13px; color: #374151; }
-    .switch { position: relative; width: 40px; height: 22px; }
+    .switch-row > div { min-width: 0; }
+    .switch { position: relative; width: 40px; height: 22px; flex: 0 0 auto; }
     .switch input { opacity: 0; width: 0; height: 0; }
     .slider {
       position: absolute; inset: 0; cursor: pointer;
@@ -210,7 +211,7 @@
       <div class="switch-row">
         <div>
           <div class="switch-label">高亮划词</div>
-          <div class="hint">开启后，网页上的划词与摘录会用荧光笔在文字下半部分划线标记，划线按页面保存，刷新后自动恢复；也可右键点击工具栏图标，用「高亮划词」菜单随时开关。关闭时会清除本页已划的线及其保存记录。</div>
+          <div class="hint">全新安装时默认开启。开启后，网页上的划词与摘录会用荧光笔在文字下半部分划线标记，划线按页面保存，刷新后自动恢复；也可右键点击工具栏图标，用「高亮划词」菜单随时开关。关闭时会清除本页已划的线及其保存记录。</div>
         </div>
         <label class="switch"><input type="checkbox" id="highlightSwitch" /><span class="slider"></span></label>
       </div>

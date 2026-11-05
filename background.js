@@ -18,6 +18,7 @@ const DEFAULT_CONFIG = {
     "2. “逐词解释”用无序列表，每项一行，格式为“字：解释”。\n" +
     "3. 不同板块内容严禁合并到同一行；严禁把小节标题或整句翻译追加到“逐词解释”的某个列表项后面；整句翻译必须完整写在一个独立段落里，不要拆成多行。\n" +
     "4. 不要用 ``` 代码块把全文包起来。\n" +
+    "【范围约束】只解释【所选文本】；【所在页面上下文】仅用于理解语境，不要逐句翻译或解释上下文中的其他内容（除非所选本身已是整段）。\n" +
     "【解释原则】若是外文，先给准确翻译再简要解释；若是文言文或单个汉字，考证其本字、造字原意与字形演变；若是专业术语或缩写，用通俗语言讲解。回答简洁，条理清楚。",
 };
 
@@ -129,7 +130,10 @@ function buildBody(cfg, text, context) {
 
   let userContent = text;
   if (context && context.trim()) {
-    userContent = "【所选文本】\n" + text + "\n\n【所在页面上下文】\n" + context.trim();
+    userContent =
+      "【所选文本】\n" + text +
+      "\n\n【所在页面上下文（仅用于理解语境，不要解释或翻译这里的内容）】\n" +
+      context.trim();
   }
   messages.push({ role: "user", content: userContent });
 
@@ -382,7 +386,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // 右键菜单：复制选中文本 / 打开历史记录
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
+  // 全新安装时默认开启「高亮划词」（已有的用户配置不覆盖）
+  if (details && details.reason === "install") {
+    chrome.storage.local.get({ [HIGHLIGHT_KEY]: null }, (res) => {
+      if (res[HIGHLIGHT_KEY] === null) chrome.storage.local.set({ [HIGHLIGHT_KEY]: true });
+    });
+  }
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: "ai-explain-copy",
