@@ -776,11 +776,15 @@
   function buildContext(range) {
     if (!range) return "";
     try {
-      const before = 180, after = 120;
-      let text = range.startContainer.parentElement?.textContent || "";
       const selTxt = range.toString();
+      let text = range.startContainer.parentElement?.textContent || "";
       const idx = text.indexOf(selTxt);
       if (idx < 0) return "";
+      // 上下文窗口随所选文本长度自适应：短词只取邻近一小段，避免把整段/整首诗都塞进上下文
+      const span = Math.max(60, selTxt.length * 6); // 上下文总长上限
+      const rest = Math.max(0, span - selTxt.length);
+      const before = Math.min(40, Math.floor(rest / 2));
+      const after = Math.min(40, Math.ceil(rest / 2));
       const start = Math.max(0, idx - before);
       const end = Math.min(text.length, idx + selTxt.length + after);
       return text.slice(start, end).replace(/\s+/g, " ").trim();
