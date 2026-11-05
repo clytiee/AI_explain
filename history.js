@@ -30,10 +30,13 @@ const DEFAULT_DISPLAY = {
   pageBg: "#eef2ff",
   quoteBg: "#e0e7ff",
   mainBg: "#f4f4fe",
-  extractBg: "#dcfce7",
+  extractBg: "#eff6ff",
   fontColor: "#1f2937",
   fontSize: 13,
   lineHeight: 1.2,
+  cardRadius: 16,
+  quoteRadius: 8,
+  extractRadius: 0,
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif",
 };
@@ -221,18 +224,28 @@ function applyDisplay(d) {
   s.setProperty("--font-size", d.fontSize + "px");
   s.setProperty("--font-family", toFontFamilyCss(d.fontFamily));
   s.setProperty("--line-height", d.lineHeight);
+  s.setProperty("--card-radius", (Number(d.cardRadius) || 0) + "px");
+  s.setProperty("--quote-radius", (Number(d.quoteRadius) || 0) + "px");
+  s.setProperty("--extract-radius", (Number(d.extractRadius) || 0) + "px");
   $("optFontSizeVal").textContent = d.fontSize;
   $("optLineHeightVal").textContent = d.lineHeight;
+  $("optCardRadiusVal").textContent = Number(d.cardRadius) || 0;
+  $("optQuoteRadiusVal").textContent = Number(d.quoteRadius) || 0;
+  $("optExtractRadiusVal").textContent = Number(d.extractRadius) || 0;
 }
 
 // 导出 HTML 时，把显示设置写成覆盖规则追加到样式末尾
 function buildDisplayCss(d) {
   const ff = toFontFamilyCss(d.fontFamily);
+  const cardR = Number(d.cardRadius) || 0;
+  const quoteR = Number(d.quoteRadius) || 0;
+  const extractR = Number(d.extractRadius) || 0;
   return (
     "body{background:" + d.pageBg + ";color:" + d.fontColor +
       ";font-family:" + ff + ";font-size:" + d.fontSize + "px}" +
+    ".card{border-radius:" + cardR + "px}" +
     ".item-text{background:" + d.quoteBg + ";color:" + d.fontColor +
-      ";font-size:" + d.fontSize + "px}" +
+      ";font-size:" + d.fontSize + "px;border-radius:" + quoteR + "px}" +
     ".item-answer{color:" + d.fontColor + ";font-size:" + d.fontSize +
       "px;line-height:" + d.lineHeight + "}" +
     ".item-main{background:" + d.mainBg + ";color:" + d.fontColor +
@@ -240,7 +253,7 @@ function buildDisplayCss(d) {
     // 摘录记录：左侧深色竖线的引文样式，底色与主文不同，置于最后确保覆盖上面的原文底色
     ".item-text-extract{background:" + d.extractBg +
       ";border-left:3px solid " + deepBorder(d.extractBg) +
-      ";border-radius:0;padding-left:12px;font-weight:normal}"
+      ";border-radius:" + extractR + "px;padding-left:12px;font-weight:normal}"
   );
 }
 
@@ -392,6 +405,9 @@ function syncDisplayControls() {
   $("optFontColor").value = displayOpts.fontColor;
   $("optFontSize").value = displayOpts.fontSize;
   $("optLineHeight").value = displayOpts.lineHeight;
+  $("optCardRadius").value = displayOpts.cardRadius ?? DEFAULT_DISPLAY.cardRadius;
+  $("optQuoteRadius").value = displayOpts.quoteRadius ?? DEFAULT_DISPLAY.quoteRadius;
+  $("optExtractRadius").value = displayOpts.extractRadius ?? DEFAULT_DISPLAY.extractRadius;
   const storedFont = displayOpts.fontFamily || DEFAULT_DISPLAY.fontFamily;
   if (matchFontPreset(storedFont)) {
     $("optFontPreset").value = matchFontPreset(storedFont);
@@ -545,6 +561,9 @@ function bindDisplay() {
       fontColor: $("optFontColor").value,
       fontSize: Number($("optFontSize").value),
       lineHeight: Number($("optLineHeight").value),
+      cardRadius: Number($("optCardRadius").value),
+      quoteRadius: Number($("optQuoteRadius").value),
+      extractRadius: Number($("optExtractRadius").value),
       fontFamily: currentFontFamily(),
     };
     applyDisplay(displayOpts);
@@ -563,6 +582,9 @@ function bindDisplay() {
   $("optFontColor").addEventListener("input", persist);
   $("optFontSize").addEventListener("input", persist);
   $("optLineHeight").addEventListener("input", persist);
+  $("optCardRadius").addEventListener("input", persist);
+  $("optQuoteRadius").addEventListener("input", persist);
+  $("optExtractRadius").addEventListener("input", persist);
   // 字体：预设下拉 + 自定义输入框
   $("optFontPreset").addEventListener("change", () => {
     if ($("optFontPreset").value === "") {
@@ -589,6 +611,9 @@ function bindDisplay() {
     $("optFontColor").value = displayOpts.fontColor;
     $("optFontSize").value = displayOpts.fontSize;
     $("optLineHeight").value = displayOpts.lineHeight;
+    $("optCardRadius").value = displayOpts.cardRadius;
+    $("optQuoteRadius").value = displayOpts.quoteRadius;
+    $("optExtractRadius").value = displayOpts.extractRadius;
     $("optFontPreset").value = FONT_OPTIONS[0].value; // 默认
     $("optFontFamily").value = "";
     $("presetSelect").value = ""; // 恢复默认后不再指向已存样式组

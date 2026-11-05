@@ -131,6 +131,7 @@
       border-radius: 7px;
       cursor: pointer;
     }
+    .opts input[type="range"] { width: 100px; }
     .opts-hint { color: var(--muted); font-size: 12px; }
     .opts .reset-btn {
       border: 1px solid var(--border); background: #fff; color: var(--muted);
@@ -176,7 +177,7 @@
       -webkit-backdrop-filter: blur(14px);
       backdrop-filter: blur(14px);
       border: 1px solid rgba(255, 255, 255, 0.6);
-      border-radius: 16px;
+      border-radius: var(--card-radius, 16px);
       padding: 16px 18px;
       margin-bottom: 12px;
       box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
@@ -232,7 +233,8 @@
     .item-text {
       font-size: var(--font-size); font-weight: 600; color: var(--font-color);
       background: var(--quote-bg);
-      border-radius: 8px; padding: 6px 10px;
+      border-radius: var(--quote-radius, 8px);
+      padding: 6px 10px;
       margin-bottom: 8px;
       word-break: break-word;
     }
@@ -240,7 +242,7 @@
     .item-text-extract {
       background: var(--extract-bg) !important;
       border-left: 3px solid var(--extract-border);
-      border-radius: 0;
+      border-radius: var(--extract-radius, 0);
       padding-left: 12px;
       font-weight: normal;
     }
@@ -379,6 +381,11 @@
       <span class="opts-title">摘录背景色：</span>
       <label><input type="color" id="optExtractBg" value="#dcfce7" /></label>
       <span class="bg-swatches" id="extractSwatches"></span>
+      <span class="opts-br"></span>
+      <span class="opts-title">圆角设置：</span>
+      <label>卡片 <input type="range" id="optCardRadius" min="0" max="24" step="1" value="16" /> <span id="optCardRadiusVal">16</span>px</label>
+      <label>原文 <input type="range" id="optQuoteRadius" min="0" max="24" step="1" value="8" /> <span id="optQuoteRadiusVal">8</span>px</label>
+      <label>摘录 <input type="range" id="optExtractRadius" min="0" max="24" step="1" value="0" /> <span id="optExtractRadiusVal">0</span>px</label>
       <span class="opts-br"></span>
       <span class="opts-title">样式管理：</span>
       <button type="button" id="saveDisplay" class="reset-btn">保存显示设置</button>
