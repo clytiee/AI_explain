@@ -963,29 +963,66 @@ function jumpTop() {
   if (list && list.scrollIntoView) list.scrollIntoView({ block: "start" });
 }
 
-// 渲染分页条，超过一页时显示「上一页 / 第 x / N 页 / 下一页」
+// 渲染分页条，超过一页时显示「首页 / 上一页 / 第 x / N 页（可输入跳转）/ 下一页 / 尾页」
 function renderPager(total) {
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   if (page > pages) page = pages;
   const pager = $("pager");
   pager.innerHTML = "";
   if (pages <= 1) return;
+  const goTo = (p) => {
+    const t = Math.min(pages, Math.max(1, p));
+    if (t === page) return;
+    page = t;
+    render();
+    jumpTop();
+  };
+  const first = document.createElement("button");
+  first.className = "page-btn";
+  first.textContent = "« 首页";
+  first.disabled = page <= 1;
+  first.addEventListener("click", () => goTo(1));
+  pager.appendChild(first);
   const prev = document.createElement("button");
   prev.className = "page-btn";
   prev.textContent = "‹ 上一页";
   prev.disabled = page <= 1;
-  prev.addEventListener("click", () => { if (page > 1) { page--; render(); jumpTop(); } });
+  prev.addEventListener("click", () => goTo(page - 1));
   pager.appendChild(prev);
   const info = document.createElement("span");
   info.className = "page-info";
-  info.textContent = "第 " + page + " / " + pages + " 页";
+  const pageInput = document.createElement("input");
+  pageInput.type = "number";
+  pageInput.className = "page-input";
+  pageInput.min = "1";
+  pageInput.max = String(pages);
+  pageInput.value = String(page);
+  pageInput.title = "输入页码，回车跳转";
+  const jump = () => {
+    const t = parseInt(pageInput.value, 10);
+    if (isNaN(t)) { pageInput.value = String(page); return; }
+    goTo(t);
+    // 重渲染后分页条已重建，无需回写输入框
+  };
+  pageInput.addEventListener("change", jump);
+  pageInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); pageInput.blur(); jump(); }
+  });
+  info.appendChild(pageInput);
+  info.appendChild(document.createTextNode(" / " + pages + " 页"));
   pager.appendChild(info);
   const next = document.createElement("button");
   next.className = "page-btn";
   next.textContent = "下一页 ›";
   next.disabled = page >= pages;
-  next.addEventListener("click", () => { if (page < pages) { page++; render(); jumpTop(); } });
+  next.addEventListener("click", () => goTo(page + 1));
   pager.appendChild(next);
+  const last = document.createElement("button");
+  last.className = "page-btn";
+  last.textContent = "尾页 »";
+  last.disabled = page >= pages;
+  last.addEventListener("click", () => goTo(pages));
+  pager.appendChild(last);
 }
 
 function renderAggregated(list) {
@@ -1742,5 +1779,24 @@ $("toggleMain").addEventListener("click", toggleMain);
 $("toggleAgg").addEventListener("click", toggleAgg);
 $("toggleSettings").addEventListener("click", toggleSettings);
 bindMainModal();
+
+// ---------- 悬浮按钮组：跳到页首/页脚 ----------
+(function initFab() {
+  const group = $("fabGroup");
+  const top = $("fabTop");
+  const bottom = $("fabBottom");
+  if (!group || !top || !bottom) return;
+  top.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+  bottom.addEventListener("click", () => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }));
+  // 滚动超过一屏的一半才显示，避免短页面常驻遮挡
+  const update = () => {
+    const scrolled = window.scrollY || document.documentElement.scrollTop || 0;
+    const threshold = Math.min(window.innerHeight * 0.5, 300);
+    group.classList.toggle("show", scrolled > threshold);
+  };
+  window.addEventListener("scroll", update, { passive: true });
+  window.addEventListener("resize", update, { passive: true });
+  update();
+})();
 
 document.addEventListener("DOMContentLoaded", load);
