@@ -285,6 +285,7 @@
       setStatus("idle", "已选中，点击「解释」发起释义");
       retryBtn.hidden = false;
       retryBtn.textContent = "解释";
+      retryBtn.dataset.action = "retry";
     }
     checkHistoryWarn(); // 历史将满时，在标题提示去导出备份
   }
@@ -628,6 +629,11 @@
     warnEl.addEventListener("click", openHistory); // 历史将满提示：点击去导出备份
     settingsBtn.addEventListener("click", openSettings);
     retryBtn.addEventListener("click", () => {
+      // 「去设置 API Key」不是重试：直接打开设置页
+      if (retryBtn.dataset.action === "settings") {
+        openSettings();
+        return;
+      }
       const sel = lastSelectedText || selEl.textContent.replace(/^「|」$/g, "").trim();
       if (sel) startExplain(sel);
     });
@@ -828,9 +834,11 @@
       if (msg.code === "no_key") {
         retryBtn.hidden = false;
         retryBtn.textContent = "去设置 API Key";
+        retryBtn.dataset.action = "settings";
       } else {
         retryBtn.hidden = false;
         retryBtn.textContent = "重试";
+        retryBtn.dataset.action = "retry";
       }
     }
   }

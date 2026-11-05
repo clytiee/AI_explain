@@ -1367,6 +1367,23 @@ function buildCardsHtml(list) {
   return list.map((e) => gap + cardHtml(e)).join("\n");
 }
 
+// 导出用的隐藏元数据：始终写入 data-* 属性。
+// 即使没勾选「时间/来源页面/页面地址」（页面上不显示），或没勾「备份数据」，
+// 另一台电脑导入时仍能从这些属性精确还原，不会丢时间、来源与页面地址。
+// withSource=false 用于聚合卡片里的条目：同一卡片内所有记录来源相同，
+// 地址与标题只写在卡片头上，导入时由条目继承，避免逐条重复。
+function metaAttrs(e, isExtract, withSource) {
+  return (
+    ' data-id="' + esc(e.id || "") + '"' +
+    ' data-time="' + esc(String(e.time || 0)) + '"' +
+    (withSource === false
+      ? ""
+      : ' data-page-url="' + esc(e.pageUrl || "") + '"' +
+        ' data-page-title="' + esc(e.pageTitle || "") + '"') +
+    (isExtract ? ' data-extract="1"' : "")
+  );
+}
+
 // 普通单条卡片的 HTML（与页面非聚合卡片一致：时间 + 来源）
 function cardHtml(e) {
   const opts = exportOpts;
@@ -1389,8 +1406,9 @@ function cardHtml(e) {
     showMainText && sourceTexts[srcKey]
       ? '<div class="item-main">' + esc(sourceTexts[srcKey]) + "</div>"
       : "";
+  const meta = metaAttrs(e, isExtract);
   return (
-    '<div class="card">' +
+    '<div class="card"' + meta + ">" +
     '<div class="item-head">' + head.join("") + "</div>" +
     main +
     '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>" +
@@ -1432,8 +1450,9 @@ function buildCardsHtmlAggregated(list) {
             ? '<div class="agg-item-head"><span class="agg-item-time">' + esc(formatTime(e.time)) + "</span></div>"
             : "";
           const isExtract = isExtractRecord(e);
+          const meta = metaAttrs(e, isExtract, false);
           return (
-            '<div class="agg-item">' +
+            '<div class="agg-item"' + meta + ">" +
             itemHead +
             '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>" +
             (isExtract ? "" : '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>") +
@@ -1443,7 +1462,9 @@ function buildCardsHtmlAggregated(list) {
         .join("\n");
       return (
         gap +
-        '<div class="card card-agg">' +
+        '<div class="card card-agg"' +
+        ' data-page-url="' + esc(first.pageUrl || "") + '"' +
+        ' data-page-title="' + esc(first.pageTitle || "") + '">' +
         '<div class="item-head item-head-agg">' + head.join("") + "</div>" +
         main +
         '<div class="agg-items' + (opts.sep ? "" : " no-sep") + '">' + items + "</div>" +
@@ -1515,6 +1536,37 @@ function exportHtml() {
   exportStatus("已导出 " + list.length + " 条记录为 HTML 文件：" + name, true);
 }
 
+// 只导出备份数据（JSON 文件），供另一台电脑「导入」精确还原；
+// 备份始终包含全部历史，不受搜索与时间范围筛选影响
+function exportBackup() {
+  const statusEl = $("exportStatus");
+  const exportStatus = (text, ok) => {
+    statusEl.textContent = text;
+    statusEl.className = "export-status" + (ok ? " ok" : " err");
+  };
+  if (!all.length) {
+    exportStatus("暂无记录可导出。", false);
+    return;
+  }
+  const text = JSON.stringify({ version: 1, exportedAt: Date.now(), records: all }, null, 2);
+  const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  const name =
+    "划词释义备份_" +
+    d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) +
+    "_" + p(d.getHours()) + p(d.getMinutes()) + ".json";
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  exportStatus("已导出 " + all.length + " 条记录的备份数据：" + name, true);
+}
+
 // ---------- 导入历史记录（跨电脑同步） ----------
 const IMPORT_SCRIPT_RE = /<script[^>]*id=["']aie-history-data["'][^>]*>([\s\S]*?)<\/script>/i;
 const IMPORT_ANY_JSON_RE = /<script[^>]*type=["']application\/json["'][^>]*>([\s\S]*?)<\/script>/i;
@@ -1537,12 +1589,25 @@ function sanitizeRecord(r) {
     time: normalizeTime(r && r.time),
   };
   if (!rec.id) rec.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  if (r && r.extract) rec.extract = true; // 保留摘录标记，导入后仍按摘录记录渲染
   return rec;
 }
 
 // 解析导出的 HTML：优先读取内嵌的 aie-history-data JSON（完整保真）；
 // 数据区缺失或损坏时退化为从卡片 DOM 解析基本字段（answer 为纯文本，排版会丢失）
 function parseImportFile(text) {
+  // 纯 JSON 备份文件（工具栏「导出」按钮生成）
+  const raw = String(text).replace(/^\uFEFF/, "").trim();
+  if (raw.charAt(0) === "{") {
+    try {
+      const data = JSON.parse(raw);
+      if (data && Array.isArray(data.records) && data.records.length) {
+        return { records: data.records.map(sanitizeRecord), degraded: false };
+      }
+    } catch (e) {
+      /* 不是有效 JSON，继续按 HTML 解析 */
+    }
+  }
   const m = text.match(IMPORT_SCRIPT_RE) || text.match(IMPORT_ANY_JSON_RE);
   if (m) {
     try {
@@ -1574,42 +1639,57 @@ function parseTimeText(s) {
   return d.getTime() || 0;
 }
 
-// 退化：从导出 HTML 的卡片 DOM 提取基本字段
+// 从导出 HTML 的卡片 DOM 提取字段。
+// 优先读导出时写入的 data-* 隐藏元数据（时间/来源/地址/上下文/摘录标记/id），
+// 即使页面上没显示这些内容也能完整还原；旧版本导出文件没有 data-* 时，
+// 回退为从可见文本解析（时间取自 .item-time，来源取自 .item-src）。
 function parseFromDom(text) {
   const doc = new DOMParser().parseFromString(text, "text/html");
   const cards = doc.querySelectorAll(".card");
   const records = [];
+  const dataOf = (el, name) => (el && el.getAttribute ? el.getAttribute("data-" + name) || "" : "");
   cards.forEach((card) => {
     const srcEl = card.querySelector(".item-src");
-    let pageTitle = "", pageUrl = "";
-    if (srcEl) {
+    let pageTitle = dataOf(card, "page-title");
+    let pageUrl = dataOf(card, "page-url");
+    if ((!pageTitle || !pageUrl) && srcEl) {
       const a = srcEl.querySelector("a");
-      pageTitle = srcEl.textContent.replace(/^来源：/, "").trim();
-      if (a) pageUrl = a.getAttribute("href") || "";
+      if (!pageTitle) pageTitle = srcEl.textContent.replace(/^来源：/, "").trim();
+      if (!pageUrl && a) pageUrl = a.getAttribute("href") || "";
     }
+    const readTime = (el) => {
+      const dv = dataOf(el, "time");
+      if (dv !== "") return Number(dv) || 0;
+      const t = el.querySelector(".item-time");
+      return t ? parseTimeText(t.textContent) : 0;
+    };
+    const readAnswer = (el) =>
+      el.querySelector(".item-answer") ? el.querySelector(".item-answer").textContent.trim() : "";
     const items = card.querySelectorAll(".agg-item");
     if (items.length) {
       items.forEach((it) => {
-        const t = it.querySelector(".item-time");
         records.push(
           sanitizeRecord({
+            id: dataOf(it, "id"),
             text: stripQuote(it.querySelector(".item-text")),
-            answer: it.querySelector(".item-answer") ? it.querySelector(".item-answer").textContent.trim() : "",
-            pageUrl,
-            pageTitle,
-            time: t ? parseTimeText(t.textContent) : 0,
+            answer: readAnswer(it),
+            pageUrl: dataOf(it, "page-url") || pageUrl,
+            pageTitle: dataOf(it, "page-title") || pageTitle,
+            time: readTime(it),
+            extract: dataOf(it, "extract") === "1",
           })
         );
       });
     } else {
-      const t = card.querySelector(".item-time");
       records.push(
         sanitizeRecord({
+          id: dataOf(card, "id"),
           text: stripQuote(card.querySelector(".item-text")),
-          answer: card.querySelector(".item-answer") ? card.querySelector(".item-answer").textContent.trim() : "",
-          pageUrl,
-          pageTitle,
-          time: t ? parseTimeText(t.textContent) : 0,
+          answer: readAnswer(card),
+          pageUrl: pageUrl,
+          pageTitle: pageTitle,
+          time: readTime(card),
+          extract: dataOf(card, "extract") === "1",
         })
       );
     }
@@ -1754,6 +1834,7 @@ $("searchClear").addEventListener("click", () => {
 });
 $("export").addEventListener("click", exportMd);
 $("exportHtml").addEventListener("click", exportHtml);
+$("exportBackup").addEventListener("click", exportBackup);
 $("import").addEventListener("click", () => $("importFile").click());
 $("importFile").addEventListener("change", handleImportFile);
 $("importMerge").addEventListener("click", () => doImport("merge"));
