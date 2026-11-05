@@ -165,11 +165,16 @@
 
   // 悬停弹出的浮层：直接读取历史记录里这条划词的释义，不调 AI
   function showHoverPopup(hlSpan) {
+    // 普通划词释义浮层正在显示时不劫持：划词后 applyHighlight 包裹选区会让浏览器
+    // 对新出现的 .aie-hl 触发一次 mouseover，若不拦截会把刚打开的释义浮层抢走，
+    // 导致 savedThisExplain 被置 true（历史不写入）、AI 流被覆盖/掐断
+    if (!hoverPopup && isVisible()) return;
     const text = (hlSpan.textContent || "").trim();
     if (!text) return;
     hoverPopup = true;
     setPinned(false); // 新悬停弹出的浮层默认不钉住
     ensurePopup();
+    abortPort(); // 停掉可能仍在进行的 AI 流，避免旧结果写进悬停浮层
     userMoved = false;
     savedThisExplain = true; // 悬停不产生新释义，禁止写入历史
     lastSelectedText = text;
