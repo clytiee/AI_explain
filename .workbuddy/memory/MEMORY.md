@@ -25,3 +25,9 @@
 - 导入文件选择器接受 `.json`；历史页「导出」按钮只导全量 `{version, exportedAt, records}`，不受搜索与时间筛选影响，可直接用「导入」还原。
 - 默认提示词在 `background.js` 的 `DEFAULT_CONFIG.systemPrompt` 与 `options.js` 的 `DEFAULT_PROMPT` 各存一份，改动必须两处同步（当前 356 字符、7 行）；用户存过自定义提示词时新默认不生效，需在设置页「恢复默认」。
 - 导出 HTML 右上角只有一个「打印」按钮（ghost 风格、打印时隐藏）。`window.print()` 无法指定「另存为 PDF」，只能靠 Chrome 记住上次选择的打印目标。
+
+## 验证约定（重要）
+- 分工：耗 token 的验证（截图、视觉比对、端到端点击）交给用户做；改完我只做最小校验（`node --check`、关键字/两处文本一致性比对、文件是否真的落盘），并把"该看什么、验什么点"讲清楚。
+- headless 可用性：`chrome --headless --dump-dom` 返回 0 字节（`--headless=new` + 独立 `--user-data-dir` 同样失败），不可用；`--screenshot` 与 `--print-to-pdf` 正常。要拿页面里 JS 的真实输出，用本地 HTTP 服务 + 页面内 `fetch('/result?data=…')` 回传。
+- 改完 JS 后由用户点扩展卡片上的「刷新」重载；不要点「移除」（会清数据）。
+- 含中文的大文件多段替换走独立 python 脚本并读回校验：`Edit` 对 content.js 曾出现"返回成功但未落盘"。
