@@ -30,6 +30,7 @@ const DEFAULT_DISPLAY = {
   pageBg: "#eef2ff",
   quoteBg: "#e0e7ff",
   mainBg: "#f4f4fe",
+  extractBg: "#dcfce7",
   fontColor: "#1f2937",
   fontSize: 13,
   lineHeight: 1.2,
@@ -109,6 +110,43 @@ function darken(hex, amt) {
   return "#" + toHex(r1) + toHex(g1) + toHex(b1);
 }
 
+// 由浅色背景生成“引文左边框”的深色：固定低明度并压低饱和度，
+// 避免直接用 darken 把浅色压成鲜艳的亮色（浅色底明度高、饱和低，只降明度会变鲜艳）
+function deepBorder(hex) {
+  hex = (hex || "#fff").replace("#", "");
+  if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+  const r = parseInt(hex.slice(0, 2), 16) / 255;
+  const g = parseInt(hex.slice(2, 4), 16) / 255;
+  const b = parseInt(hex.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+    else if (max === g) h = ((b - r) / d + 2) * 60;
+    else h = ((r - g) / d + 4) * 60;
+  }
+  const L = 0.45;              // 明度：太深会发黑，取偏亮的中深色
+  const S = Math.min(s, 0.5);  // 控制饱和度，避免过艳
+  const c = (1 - Math.abs(2 * L - 1)) * S;
+  const hh = ((h % 360) + 360) % 360 / 60;
+  const x = c * (1 - Math.abs((hh % 2) - 1));
+  let r1 = 0, g1 = 0, b1 = 0;
+  if (hh < 1) { r1 = c; g1 = x; }
+  else if (hh < 2) { r1 = x; g1 = c; }
+  else if (hh < 3) { g1 = c; b1 = x; }
+  else if (hh < 4) { g1 = x; b1 = c; }
+  else if (hh < 5) { r1 = x; b1 = c; }
+  else { r1 = c; b1 = x; }
+  const m = L - c / 2;
+  const toHex = (n) =>
+    Math.round(Math.min(255, Math.max(0, (n + m) * 255)))
+      .toString(16).padStart(2, "0");
+  return "#" + toHex(r1) + toHex(g1) + toHex(b1);
+}
+
 // 三个背景色共用的推荐调色盘（25 色，浅色柔和、适合背景；按色相环排列）
 const BG_PALETTE = [
   "#fef2f2", // 极浅红（红）
@@ -117,6 +155,7 @@ const BG_PALETTE = [
   "#fefce8", // 极浅米黄（黄）
   "#fef9c3", // 浅黄（黄）
   "#f0fdf4", // 极浅绿（绿）
+  "#dcfce7", // 浅绿（绿）
   "#ecfdf5", // 极浅薄荷（绿/青）
   "#d1fae5", // 薄荷（青）
   "#f0f9ff", // 极浅天蓝（青/蓝）
@@ -174,6 +213,8 @@ function applyDisplay(d) {
   const s = document.documentElement.style;
   s.setProperty("--page-bg", d.pageBg);
   s.setProperty("--quote-bg", d.quoteBg);
+  s.setProperty("--extract-bg", d.extractBg);
+  s.setProperty("--extract-border", deepBorder(d.extractBg));
   s.setProperty("--main-bg", d.mainBg);
   s.setProperty("--main-border", darken(d.mainBg, 0.12));
   s.setProperty("--font-color", d.fontColor);
@@ -195,7 +236,11 @@ function buildDisplayCss(d) {
     ".item-answer{color:" + d.fontColor + ";font-size:" + d.fontSize +
       "px;line-height:" + d.lineHeight + "}" +
     ".item-main{background:" + d.mainBg + ";color:" + d.fontColor +
-      ";border-left:3px solid " + darken(d.mainBg, 0.12) + "}"
+      ";border-left:3px solid " + darken(d.mainBg, 0.12) + "}" +
+    // 摘录记录：左侧深色竖线的引文样式，底色与主文不同，置于最后确保覆盖上面的原文底色
+    ".item-text-extract{background:" + d.extractBg +
+      ";border-left:3px solid " + deepBorder(d.extractBg) +
+      ";border-radius:0;padding-left:12px;font-weight:normal}"
   );
 }
 
@@ -343,6 +388,7 @@ function syncDisplayControls() {
   $("optPageBg").value = displayOpts.pageBg;
   $("optQuoteBg").value = displayOpts.quoteBg;
   $("optMainBg").value = displayOpts.mainBg;
+  $("optExtractBg").value = displayOpts.extractBg || DEFAULT_DISPLAY.extractBg;
   $("optFontColor").value = displayOpts.fontColor;
   $("optFontSize").value = displayOpts.fontSize;
   $("optLineHeight").value = displayOpts.lineHeight;
@@ -357,6 +403,7 @@ function syncDisplayControls() {
   syncColorSwatches("bgSwatches", "optPageBg");
   syncColorSwatches("quoteSwatches", "optQuoteBg");
   syncColorSwatches("mainSwatches", "optMainBg");
+  syncColorSwatches("extractSwatches", "optExtractBg");
   syncColorSwatches("fontSwatches", "optFontColor");
 }
 
@@ -494,6 +541,7 @@ function bindDisplay() {
       pageBg: $("optPageBg").value,
       quoteBg: $("optQuoteBg").value,
       mainBg: $("optMainBg").value,
+      extractBg: $("optExtractBg").value,
       fontColor: $("optFontColor").value,
       fontSize: Number($("optFontSize").value),
       lineHeight: Number($("optLineHeight").value),
@@ -504,12 +552,14 @@ function bindDisplay() {
     syncColorSwatches("bgSwatches", "optPageBg");
     syncColorSwatches("quoteSwatches", "optQuoteBg");
     syncColorSwatches("mainSwatches", "optMainBg");
+    syncColorSwatches("extractSwatches", "optExtractBg");
     syncColorSwatches("fontSwatches", "optFontColor");
     chrome.storage.local.set({ [DISPLAY_OPTS_KEY]: displayOpts });
   };
   $("optPageBg").addEventListener("input", persist);
   $("optQuoteBg").addEventListener("input", persist);
   $("optMainBg").addEventListener("input", persist);
+  $("optExtractBg").addEventListener("input", persist);
   $("optFontColor").addEventListener("input", persist);
   $("optFontSize").addEventListener("input", persist);
   $("optLineHeight").addEventListener("input", persist);
@@ -535,6 +585,7 @@ function bindDisplay() {
     $("optPageBg").value = displayOpts.pageBg;
     $("optQuoteBg").value = displayOpts.quoteBg;
     $("optMainBg").value = displayOpts.mainBg;
+    $("optExtractBg").value = displayOpts.extractBg;
     $("optFontColor").value = displayOpts.fontColor;
     $("optFontSize").value = displayOpts.fontSize;
     $("optLineHeight").value = displayOpts.lineHeight;
@@ -544,6 +595,7 @@ function bindDisplay() {
     syncColorSwatches("bgSwatches", "optPageBg");
     syncColorSwatches("quoteSwatches", "optQuoteBg");
     syncColorSwatches("mainSwatches", "optMainBg");
+    syncColorSwatches("extractSwatches", "optExtractBg");
     syncColorSwatches("fontSwatches", "optFontColor");
     applyDisplay(displayOpts);
     chrome.storage.local.set({ [DISPLAY_OPTS_KEY]: displayOpts });
@@ -643,6 +695,17 @@ function render() {
   renderPager(list.length);
 }
 
+// 旧版摘录记录残留的占位释义文本；识别摘录记录时一并视为无释义
+const EXTRACT_PLACEHOLDER = "（摘录模式，未释义）"
+
+// 判断一条记录是否为摘录（无释义）：有 extract 标记、answer 为空，或旧占位文本
+function isExtractRecord(e) {
+  if (!e) return false;
+  if (e.extract === true) return true;
+  const a = (e.answer || "").trim();
+  return !a || a === EXTRACT_PLACEHOLDER;
+}
+
 // 「主文」按钮图标：双引号（用户提供的 quote.svg），配合 title 提示表示“该来源的一段主文说明”
 const MAIN_BTN_ICON =
   '<svg width="12" height="12" viewBox="0 0 1024 1024" fill="currentColor" aria-hidden="true">' +
@@ -705,13 +768,14 @@ function buildItemCard(e) {
   del.addEventListener("click", () => removeOne(e.id));
   head.appendChild(del);
 
+  const isExtract = isExtractRecord(e);
   const textEl = document.createElement("div");
-  textEl.className = "item-text";
+  textEl.className = "item-text" + (isExtract ? " item-text-extract" : "");
   textEl.textContent = "「" + (e.text || "") + "」";
 
   const ans = document.createElement("div");
   ans.className = "item-answer";
-  ans.innerHTML = renderMarkdown(e.answer || "");
+  if (!isExtract) ans.innerHTML = renderMarkdown(e.answer || "");
 
   item.appendChild(head);
 
@@ -990,14 +1054,15 @@ function renderAggregated(list) {
       giHead.appendChild(del);
       gi.appendChild(giHead);
 
+      const isExtract = isExtractRecord(e);
       const textEl = document.createElement("div");
-      textEl.className = "item-text";
+      textEl.className = "item-text" + (isExtract ? " item-text-extract" : "");
       textEl.textContent = "「" + (e.text || "") + "」";
       gi.appendChild(textEl);
 
       const ans = document.createElement("div");
       ans.className = "item-answer";
-      ans.innerHTML = renderMarkdown(e.answer || "");
+      if (!isExtract) ans.innerHTML = renderMarkdown(e.answer || "");
       gi.appendChild(ans);
 
       items.appendChild(gi);
@@ -1223,6 +1288,7 @@ function cardHtml(e) {
     }
   }
   const srcKey = e.pageUrl || e.pageTitle || "";
+  const isExtract = isExtractRecord(e);
   const main =
     showMainText && sourceTexts[srcKey]
       ? '<div class="item-main">' + esc(sourceTexts[srcKey]) + "</div>"
@@ -1231,8 +1297,8 @@ function cardHtml(e) {
     '<div class="card">' +
     '<div class="item-head">' + head.join("") + "</div>" +
     main +
-    '<div class="item-text">「' + esc(e.text || "") + "」</div>" +
-    '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>" +
+    '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>" +
+    (isExtract ? "" : '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>") +
     "</div>"
   );
 }
@@ -1269,11 +1335,12 @@ function buildCardsHtmlAggregated(list) {
           const itemHead = opts.time
             ? '<div class="agg-item-head"><span class="agg-item-time">' + esc(formatTime(e.time)) + "</span></div>"
             : "";
+          const isExtract = isExtractRecord(e);
           return (
             '<div class="agg-item">' +
             itemHead +
-            '<div class="item-text">「' + esc(e.text || "") + "」</div>" +
-            '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>" +
+            '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>" +
+            (isExtract ? "" : '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>") +
             "</div>"
           );
         })
@@ -1605,6 +1672,7 @@ initFontSelect();
 initColorSwatches("bgSwatches", "optPageBg", BG_PALETTE);
 initColorSwatches("quoteSwatches", "optQuoteBg", BG_PALETTE);
 initColorSwatches("mainSwatches", "optMainBg", BG_PALETTE);
+initColorSwatches("extractSwatches", "optExtractBg", BG_PALETTE);
 initColorSwatches("fontSwatches", "optFontColor", FONT_RECOMMEND);
 bindExportOpts();
 bindDisplay();

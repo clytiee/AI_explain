@@ -189,10 +189,11 @@
       .sendMessage({
         type: "history-save",
         text,
-        answer: "（摘录模式，未释义）",
+        answer: "",
         context: "",
         pageUrl: location.href,
         pageTitle: document.title,
+        extract: true,
       })
       .catch(() => {});
   }

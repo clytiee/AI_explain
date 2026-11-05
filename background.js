@@ -240,18 +240,22 @@ async function getHistory() {
 }
 
 // 追加一条释义记录（新的在最前），并做条数上限裁剪（超出覆盖最早）
-async function saveHistory({ text, answer, context, pageUrl, pageTitle }) {
-  if (!text || !answer || !String(answer).trim()) return null;
+// extract=true 表示摘录记录：没有释义，允许 answer 为空
+async function saveHistory({ text, answer, context, pageUrl, pageTitle, extract }) {
+  if (!text || !String(text).trim()) return null;
+  const hasAnswer = !!answer && !!String(answer).trim();
+  if (!hasAnswer && !extract) return null;
   const list = await getHistory();
   const entry = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
     text: String(text),
-    answer: String(answer),
+    answer: hasAnswer ? String(answer) : "",
     context: context ? String(context) : "",
     pageUrl: pageUrl ? String(pageUrl) : "",
     pageTitle: pageTitle ? String(pageTitle) : "",
     time: Date.now(),
   };
+  if (extract) entry.extract = true;
   list.unshift(entry);
   const max = await getHistoryMax();
   if (list.length > max) list.length = max;

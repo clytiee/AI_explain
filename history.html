@@ -20,6 +20,8 @@
       --line-height: 1.2;
       --main-bg: #f4f4fe;
       --main-border: #6366f1;
+      --extract-bg: #dcfce7;
+      --extract-border: #39ac61;
     }
     * { box-sizing: border-box; }
     body {
@@ -87,9 +89,9 @@
     }
     .opts.timebar { overflow: visible; }
     .opts.timebar .opts-hint { flex: 0 0 auto; color: var(--primary); font-size: 12px; }
-    .opts.timebar .quick-links { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
-    .opts.timebar .quick-link { cursor: pointer; color: var(--muted); text-decoration: none; }
-    .opts.timebar .quick-link:hover { color: var(--primary); }
+    .opts.timebar .quick-links { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 12px; }
+    .opts.timebar .quick-link { cursor: pointer; color: var(--muted); text-decoration: none; width: 25px; text-align: center; border-radius: 5px; }
+    .opts.timebar .quick-link:hover { color: var(--primary); background: rgba(99, 102, 241, 0.1); }
     .opts.timebar .quick-sep { color: var(--border); }
     .opts-title {
       color: var(--muted); font-size: 12px;
@@ -233,6 +235,14 @@
       margin-bottom: 8px;
       word-break: break-word;
     }
+    /* 摘录记录：左侧深色竖线的引文样式，底色与主文不同 */
+    .item-text-extract {
+      background: var(--extract-bg) !important;
+      border-left: 3px solid var(--extract-border);
+      border-radius: 0;
+      padding-left: 12px;
+      font-weight: normal;
+    }
     .item-answer { font-size: var(--font-size); line-height: var(--line-height); color: var(--font-color); }
     .item-answer p { margin: 4px 0; }
     .item-answer h1, .item-answer h2, .item-answer h3, .item-answer h4 { margin: 8px 0 4px; font-size: 14px; }
@@ -364,6 +374,10 @@
       <span class="opts-title">主文背景色：</span>
       <label><input type="color" id="optMainBg" value="#f4f4fe" /></label>
       <span class="bg-swatches" id="mainSwatches"></span>
+      <span class="opts-br"></span>
+      <span class="opts-title">摘录背景色：</span>
+      <label><input type="color" id="optExtractBg" value="#dcfce7" /></label>
+      <span class="bg-swatches" id="extractSwatches"></span>
       <span class="opts-br"></span>
       <span class="opts-title">样式管理：</span>
       <button type="button" id="saveDisplay" class="reset-btn">保存显示设置</button>
