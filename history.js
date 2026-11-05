@@ -902,11 +902,31 @@ function groupRecords(list) {
   return entries;
 }
 
+// 排序按钮的 SVG 图标（统一 24×24 视框、2px 圆头描边，currentColor 随按钮变色）
+const MOVE_ICONS = {
+  top: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14M12 20V8M7.5 12.5L12 8l4.5 4.5"/></svg>',
+  up: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+  down: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
+  bottom: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20h14M12 4v12M7.5 11.5L12 16l4.5-4.5"/></svg>',
+};
+
 // 聚合模式下移动某条记录在其来源内的位置，并持久化手工排序
-function moveInOrder(srcKey, index, dir, recs) {
-  const target = index + dir;
-  if (target < 0 || target >= recs.length) return;
-  [recs[index], recs[target]] = [recs[target], recs[index]];
+// mode：-1 上移 / 1 下移 / "top" 移到最上 / "bottom" 移到最下
+function moveInOrder(srcKey, index, mode, recs) {
+  if (index < 0 || index >= recs.length) return;
+  if (mode === "top") {
+    if (index === 0) return;
+    const item = recs.splice(index, 1)[0];
+    recs.unshift(item);
+  } else if (mode === "bottom") {
+    if (index === recs.length - 1) return;
+    const item = recs.splice(index, 1)[0];
+    recs.push(item);
+  } else {
+    const target = index + mode;
+    if (target < 0 || target >= recs.length) return;
+    [recs[index], recs[target]] = [recs[target], recs[index]];
+  }
   aggOrder[srcKey] = recs.map((r) => r.id);
   chrome.storage.local.set({ [AGG_ORDER_KEY]: aggOrder });
   render();
@@ -1032,20 +1052,34 @@ function renderAggregated(list) {
       t.className = "agg-item-time";
       t.textContent = formatTime(e.time);
       giHead.appendChild(t);
+      const top = document.createElement("button");
+      top.className = "item-move";
+      top.title = "移到最上";
+      top.innerHTML = MOVE_ICONS.top;
+      top.disabled = idx === 0;
+      top.addEventListener("click", () => moveInOrder(srcKey, idx, "top", recs));
+      giHead.appendChild(top);
       const up = document.createElement("button");
       up.className = "item-move";
       up.title = "上移";
-      up.textContent = "↑";
+      up.innerHTML = MOVE_ICONS.up;
       up.disabled = idx === 0;
       up.addEventListener("click", () => moveInOrder(srcKey, idx, -1, recs));
       giHead.appendChild(up);
       const down = document.createElement("button");
       down.className = "item-move";
       down.title = "下移";
-      down.textContent = "↓";
+      down.innerHTML = MOVE_ICONS.down;
       down.disabled = idx === recs.length - 1;
       down.addEventListener("click", () => moveInOrder(srcKey, idx, 1, recs));
       giHead.appendChild(down);
+      const bottom = document.createElement("button");
+      bottom.className = "item-move";
+      bottom.title = "移到最下";
+      bottom.innerHTML = MOVE_ICONS.bottom;
+      bottom.disabled = idx === recs.length - 1;
+      bottom.addEventListener("click", () => moveInOrder(srcKey, idx, "bottom", recs));
+      giHead.appendChild(bottom);
       const del = document.createElement("button");
       del.className = "item-del";
       del.title = "删除这条";
