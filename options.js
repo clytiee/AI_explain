@@ -24,6 +24,59 @@ const HL_PRESET_COLORS = [
 ];
 const HL_DEFAULT_COLOR = "#fef08a";
 
+// 内置提示词（与 background.js 的 BUILTIN_PROMPTS 一一对应，改动需两处同步）
+const BUILTIN_PROMPTS = [
+  { id: "default", name: "默认释义", prompt: DEFAULT_PROMPT },
+  {
+    id: "brief",
+    name: "简洁速览",
+    prompt:
+      "你是一位中文阅读助手。用户选中了网页上的一段文本，请用简体中文、不超过三句话说明它的意思：\n" +
+      "① 先用一句话概括这段文本在说什么；\n" +
+      "② 再点出其中最容易误解的一个词或说法，简短解释；\n" +
+      "③ 若是外文或文言，先给出通顺的现代汉语译文。\n" +
+      "不要列小标题、不要逐字考证、不要复述页面上下文。",
+  },
+  {
+    id: "translate",
+    name: "翻译优先",
+    prompt:
+      "你是一位翻译。用户选中了网页上的一段文本。\n" +
+      "若为外文或文言：先给出整段通顺、准确的中文译文；译文之后另起一段，用要点列出不超过 3 个难点词或术语的简短注释（词用粗体，注释同行）。\n" +
+      "若为现代中文：先用一句话概括意思，再解释其中难懂的词。\n" +
+      "不做字形考证，不加评价，不解释页面上下文。",
+  },
+];
+
+// 当前编辑中的提示词集合与选中项（保存时整体写回 config）
+let prompts = [];
+let activePromptId = "";
+let promptUid = 0;
+const newPromptId = () =>
+  "p" + Date.now().toString(36) + (promptUid++).toString(36) + Math.random().toString(36).slice(2, 5);
+
+// 与 background.js 的 normalizePromptConfig 同义：旧配置迁移 + 保证选中项合法
+function normalizePrompts(cfg) {
+  let list = Array.isArray(cfg.prompts) ? cfg.prompts : [];
+  list = list
+    .filter((p) => p && typeof p.prompt === "string" && p.prompt.trim())
+    .map((p, i) => ({
+      id: String(p.id || "p" + i),
+      name: String(p.name || "").trim() || "提示词 " + (i + 1),
+      prompt: String(p.prompt),
+    }));
+  if (!list.length) {
+    const saved = String(cfg.systemPrompt || "").trim();
+    list =
+      saved && saved !== DEFAULT_PROMPT
+        ? [{ id: "custom", name: "我的提示词", prompt: saved }]
+        : BUILTIN_PROMPTS.map((p) => ({ ...p }));
+  }
+  let id = cfg.activePromptId;
+  if (!list.some((p) => p.id === id)) id = list[0].id;
+  return { list, id };
+}
+
 const $ = (id) => document.getElementById(id);
 
 let currentConfig = {
@@ -80,7 +133,11 @@ function load() {
     $("stream").checked = !!currentConfig.stream;
     $("autoSaveHistory").checked = currentConfig.autoSaveHistory !== false;
     $("historyMax").value = currentConfig.historyMax ?? 1000;
-    $("systemPrompt").value = currentConfig.systemPrompt || DEFAULT_PROMPT;
+    const np = normalizePrompts(currentConfig);
+    prompts = np.list;
+    activePromptId = np.id;
+    renderPromptSelect();
+    fillPromptForm();
     const hlColor = currentConfig.highlightColor || HL_DEFAULT_COLOR;
     $("highlightColor").value = hlColor;
     markActiveSwatch(hlColor);
@@ -97,6 +154,18 @@ function load() {
 }
 
 function readForm() {
+  // 先把表单当前内容写回编辑中的那份提示词，再整体序列化
+  const cur = currentEntry();
+  if (cur) {
+    cur.name = $("promptName").value.trim() || cur.name;
+    cur.prompt = $("systemPrompt").value;
+  }
+  const list = prompts.map((p, i) => ({
+    id: p.id,
+    name: String(p.name || "").trim() || "提示词 " + (i + 1),
+    prompt: String(p.prompt || ""),
+  }));
+  const active = list.find((p) => p.id === activePromptId) || list[0];
   return {
     apiBaseUrl: $("apiBaseUrl").value.trim(),
     apiKey: $("apiKey").value.trim(),
@@ -107,9 +176,48 @@ function readForm() {
     stream: $("stream").checked,
     autoSaveHistory: $("autoSaveHistory").checked,
     historyMax: Number($("historyMax").value) || 1000,
-    systemPrompt: $("systemPrompt").value,
+    systemPrompt: active ? active.prompt : "",
+    prompts: list,
+    activePromptId: active ? active.id : "",
     highlightColor: $("highlightColor").value,
   };
+}
+
+// ---------- 多提示词：下拉切换 + 增删改 ----------
+function currentEntry() {
+  return prompts.find((p) => p.id === activePromptId) || prompts[0] || null;
+}
+
+function renderPromptSelect() {
+  const sel = $("promptSelect");
+  sel.innerHTML = "";
+  prompts.forEach((p) => {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.name;
+    sel.appendChild(opt);
+  });
+  sel.value = activePromptId;
+}
+
+function fillPromptForm() {
+  const cur = currentEntry();
+  if (!cur) return;
+  $("promptName").value = cur.name;
+  $("systemPrompt").value = cur.prompt;
+}
+
+// 切换编辑/使用目标：先把当前表单内容存回原来那份，再载入新的一份
+function selectPrompt(id) {
+  const cur = currentEntry();
+  if (cur) {
+    cur.name = $("promptName").value.trim() || cur.name;
+    cur.prompt = $("systemPrompt").value;
+  }
+  if (!prompts.some((p) => p.id === id)) return;
+  activePromptId = id;
+  renderPromptSelect();
+  fillPromptForm();
 }
 
 function setStatus(text, ok) {
@@ -165,6 +273,10 @@ $("save").addEventListener("click", () => {
     setStatus("请填写模型名称。", false);
     return;
   }
+  if (!String(cfg.systemPrompt || "").trim()) {
+    setStatus("当前选中的提示词正文为空，请填写后再保存。", false);
+    return;
+  }
   chrome.storage.local.set({ config: cfg }, () => {
     currentConfig = cfg;
     setStatus("已保存 ✓ 现在去网页上选中文字试试吧。", true);
@@ -173,7 +285,81 @@ $("save").addEventListener("click", () => {
 
 $("resetPrompt").addEventListener("click", () => {
   $("systemPrompt").value = DEFAULT_PROMPT;
-  setStatus("已恢复默认提示词，记得点「保存设置」生效。", true);
+  const cur = currentEntry();
+  if (cur) cur.prompt = DEFAULT_PROMPT;
+  setStatus("已把这份提示词恢复为默认正文，记得点「保存设置」生效。", true);
+});
+
+// 下拉切换提示词
+$("promptSelect").addEventListener("change", (e) => {
+  selectPrompt(e.target.value);
+});
+
+// 改名：即时同步到下拉选项，避免切换后还要重选
+$("promptName").addEventListener("input", () => {
+  const cur = currentEntry();
+  if (!cur) return;
+  const name = $("promptName").value.trim();
+  if (!name) return;
+  cur.name = name;
+  renderPromptSelect();
+});
+
+$("systemPrompt").addEventListener("input", () => {
+  const cur = currentEntry();
+  if (cur) cur.prompt = $("systemPrompt").value;
+});
+
+// 新增一份空白提示词
+$("promptAdd").addEventListener("click", () => {
+  const cur = currentEntry();
+  if (cur) {
+    cur.name = $("promptName").value.trim() || cur.name;
+    cur.prompt = $("systemPrompt").value;
+  }
+  const id = newPromptId();
+  prompts.push({ id, name: "新提示词 " + (prompts.length + 1), prompt: "" });
+  activePromptId = id;
+  renderPromptSelect();
+  fillPromptForm();
+  $("systemPrompt").focus();
+  setStatus("已新增一份提示词，填好正文与名称后点「保存设置」。", true);
+});
+
+// 以当前这份为模板复制一份
+$("promptDup").addEventListener("click", () => {
+  const cur = currentEntry();
+  if (!cur) return;
+  cur.name = $("promptName").value.trim() || cur.name;
+  cur.prompt = $("systemPrompt").value;
+  const id = newPromptId();
+  const baseName = cur.name.replace(/（副本(\d*)）/g, "");
+  const dupCount = prompts.filter((p) => p.name.startsWith(baseName)).length;
+  prompts.push({
+    id,
+    name: baseName + "（副本" + (dupCount > 1 ? dupCount : "") + "）",
+    prompt: cur.prompt,
+  });
+  activePromptId = id;
+  renderPromptSelect();
+  fillPromptForm();
+  setStatus("已复制一份提示词，可改个名字区分后保存。", true);
+});
+
+// 删除当前这份（至少保留一份）
+$("promptDel").addEventListener("click", () => {
+  if (prompts.length <= 1) {
+    setStatus("至少保留一份提示词，不能删除。", false);
+    return;
+  }
+  const cur = currentEntry();
+  if (!cur) return;
+  if (!confirm("确定删除提示词「" + cur.name + "」？此操作在保存设置后生效。")) return;
+  prompts = prompts.filter((p) => p.id !== cur.id);
+  activePromptId = prompts[0].id;
+  renderPromptSelect();
+  fillPromptForm();
+  setStatus("已删除「" + cur.name + "」，点「保存设置」写入。", true);
 });
 
 $("openHistory").addEventListener("click", () => {

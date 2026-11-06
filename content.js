@@ -28,6 +28,7 @@
   let pinned = false;             // 浮层是否被钉住（钉住后不自动消失）
   let statusEl, bodyEl, resultEl, selEl, closeBtn, copyBtn, historyBtn, warnEl, settingsBtn, retryBtn, header;
   let pinBtn;
+  let promptSelect, selTextEl, histTag;  // 提示词下拉（原文行最右）+ 原文文字节点 + 「历史释义」标签
   let savedThisExplain = false; // 本次释义是否已写入历史（防止 result+done 重复保存）
 
   chrome.storage.local.get({ config: null, paused: false, extractMode: false, highlightMode: false }, (res) => {
@@ -42,6 +43,7 @@
     if (changes.config?.newValue) {
       config = { ...config, ...changes.config.newValue };
       syncHighlightColors(); // 荧光笔颜色变化时，同步已划线的颜色
+      syncPromptBar(); // 设置页改了提示词/切换了提示词时，刷新浮层下拉
     }
     if (changes.paused !== undefined) {
       paused = !!changes.paused.newValue;
@@ -175,11 +177,13 @@
     setPinned(false); // 新悬停弹出的浮层默认不钉住
     ensurePopup();
     abortPort(); // 停掉可能仍在进行的 AI 流，避免旧结果写进悬停浮层
+    syncPromptBar(); // 悬停模式下会隐藏提示词切换条
+    setHistoryTag(false); // 每次悬停先收起标签，查到释义后再显示
     userMoved = false;
     savedThisExplain = true; // 悬停不产生新释义，禁止写入历史
     lastSelectedText = text;
-    selEl.textContent = text.length > 40 ? "「" + text.slice(0, 40) + "…」" : "「" + text + "」";
-    selEl.title = text;
+    selTextEl.textContent = text.length > 40 ? "「" + text.slice(0, 40) + "…」" : "「" + text + "」";
+    selTextEl.title = text;
     resultEl.innerHTML = "";
     rawAnswer = "";
     resultEl.hidden = true;
@@ -197,8 +201,10 @@
             if (resp.entry.answer && String(resp.entry.answer).trim()) {
               rawAnswer = resp.entry.answer;
               render();
-              setStatus("idle", "历史释义"); // render 会隐藏状态栏，这里重新显示
-              statusEl.hidden = false;
+              // 「历史释义」作为标签挂在原文行最右，不再单独占标题行
+              setStatus("idle", "");
+              statusEl.hidden = true;
+              setHistoryTag(true);
             } else {
               setStatus("idle", "摘录 · 该划词未释义");
             }
@@ -254,21 +260,23 @@
     lastContext = range ? buildContext(range) : "";
     // 单个汉字时，在字右侧附带汉典链接
     if (text.length === 1) {
-      selEl.innerHTML =
+      selTextEl.innerHTML =
         "「" + escHtml(text) + "」" +
         '<a class="aie-zdic" href="https://zdic.net/hans/' +
         encodeURIComponent(text) +
         '" target="_blank" rel="noopener" title="汉典：' + escHtml(text) + '">汉典</a>';
     } else {
-      selEl.textContent = "「" + text + "」";
+      selTextEl.textContent = "「" + text + "」";
     }
-    selEl.title = text;
+    selTextEl.title = text;
     resultEl.innerHTML = "";
     rawAnswer = "";
     setStatus("loading", "正在解析…");
     resultEl.hidden = true;
     retryBtn.hidden = true;
     bodyEl.style.display = "";
+    syncPromptBar(); // 显示提示词切换条（普通划词流程）
+    setHistoryTag(false);
     reposition(rect);
 
     // 高亮划词：用荧光笔在选区文字下半部分划线（划词与摘录均生效）
@@ -568,7 +576,11 @@
       '<button class="aie-btn aie-close" title="关闭">×</button>' +
       "</div>" +
       "</div>" +
-      '<div class="aie-seltext"></div>' +
+      '<div class="aie-seltext">' +
+      '<span class="aie-seltext-text"></span>' +
+      '<span class="aie-tag" hidden>历史释义</span>' +
+      '<select class="aie-prompt-select" title="切换AI提示词" hidden></select>' +
+      "</div>" +
       '<div class="aie-body">' +
       '<div class="aie-status"></div>' +
       '<div class="aie-result"></div>' +
@@ -587,7 +599,10 @@
     warnEl = root.querySelector(".aie-warn");
     settingsBtn = root.querySelector(".aie-settings");
     retryBtn = root.querySelector(".aie-retry");
+    promptSelect = root.querySelector(".aie-prompt-select");
     selEl = root.querySelector(".aie-seltext");
+    selTextEl = root.querySelector(".aie-seltext-text");
+    histTag = root.querySelector(".aie-tag");
     statusEl = root.querySelector(".aie-status");
     bodyEl = root.querySelector(".aie-body");
     resultEl = root.querySelector(".aie-result");
@@ -628,13 +643,14 @@
     historyBtn.addEventListener("click", openHistory);
     warnEl.addEventListener("click", openHistory); // 历史将满提示：点击去导出备份
     settingsBtn.addEventListener("click", openSettings);
+    promptSelect.addEventListener("change", onPromptChange);
     retryBtn.addEventListener("click", () => {
       // 「去设置 API Key」不是重试：直接打开设置页
       if (retryBtn.dataset.action === "settings") {
         openSettings();
         return;
       }
-      const sel = lastSelectedText || selEl.textContent.replace(/^「|」$/g, "").trim();
+      const sel = lastSelectedText || selTextEl.textContent.replace(/^「|」$/g, "").trim();
       if (sel) startExplain(sel);
     });
 
@@ -799,6 +815,59 @@
     }
   }
 
+  // ---------- 提示词切换（浮层内） ----------
+  function promptList() {
+    return Array.isArray(config.prompts) ? config.prompts : [];
+  }
+
+  function activePrompt() {
+    const list = promptList();
+    return list.find((p) => p.id === config.activePromptId) || list[0] || null;
+  }
+
+  // 用设置里保存的提示词列表渲染原文行最右的下拉；悬停读历史释义或没有提示词时隐藏
+  function syncPromptBar() {
+    if (!promptSelect) return;
+    const list = promptList();
+    promptSelect.innerHTML = "";
+    if (!list.length || hoverPopup) {
+      promptSelect.hidden = true;
+      return;
+    }
+    list.forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = String(p.name || "提示词");
+      promptSelect.appendChild(opt);
+    });
+    const cur = activePrompt();
+    promptSelect.value = cur ? cur.id : "";
+    promptSelect.hidden = false;
+    promptSelect.title = "切换AI提示词";
+  }
+
+  // 悬停读历史释义时，在原文行最右显示「历史释义」小标签
+  function setHistoryTag(on) {
+    if (histTag) histTag.hidden = !on;
+  }
+
+  function onPromptChange() {
+    const target = promptList().find((p) => p.id === promptSelect.value);
+    if (!target) return;
+    const next = { ...config, activePromptId: target.id, systemPrompt: target.prompt };
+    config = next;
+    // 写回时以存储里的最新配置为底，避免把别处刚改的字段覆盖成旧值
+    chrome.storage.local.get({ config: null }, (res) => {
+      const base = { ...(res.config || {}), activePromptId: target.id, systemPrompt: target.prompt };
+      chrome.storage.local.set({ config: base });
+    });
+    // 已经有释义结果时，直接用新提示词重新解释当前这段文字
+    if (rawAnswer && rawAnswer.trim()) {
+      const sel = lastSelectedText || (selTextEl ? selTextEl.textContent.replace(/^「|」$/g, "").trim() : "");
+      if (sel) startExplain(sel);
+    }
+  }
+
   function startExplain(text) {
     abortPort();
     savedThisExplain = false;
@@ -862,7 +931,7 @@
     if (config.autoSaveHistory === false) return;
     const text =
       lastSelectedText ||
-      (selEl ? selEl.textContent.replace(/^「|」$/g, "").trim() : "");
+      (selTextEl ? selTextEl.textContent.replace(/^「|」$/g, "").trim() : "");
     if (!text || !rawAnswer.trim()) return;
     savedThisExplain = true;
     chrome.runtime
@@ -889,7 +958,7 @@
   }
 
   function copyAnswer() {
-    const text = rawAnswer || lastSelectedText || selEl.textContent.replace(/^「|」$/g, "");
+    const text = rawAnswer || lastSelectedText || selTextEl.textContent.replace(/^「|」$/g, "");
     const flash = () => {
       copyBtn.textContent = "已复制";
       setTimeout(() => (copyBtn.textContent = "复制"), 1200);

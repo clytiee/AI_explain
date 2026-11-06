@@ -21,12 +21,72 @@ const DEFAULT_CONFIG = {
     "只解释【所选文本】；【所在页面上下文】仅用于理解语境，不要逐句翻译或解释上下文中的其他内容（除非所选本身已是整段）。",
 };
 
+// 多份提示词：默认内置这三份，用户可在设置页增删改，在浮层里随时切换
+// 存法：config.prompts = [{ id, name, prompt }]，config.activePromptId 指向当前使用的那份，
+// config.systemPrompt 始终同步为当前提示词正文，请求时照旧读 systemPrompt。
+const BUILTIN_PROMPTS = [
+  { id: "default", name: "默认释义", prompt: DEFAULT_CONFIG.systemPrompt },
+  {
+    id: "brief",
+    name: "简洁速览",
+    prompt:
+      "你是一位中文阅读助手。用户选中了网页上的一段文本，请用简体中文、不超过三句话说明它的意思：\n" +
+      "① 先用一句话概括这段文本在说什么；\n" +
+      "② 再点出其中最容易误解的一个词或说法，简短解释；\n" +
+      "③ 若是外文或文言，先给出通顺的现代汉语译文。\n" +
+      "不要列小标题、不要逐字考证、不要复述页面上下文。",
+  },
+  {
+    id: "translate",
+    name: "翻译优先",
+    prompt:
+      "你是一位翻译。用户选中了网页上的一段文本。\n" +
+      "若为外文或文言：先给出整段通顺、准确的中文译文；译文之后另起一段，用要点列出不超过 3 个难点词或术语的简短注释（词用粗体，注释同行）。\n" +
+      "若为现代中文：先用一句话概括意思，再解释其中难懂的词。\n" +
+      "不做字形考证，不加评价，不解释页面上下文。",
+  },
+];
+
+// 统一整理 config 里的提示词：缺字段/旧版只有 systemPrompt 时自动迁移，并保证 systemPrompt 与选中项一致
+function normalizePromptConfig(cfg) {
+  let prompts = Array.isArray(cfg.prompts) ? cfg.prompts : [];
+  prompts = prompts
+    .filter((p) => p && typeof p.prompt === "string" && p.prompt.trim())
+    .map((p, i) => ({
+      id: String(p.id || "p" + i),
+      name: String(p.name || "").trim() || "提示词 " + (i + 1),
+      prompt: String(p.prompt),
+    }));
+  if (!prompts.length) {
+    // 旧配置：只有一份 systemPrompt，用户改过就保留成「我的提示词」，没改过则铺开内置三份
+    const saved = String(cfg.systemPrompt || "").trim();
+    prompts =
+      saved && saved !== DEFAULT_CONFIG.systemPrompt
+        ? [{ id: "custom", name: "我的提示词", prompt: saved }]
+        : BUILTIN_PROMPTS.map((p) => ({ ...p }));
+  }
+  let activeId = cfg.activePromptId;
+  if (!prompts.some((p) => p.id === activeId)) activeId = prompts[0].id;
+  const active = prompts.find((p) => p.id === activeId);
+  return { prompts, activePromptId: activeId, systemPrompt: active.prompt };
+}
+
 let configCache = null;
 
 async function getConfig() {
   if (configCache) return configCache;
   const res = await chrome.storage.local.get("config");
-  configCache = { ...DEFAULT_CONFIG, ...(res.config || {}) };
+  const saved = res.config || {};
+  configCache = { ...DEFAULT_CONFIG, ...saved };
+  configCache = { ...configCache, ...normalizePromptConfig(configCache) };
+  // 旧配置迁移：把整理后的提示词结构写回一次，content 脚本与设置页就不用各自兜底
+  if (
+    !Array.isArray(saved.prompts) ||
+    !saved.activePromptId ||
+    saved.systemPrompt !== configCache.systemPrompt
+  ) {
+    chrome.storage.local.set({ config: configCache }).catch(() => {});
+  }
   return configCache;
 }
 

@@ -28,6 +28,10 @@
     .key-row { display: flex; gap: 10px; align-items: center; }
     .key-row input { flex: 1 1 auto; min-width: 0; }
     .key-row button { flex: 0 0 auto; }
+    /* 多提示词：下拉 + 增删按钮一行 */
+    .prompt-row { display: flex; gap: 8px; align-items: center; }
+    .prompt-row select { flex: 1 1 auto; min-width: 0; }
+    .prompt-row button { flex: 0 0 auto; padding: 8px 12px; }
     h1 { font-size: 20px; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
     h1 .dot {
       width: 12px; height: 12px; border-radius: 50%;
@@ -198,12 +202,21 @@
         </div>
         <label class="switch"><input type="checkbox" id="stream" checked /><span class="slider"></span></label>
       </div>
-      <label>系统提示词（决定解释的风格与侧重）</label>
+      <label>提示词（可存多份，随时切换）</label>
+      <div class="prompt-row">
+        <select id="promptSelect" title="选择要编辑/使用的提示词"></select>
+        <button class="ghost" id="promptAdd" type="button">新增</button>
+        <button class="ghost" id="promptDup" type="button">复制一份</button>
+        <button class="ghost" id="promptDel" type="button">删除</button>
+      </div>
+      <label>提示词名称</label>
+      <input type="text" id="promptName" maxlength="40" placeholder="例如：汉字考证" />
+      <label>提示词正文（当前选中的这份决定解释的风格与侧重）</label>
       <textarea id="systemPrompt"></textarea>
       <div style="margin-top:6px">
         <button class="ghost" id="resetPrompt" type="button">恢复默认提示词</button>
       </div>
-      <div class="hint">默认风格会兼顾外文翻译、专业术语通俗讲解、文言文与汉字的本字及造字原意考证，并强制 AI 按「分板块 + 逐词列表」的规范格式输出，避免把整句翻译并进逐词解释里。改过提示词导致排版乱时，可一键恢复。</div>
+      <div class="hint">下拉里选中的就是当前用于释义的那份；改名、改正文后点「保存设置」生效。网页浮层里也能直接切换，改选后立即生效，并用新的提示词重新解释当前这段文字。默认风格会兼顾外文翻译、专业术语通俗讲解、文言文与汉字的本字及造字原意考证，并强制 AI 按「分板块 + 逐词列表」的规范格式输出，避免把整句翻译并进逐词解释里。</div>
     </div>
 
     <div class="card">
