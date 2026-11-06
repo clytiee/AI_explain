@@ -6,6 +6,7 @@
   window.__aiExplainLoaded = true;
 
   const POPUP_ID = "ai-explain-popup";
+  const TAG_MENU_ID = "ai-explain-tagmenu";
   let config = { autoExplain: true, autoSaveHistory: true, maxLength: 500, stream: true };
   let paused = false;             // 是否暂停划词（点击插件图标切换）
   let extractMode = false;        // 摘录模式：划词仅存为历史摘录，不释义（图标右键切换）
@@ -29,6 +30,8 @@
   let statusEl, bodyEl, resultEl, selEl, closeBtn, copyBtn, historyBtn, warnEl, settingsBtn, retryBtn, header;
   let pinBtn;
   let promptSelect, selTextEl, histTag;  // 提示词下拉（原文行最右）+ 原文文字节点 + 「历史释义」标签
+  let curTagBtn, tagMenu; // 标题栏的「当前标签」chip 与它的下拉
+  let hoverEntry = null; // 悬停看历史释义时取到的那条记录（改标签要改它，而不是全局当前标签）
   let savedThisExplain = false; // 本次释义是否已写入历史（防止 result+done 重复保存）
 
   chrome.storage.local.get({ config: null, paused: false, extractMode: false, highlightMode: false }, (res) => {
@@ -44,6 +47,7 @@
       config = { ...config, ...changes.config.newValue };
       syncHighlightColors(); // 荧光笔颜色变化时，同步已划线的颜色
       syncPromptBar(); // 设置页改了提示词/切换了提示词时，刷新浮层下拉
+      updateCurTagChip(); // 别处（设置页或另一台电脑）改了当前标签，chip 跟着变
     }
     if (changes.paused !== undefined) {
       paused = !!changes.paused.newValue;
@@ -81,7 +85,8 @@
 
   function isInsidePopup(node) {
     if (!node || !node.closest) return false;
-    return !!node.closest("#" + POPUP_ID);
+    // 标签下拉挂在 <html> 下，但视作浮层的一部分，否则点它会把浮层关掉
+    return !!node.closest("#" + POPUP_ID) || !!node.closest("#" + TAG_MENU_ID);
   }
 
   // 是否在浮层内实际选中了一段文本（塌陷的选择不算）
@@ -130,6 +135,7 @@
   document.addEventListener(
     "scroll",
     () => {
+      closeTagMenu(); // 菜单按视口坐标定位，页面一滚就收起，避免飘走
       if (isVisible() && currentRange && !userMoved) {
         reposition(currentRange.getBoundingClientRect());
       }
@@ -160,6 +166,8 @@
       clearTimeout(hoverShowTimer);
       clearTimeout(hoverHideTimer);
       hoverHideTimer = setTimeout(() => {
+        // 标签菜单开着（可能在给这条记录改标签）就别关浮层
+        if (tagMenu && !tagMenu.hidden) return;
         if (hoverPopup && !pinned && isVisible()) hidePopup();
       }, 250);
     }
@@ -179,6 +187,9 @@
     abortPort(); // 停掉可能仍在进行的 AI 流，避免旧结果写进悬停浮层
     syncPromptBar(); // 悬停模式下会隐藏提示词切换条
     setHistoryTag(false); // 每次悬停先收起标签，查到释义后再显示
+    hoverEntry = null; // 查到记录后填上，chip 显示的是这条记录自己的标签
+    updateCurTagChip();
+    closeTagMenu();
     userMoved = false;
     savedThisExplain = true; // 悬停不产生新释义，禁止写入历史
     lastSelectedText = text;
@@ -198,6 +209,8 @@
         (resp) => {
           if (!hoverPopup || !isVisible()) return; // 浮层已被关闭/替换
           if (resp && resp.ok && resp.entry) {
+            hoverEntry = resp.entry; // 记住这条记录，chip 显示/修改它的标签
+            updateCurTagChip();
             if (resp.entry.answer && String(resp.entry.answer).trim()) {
               rawAnswer = resp.entry.answer;
               render();
@@ -277,6 +290,10 @@
     bodyEl.style.display = "";
     syncPromptBar(); // 显示提示词切换条（普通划词流程）
     setHistoryTag(false);
+    hoverEntry = null; // 普通划词：chip 回到“当前标签”语义
+    if (curTagBtn) curTagBtn.hidden = false;
+    updateCurTagChip(); // 标题栏显示当前的打标签状态
+    closeTagMenu();
     reposition(rect);
 
     // 高亮划词：用荧光笔在选区文字下半部分划线（划词与摘录均生效）
@@ -565,6 +582,7 @@
     root.innerHTML =
       '<div class="aie-header">' +
       '<span class="aie-label">划词释义</span>' +
+      '<button class="aie-curtag" type="button" title="点击选择标签，之后的划词与摘录都会自动打上">＋标签</button>' +
       '<span class="aie-warn" title="历史记录将满，点击去导出备份" hidden></span>' +
       '<div class="aie-actions">' +
       '<button class="aie-btn aie-copy" title="复制释义">复制</button>' +
@@ -603,14 +621,41 @@
     selEl = root.querySelector(".aie-seltext");
     selTextEl = root.querySelector(".aie-seltext-text");
     histTag = root.querySelector(".aie-tag");
+    curTagBtn = root.querySelector(".aie-curtag");
+    // 标签下拉挂在 <html> 下而不是浮层里：浮层有 backdrop-filter（会成为 fixed 后代的
+    // 包含块）且 overflow:hidden，菜单放在里面会被裁掉/定位错乱，看起来像“点了没反应”
+    tagMenu = document.getElementById(TAG_MENU_ID);
+    if (!tagMenu) {
+      tagMenu = document.createElement("div");
+      tagMenu.id = TAG_MENU_ID;
+      tagMenu.className = "aie-tagmenu";
+      tagMenu.hidden = true;
+    }
+    // 每次都挪到 html 末尾：浮层被重建时会重新 append，若菜单留在它前面，同层级下会被浮层盖住
+    document.documentElement.appendChild(tagMenu);
     statusEl = root.querySelector(".aie-status");
     bodyEl = root.querySelector(".aie-body");
     resultEl = root.querySelector(".aie-result");
     header = root.querySelector(".aie-header");
 
+    // 标题栏「当前标签」chip：点开选择/新建，之后的划词与摘录都自动带上
+    curTagBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openTagMenu();
+    });
+    document.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (!tagMenu || tagMenu.hidden) return;
+        if (e.target.closest(".aie-tagmenu") || e.target.closest(".aie-curtag")) return;
+        closeTagMenu();
+      },
+      true
+    );
+
     // 拖动标题栏移动浮层位置（按钮区域除外）
     header.addEventListener("pointerdown", (e) => {
-      if (e.target.closest(".aie-btn")) return;
+      if (e.target.closest(".aie-btn, .aie-curtag")) return;
       e.preventDefault();
       e.stopPropagation();
       const startX = e.clientX;
@@ -690,8 +735,7 @@
     };
 
     // 右边缘手柄：单独拉宽；底边手柄：单独拉高；右下角手柄：同时拉宽拉高
-    root.querySelector(".aie-grip-w").addEventListener("pointerdown", (e) => startResize(e, { w: true }));
-    root.querySelector(".aie-grip-h").addEventListener("pointerdown", (e) => startResize(e, { h: true }));
+    root.querySelector(".aie-grip-w").addEventListener("pointerdown", (e) => startResize(e, { w: true }));    root.querySelector(".aie-grip-h").addEventListener("pointerdown", (e) => startResize(e, { h: true }));
     root.querySelector(".aie-grip-corner").addEventListener("pointerdown", (e) => startResize(e, { w: true, h: true }));
 
     // 单独的拉宽/拉高手柄：鼠标靠近右边缘显示拉宽、靠近下边缘显示拉高
@@ -778,6 +822,7 @@
   function hidePopup() {
     const root = document.getElementById(POPUP_ID);
     if (root) root.remove();
+    closeTagMenu();
     hoverPopup = false;
     setPinned(false);
     clearTimeout(hoverShowTimer);
@@ -844,6 +889,162 @@
     promptSelect.value = cur ? cur.id : "";
     promptSelect.hidden = false;
     promptSelect.title = "切换AI提示词";
+  }
+
+  // ---------- 当前标签：划词与摘录入库时自动带上，切换后一直生效 ----------
+  // 悬停看历史释义时，chip 改为显示/编辑“这条记录自己的标签”
+  function hoverRecordTags() {
+    return hoverEntry && Array.isArray(hoverEntry.tags) ? hoverEntry.tags.filter((t) => String(t || "").trim()) : [];
+  }
+
+  function updateCurTagChip() {
+    if (!curTagBtn) return;
+    curTagBtn.hidden = false; // 普通划词与悬停看历史释义的浮层都显示
+    if (hoverEntry) {
+      const tags = hoverRecordTags();
+      curTagBtn.textContent = tags.length ? tags.join(" · ") : "＋标签";
+      curTagBtn.classList.toggle("has-tag", !!tags.length);
+      curTagBtn.title = tags.length
+        ? "这条记录的标签：" + tags.join("、") + "（点击修改）"
+        : "这条记录还没有标签，点击添加";
+      return;
+    }
+    const tag = String((config && config.currentTag) || "").trim();
+    curTagBtn.textContent = tag || "＋标签";
+    curTagBtn.classList.toggle("has-tag", !!tag);
+    curTagBtn.title = tag
+      ? "当前标签：" + tag + "（点击切换，之后的划词与摘录都会打上它）"
+      : "点击选择标签，之后的划词与摘录都会自动打上";
+  }
+
+  // 改写悬停那条记录的标签（只动 updatedAt，不动 time；发 history-changed 触发云端同步）
+  function setHoverRecordTags(tags) {
+    if (!hoverEntry || !hoverEntry.id) return;
+    const clean = tags.map((t) => String(t || "").trim()).filter(Boolean).slice(0, 8);
+    hoverEntry.tags = clean;
+    updateCurTagChip();
+    chrome.storage.local.get({ history: [] }, (res) => {
+      const list = Array.isArray(res.history) ? res.history : [];
+      const item = list.find((e) => e.id === hoverEntry.id);
+      if (!item) return;
+      if (clean.length) item.tags = clean;
+      else delete item.tags;
+      item.updatedAt = Date.now();
+      chrome.storage.local.set({ history: list }, () => {
+        try {
+          chrome.runtime.sendMessage({ type: "history-changed" });
+        } catch (e) {}
+      });
+    });
+  }
+
+  function closeTagMenu() {
+    if (tagMenu) tagMenu.hidden = true;
+  }
+
+  function positionTagMenu() {
+    if (!tagMenu || !curTagBtn || tagMenu.hidden) return;
+    const r = curTagBtn.getBoundingClientRect();
+    const width = 220;
+    // 右侧放不下就往左挪，整体夹在视口内
+    const left = Math.min(Math.max(8, r.left), Math.max(8, window.innerWidth - width - 8));
+    tagMenu.style.left = left + "px";
+    tagMenu.style.top = r.bottom + 6 + "px";
+    tagMenu.style.width = width + "px";
+  }
+
+  function setCurrentTag(tag) {
+    const name = String(tag || "").trim();
+    config = { ...config, currentTag: name };
+    // 写回时以存储里的最新配置为底，避免把别处刚改的字段覆盖成旧值
+    chrome.storage.local.get({ config: null }, (res) => {
+      chrome.storage.local.set({ config: { ...(res.config || {}), currentTag: name } });
+    });
+    updateCurTagChip();
+    setStatus("idle", "之后的划词与摘录将打上标签：" + (name || "无"));
+  }
+
+  function openTagMenu() {
+    if (!tagMenu) return;
+    if (!tagMenu.hidden) {
+      closeTagMenu();
+      return;
+    }
+    const cur = String((config && config.currentTag) || "").trim();
+    const recordMode = !!hoverEntry; // 悬停看历史释义：改的是这条记录的标签
+    let recordTags = hoverRecordTags();
+    tagMenu.innerHTML = "";
+
+    const addItem = (label, onClick, active) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "aie-tagmenu-item" + (active ? " active" : "");
+      btn.textContent = label;
+      btn.addEventListener("click", onClick);
+      tagMenu.appendChild(btn);
+    };
+    if (!recordMode) addItem("不打标签", () => { setCurrentTag(""); closeTagMenu(); }, !cur);
+
+    tagMenu.hidden = false;
+    positionTagMenu();
+
+    // 已有标签从历史记录里聚合，不单独维护标签库（删记录不会留下空标签）
+    chrome.runtime.sendMessage({ type: "tag-list" }, (resp) => {
+      if (!tagMenu || tagMenu.hidden) return;
+      const tags = resp && resp.ok && Array.isArray(resp.tags) ? resp.tags : [];
+      if (recordMode) {
+        // 记录模式：点一下加/减，菜单不关，方便连续挑多个标签
+        tags.forEach((t) => {
+          const on = recordTags.includes(t);
+          addItem((on ? "✓ " : "") + t, () => {
+            recordTags = on ? recordTags.filter((x) => x !== t) : [...recordTags, t];
+            setHoverRecordTags(recordTags);
+            // 立刻重画菜单，反映勾选状态
+            closeTagMenu();
+            openTagMenu();
+          }, on);
+        });
+        if (recordTags.length) {
+          addItem("清除标签", () => {
+            setHoverRecordTags([]);
+            closeTagMenu();
+          }, false);
+        }
+      } else {
+        tags.forEach((t) => addItem(t, () => { setCurrentTag(t); closeTagMenu(); }, t === cur));
+      }
+
+      const row = document.createElement("div");
+      row.className = "aie-tagmenu-new";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = recordMode ? "新标签名" : "新标签名";
+      input.maxLength = 24;
+      const okBtn = document.createElement("button");
+      okBtn.type = "button";
+      okBtn.textContent = "确定";
+      const submit = () => {
+        const name = input.value.trim();
+        if (!name) return;
+        if (recordMode) {
+          if (!recordTags.includes(name)) setHoverRecordTags([...recordTags, name]);
+        } else {
+          setCurrentTag(name);
+        }
+        closeTagMenu();
+      };
+      okBtn.addEventListener("click", submit);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submit();
+        }
+      });
+      row.appendChild(input);
+      row.appendChild(okBtn);
+      tagMenu.appendChild(row);
+      positionTagMenu();
+    });
   }
 
   // 悬停读历史释义时，在原文行最右显示「历史释义」小标签

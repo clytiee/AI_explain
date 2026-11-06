@@ -21,6 +21,7 @@ const DEFAULT_CONFIG = {
   autoSaveHistory: true,
   maxLength: 500,
   historyMax: 1000,
+  currentTag: "", // 当前标签：划词/摘录入库时自动打上，空表示不打标签
   sync: DEFAULT_SYNC,
   systemPrompt:
     "你是一位博学的中文释义助手。用户选中了网页上的一段文本，请用简体中文对其中可能不理解的生词、术语、难句或概念进行清晰、准确、易懂的解释。\n" +
@@ -349,20 +350,28 @@ async function getHistory() {
 
 // 追加一条释义记录（新的在最前），并做条数上限裁剪（超出覆盖最早）
 // extract=true 表示摘录记录：没有释义，允许 answer 为空
-async function saveHistory({ text, answer, context, pageUrl, pageTitle, extract }) {
+async function saveHistory({ text, answer, context, pageUrl, pageTitle, extract, tags }) {
   if (!text || !String(text).trim()) return null;
   const hasAnswer = !!answer && !!String(answer).trim();
   if (!hasAnswer && !extract) return null;
   const list = await getHistory();
+  const cfg = await getConfig();
+  // 调用方没显式给标签时，用设置里的「当前标签」，划词与摘录都会带上
+  const explicit = Array.isArray(tags) ? tags.map((t) => String(t).trim()).filter(Boolean) : null;
+  const curTag = String(cfg.currentTag || "").trim();
+  const entryTags = explicit && explicit.length ? explicit : curTag ? [curTag] : [];
+  const now = Date.now();
   const entry = {
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    id: now.toString(36) + Math.random().toString(36).slice(2, 8),
     text: String(text),
     answer: hasAnswer ? String(answer) : "",
     context: context ? String(context) : "",
     pageUrl: pageUrl ? String(pageUrl) : "",
     pageTitle: pageTitle ? String(pageTitle) : "",
-    time: Date.now(),
+    time: now,
+    updatedAt: now, // 合并用：改标签等编辑只动它，不动 time（time 决定排序）
   };
+  if (entryTags.length) entry.tags = entryTags;
   if (extract) entry.extract = true;
   list.unshift(entry);
   const max = await getHistoryMax();
@@ -579,13 +588,14 @@ async function writeRemote(cfg, payload) {
   }
 }
 
-// 合并两端记录：id 并集，同 id 取 time 更大者（并集后再剔除墓碑）
+// 合并两端记录：id 并集，同 id 取 updatedAt（没有则 time）更大者；并集后再剔除墓碑
 function mergeRecords(local, remote, tombstones) {
   const map = new Map();
+  const version = (e) => Number(e && (e.updatedAt || e.time)) || 0;
   const add = (e) => {
     if (!e || !e.id) return;
     const cur = map.get(e.id);
-    if (!cur || (Number(e.time) || 0) > (Number(cur.time) || 0)) map.set(e.id, e);
+    if (!cur || version(e) > version(cur)) map.set(e.id, e);
   };
   (local || []).forEach(add);
   (remote || []).forEach(add);
@@ -758,6 +768,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "history-changed") {
     scheduleSync(); // 历史页导入等直接改存储的入口，通知后台排一次同步
     return;
+  }
+  // 历史里已用过的标签（按出现次数排序），供浮层/设置页选择
+  if (msg && msg.type === "tag-list") {
+    getHistory()
+      .then((list) => {
+        const count = new Map();
+        for (const e of list) {
+          for (const t of e.tags || []) {
+            const name = String(t || "").trim();
+            if (name) count.set(name, (count.get(name) || 0) + 1);
+          }
+        }
+        const tags = [...count.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
+        sendResponse({ ok: true, tags });
+      })
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message || err) }));
+    return true;
   }
   if (msg && msg.type === "settings-pull") {
     (async () => {

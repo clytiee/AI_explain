@@ -24,6 +24,7 @@ let settingsHidden = false; // 是否隐藏所有设置
 let aggOrder = {}; // 聚合模式下每来源记录的手工排序
 const PAGE_SIZE = 10; // 历史页分页：每页记录/组数
 let page = 1; // 当前页码
+let tagFilter = []; // 标签筛选（多选，选中任意一个即命中）
 
 // 显示设置默认值
 const DEFAULT_DISPLAY = {
@@ -679,19 +680,231 @@ function filteredList() {
         (e.pageUrl || "").toLowerCase().includes(q)
     );
   }
+  if (tagFilter.length) {
+    // 多选标签之间取「或」：只要命中其中任意一个就显示
+    list = list.filter((e) => (e.tags || []).some((t) => tagFilter.includes(t)));
+  }
   return list;
+}
+
+// 全部标签（从记录里聚合，按出现次数排序）
+function allTags() {
+  const count = new Map();
+  for (const e of all) {
+    for (const t of e.tags || []) {
+      const name = String(t || "").trim();
+      if (name) count.set(name, (count.get(name) || 0) + 1);
+    }
+  }
+  return [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+// 顶部标签筛选条：没有标签时整条隐藏
+function renderTagBar() {
+  const bar = $("tagBar");
+  const wrap = $("tagFilters");
+  const tags = allTags();
+  if (!tags.length) {
+    bar.hidden = true;
+    wrap.innerHTML = "";
+    return;
+  }
+  // 筛选里选中的标签可能已被删光，清掉失效项
+  tagFilter = tagFilter.filter((t) => tags.some(([name]) => name === t));
+  bar.hidden = false;
+  wrap.innerHTML = "";
+  tags.forEach(([name, num]) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "tag-chip" + (tagFilter.includes(name) ? " active" : "");
+    chip.textContent = name + "（" + num + "）";
+    chip.addEventListener("click", () => {
+      tagFilter = tagFilter.includes(name)
+        ? tagFilter.filter((t) => t !== name)
+        : [...tagFilter, name];
+      page = 1;
+      render();
+    });
+    wrap.appendChild(chip);
+  });
+}
+
+// 批量改写标签：changes = [{ id, tags }]，一次写盘、一次发同步消息
+function saveTagsBatch(changes) {
+  let touched = false;
+  const now = Date.now();
+  for (const ch of changes) {
+    const item = all.find((e) => e.id === ch.id);
+    if (!item) continue;
+    const clean = (ch.tags || []).map((t) => String(t || "").trim()).filter(Boolean).slice(0, 8);
+    if (clean.length) item.tags = clean;
+    else delete item.tags;
+    item.updatedAt = now;
+    touched = true;
+  }
+  if (!touched) return;
+  chrome.storage.local.set({ [HISTORY_KEY]: all }, () => {
+    try {
+      chrome.runtime.sendMessage({ type: "history-changed" }).catch(() => {});
+    } catch (e) {}
+    render();
+  });
+}
+
+// 改写某条记录的标签（只动 updatedAt，不动 time；云端合并按 updatedAt 取新）
+function saveRecordTags(id, tags) {
+  saveTagsBatch([{ id, tags }]);
+}
+
+// 一条记录（或一组同源记录共用）的标签行：点标签移除，＋ 输入框回车/失焦提交
+// 传多条时按「来源」打标签：标签取组内并集，增删都作用到这一组的每条记录
+function buildTagsRow(targets) {
+  const row = document.createElement("div");
+  row.className = "item-tags";
+  const list = (targets || []).filter(Boolean);
+  if (!list.length) return row;
+
+  // 组内标签并集（按出现次数降序，同数按名称）
+  const counts = new Map();
+  list.forEach((e) => {
+    (Array.isArray(e.tags) ? e.tags : []).forEach((t) => {
+      const name = String(t || "").trim();
+      if (name) counts.set(name, (counts.get(name) || 0) + 1);
+    });
+  });
+  const tags = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([n]) => n);
+
+  tags.forEach((t) => {
+    const chip = document.createElement("span");
+    chip.className = "item-tag";
+    chip.textContent = t;
+    chip.title = list.length > 1 ? "点击从这 " + list.length + " 条移除这个标签" : "点击移除这个标签";
+    chip.addEventListener("click", () => {
+      saveTagsBatch(
+        list.map((e) => ({
+          id: e.id,
+          tags: (Array.isArray(e.tags) ? e.tags : []).filter((x) => x !== t),
+        }))
+      );
+    });
+    row.appendChild(chip);
+  });
+
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "item-tag-add";
+  addBtn.textContent = "＋标签";
+  addBtn.title = list.length > 1 ? "给这 " + list.length + " 条一起加标签" : "给这条记录加一个标签";
+  addBtn.addEventListener("click", () => {
+    if (row.querySelector("input")) return;
+
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.className = "item-tag-input";
+    inp.placeholder = "选已有标签或输入新标签";
+    inp.maxLength = 24;
+
+    // 候选下拉：自己画（datalist 无法用代码自动展开），点 ＋ 后立即弹出
+    const menu = document.createElement("div");
+    menu.className = "item-tag-menu";
+    let done = false;
+
+    // 把标签加到这一组的所有记录上（已有则跳过）
+    const applyTag = (v) => {
+      if (done) return;
+      done = true;
+      closeMenu();
+      saveTagsBatch(
+        list.map((e) => {
+          const cur = Array.isArray(e.tags) ? e.tags.filter(Boolean) : [];
+          return { id: e.id, tags: cur.includes(v) ? cur : [...cur, v] };
+        })
+      );
+    };
+
+    function closeMenu() {
+      menu.remove();
+    }
+
+    // 按输入内容过滤候选，并把菜单摆在输入框正下方（超出视口则翻到上方）
+    function refreshMenu() {
+      const kw = inp.value.trim().toLowerCase();
+      const excludes = new Set(
+        list.flatMap((e) => (Array.isArray(e.tags) ? e.tags : [])).map((t) => String(t || "").trim())
+      );
+      const names = allTags()
+        .map(([n]) => n)
+        .filter((n) => !excludes.has(n))
+        .filter((n) => (kw ? n.toLowerCase().includes(kw) : true));
+      menu.innerHTML = "";
+      if (!names.length) {
+        closeMenu();
+        return;
+      }
+      names.forEach((n) => {
+        const opt = document.createElement("button");
+        opt.type = "button";
+        opt.className = "item-tag-menu-item";
+        opt.textContent = n;
+        // mousedown 拦掉，避免输入框先失焦把菜单收起来
+        opt.addEventListener("mousedown", (ev) => ev.preventDefault());
+        opt.addEventListener("click", () => applyTag(n));
+        menu.appendChild(opt);
+      });
+      if (!menu.isConnected) document.body.appendChild(menu);
+      const r = inp.getBoundingClientRect();
+      const h = menu.offsetHeight || 0;
+      menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 168)) + "px";
+      menu.style.top =
+        (r.bottom + 4 + h > window.innerHeight ? Math.max(8, r.top - 4 - h) : r.bottom + 4) + "px";
+    }
+
+    inp.addEventListener("input", refreshMenu);
+    inp.addEventListener("focus", refreshMenu);
+    inp.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        const v = inp.value.trim();
+        if (v) applyTag(v);
+      } else if (ev.key === "Escape") {
+        done = true;
+        closeMenu();
+        render();
+      }
+    });
+    inp.addEventListener("blur", () => {
+      // 点菜单项时 mousedown 已拦掉默认行为，这里稍等再判断是否真的离开了
+      setTimeout(() => {
+        if (done) return;
+        if (document.activeElement !== inp) closeMenu();
+        const v = inp.value.trim();
+        if (v) applyTag(v); // 输入了新标签名后点到别处：照旧提交
+        else {
+          done = true;
+          render();
+        }
+      }, 120);
+    });
+
+    row.insertBefore(inp, addBtn);
+    inp.focus();
+    refreshMenu(); // 点开＋标签立刻看到下拉候选
+  });
+  row.appendChild(addBtn);
+  return row;
 }
 
 function render() {
   const q = ($("search").value || "").trim().toLowerCase();
   // 有内容时显示搜索框右侧的清空按钮
   $("searchClear").style.display = q ? "flex" : "none";
+  renderTagBar();
   const list = filteredList();
 
   $("count").textContent =
     "共 " + list.length + " 条" +
     (aggregate ? " / " + new Set(list.map((e) => e.pageUrl || e.pageTitle || e.id)).size + " 组" : "") +
-    ((q || hasTimeFilter()) ? "（已筛选）" : "");
+    ((q || hasTimeFilter() || tagFilter.length) ? "（已筛选）" : "");
 
   const box = $("list");
   if (!list.length) {
@@ -803,6 +1016,7 @@ function buildItemCard(e) {
   if (!isExtract) ans.innerHTML = renderMarkdown(e.answer || "");
 
   item.appendChild(head);
+  item.appendChild(buildTagsRow([e]));
 
   // 同源主文：该来源保存过主文时，同源所有卡片都显示（受“显示/隐藏主文”开关控制）
   if (showMainText && sourceTexts[srcKey]) {
@@ -1091,6 +1305,8 @@ function renderAggregated(list) {
       head.appendChild(group);
     }
     item.appendChild(head);
+    // 聚合模式按「来源」打标签：一组同源记录共用一行，增删作用于组内每条
+    item.appendChild(buildTagsRow(recs));
 
     // 主文只显示一次
     if (showMainText && sourceTexts[srcKey]) {
@@ -1402,6 +1618,10 @@ function cardHtml(e) {
   }
   const srcKey = e.pageUrl || e.pageTitle || "";
   const isExtract = isExtractRecord(e);
+  const tags = Array.isArray(e.tags) ? e.tags.filter((t) => String(t || "").trim()) : [];
+  if (tags.length) {
+    head.push(tags.map((t) => '<span class="item-tag">' + esc(t) + "</span>").join(""));
+  }
   const main =
     showMainText && sourceTexts[srcKey]
       ? '<div class="item-main">' + esc(sourceTexts[srcKey]) + "</div>"
@@ -1447,7 +1667,9 @@ function buildCardsHtmlAggregated(list) {
       const items = recs
         .map((e) => {
           const itemHead = opts.time
-            ? '<div class="agg-item-head"><span class="agg-item-time">' + esc(formatTime(e.time)) + "</span></div>"
+            ? '<div class="agg-item-head"><span class="agg-item-time">' + esc(formatTime(e.time)) + "</span>" +
+              (Array.isArray(e.tags) ? e.tags.filter((t) => String(t || "").trim()).map((t) => '<span class="item-tag">' + esc(t) + "</span>").join("") : "") +
+              "</div>"
             : "";
           const isExtract = isExtractRecord(e);
           const meta = metaAttrs(e, isExtract, false);
@@ -1597,6 +1819,13 @@ function sanitizeRecord(r) {
   };
   if (!rec.id) rec.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   if (r && r.extract) rec.extract = true; // 保留摘录标记，导入后仍按摘录记录渲染
+  // 标签与版本时间：JSON 备份里带了就原样还原，避免导入后丢标签
+  if (Array.isArray(r && r.tags)) {
+    const tags = r.tags.map((t) => String(t || "").trim()).filter(Boolean).slice(0, 8);
+    if (tags.length) rec.tags = tags;
+  }
+  const upd = Number(r && r.updatedAt);
+  rec.updatedAt = Number.isFinite(upd) && upd > 0 ? upd : rec.time;
   return rec;
 }
 
@@ -1814,6 +2043,11 @@ function setStatus(text, ok) {
 
 // 事件
 $("search").addEventListener("input", () => { page = 1; render(); });
+$("tagClear").addEventListener("click", () => {
+  tagFilter = [];
+  page = 1;
+  render();
+});
 $("timeStart").addEventListener("change", () => { page = 1; render(); });
 $("timeEnd").addEventListener("change", () => { page = 1; render(); });
 $("timeClear").addEventListener("click", () => {

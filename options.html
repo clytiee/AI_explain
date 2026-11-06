@@ -197,6 +197,10 @@
       <label>历史记录最大条数（超出自动覆盖最早记录，默认 1000）</label>
       <input type="number" id="historyMax" min="1" max="1000000" step="100" value="1000" />
       <div class="hint">记录保存在本地浏览器。条数越大占用的本地存储越多。</div>
+      <label>当前标签（划词与摘录会自动打上这个标签，留空则不打）</label>
+      <input type="text" id="curTag" list="curTagOptions" maxlength="24" placeholder="例如：汉字 / 诗词 / 科技" />
+      <datalist id="curTagOptions"></datalist>
+      <div class="hint">标签从历史记录里聚合，这里填已用过的或新名字都可以；网页浮层标题栏的标签 chip 是同一个开关，切换后立即生效。</div>
       <div class="switch-row">
         <div>
           <div class="switch-label">流式输出（逐字显示）</div>

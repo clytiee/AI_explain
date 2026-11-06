@@ -135,6 +135,19 @@ function load() {
     $("pausedSwitch").checked = !!res.paused;
     $("highlightSwitch").checked = !!res.highlightMode;
     $("settingsSync").checked = res.settingsSync !== false;
+    // 当前标签的候选：从历史里聚合已经用过的标签
+    try {
+      chrome.runtime.sendMessage({ type: "tag-list" }, (resp) => {
+        const list = resp && resp.ok && Array.isArray(resp.tags) ? resp.tags : [];
+        const dl = $("curTagOptions");
+        dl.innerHTML = "";
+        list.forEach((t) => {
+          const opt = document.createElement("option");
+          opt.value = t;
+          dl.appendChild(opt);
+        });
+      });
+    } catch (e) {}
     $("apiBaseUrl").value = currentConfig.apiBaseUrl || "";
     $("model").value = currentConfig.model || "";
     $("apiKey").value = currentConfig.apiKey || "";
@@ -144,6 +157,7 @@ function load() {
     $("stream").checked = !!currentConfig.stream;
     $("autoSaveHistory").checked = currentConfig.autoSaveHistory !== false;
     $("historyMax").value = currentConfig.historyMax ?? 1000;
+    $("curTag").value = currentConfig.currentTag || "";
     const np = normalizePrompts(currentConfig);
     prompts = np.list;
     activePromptId = np.id;
@@ -196,6 +210,7 @@ function readForm() {
     stream: $("stream").checked,
     autoSaveHistory: $("autoSaveHistory").checked,
     historyMax: Number($("historyMax").value) || 1000,
+    currentTag: $("curTag").value.trim(),
     systemPrompt: active ? active.prompt : "",
     prompts: list,
     activePromptId: active ? active.id : "",
