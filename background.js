@@ -83,7 +83,7 @@ const PAUSED_ICON = {
   48: "icon-paused-48.png",
   128: "icon-paused-128.png",
 };
-// 摘录模式图标：左上角带绿点（基于正常图标生成）
+// 摘录模式图标：左上角带粉点（基于正常图标生成）
 const EXTRACT_ICON = {
   16: "icon-extract-16.png",
   32: "icon-extract-32.png",
