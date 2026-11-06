@@ -520,5 +520,17 @@ $("syncNow").addEventListener("click", () => {
 
 document.addEventListener("DOMContentLoaded", () => {
   renderHlColors();
-  load();
+  // 打开设置页先让后台把账号里的设置拉一次，再回填表单，避免显示的是旧值
+  let loaded = false;
+  const doLoad = () => {
+    if (loaded) return;
+    loaded = true;
+    load();
+  };
+  try {
+    chrome.runtime.sendMessage({ type: "settings-pull" }, () => doLoad());
+  } catch (e) {
+    doLoad();
+  }
+  setTimeout(doLoad, 2000); // 后台没响应时的兜底
 });

@@ -759,6 +759,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     scheduleSync(); // 历史页导入等直接改存储的入口，通知后台排一次同步
     return;
   }
+  if (msg && msg.type === "settings-pull") {
+    (async () => {
+      await pullSettingsFromSync();
+      const res = await chrome.storage.local.get({ config: null, highlightMode: false, extractMode: false });
+      return { ok: true, ...res };
+    })().then((res) => sendResponse(res));
+    return true;
+  }
   if (msg && msg.type === "sync-now") {
     runSync({ manual: true })
       .then((res) => sendResponse(res))
@@ -857,3 +865,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     chrome.tabs.sendMessage(tab.id, { type: "explain-selection" }).catch(() => {});
   }
 });
+
+// Service Worker 每次被唤醒都补拉一次设置：storage.onChanged 不会唤醒休眠的 worker，
+// 只靠它会导致另一台电脑一直拿不到这里刚改的配置（含 WebDAV 账号）。
+pullSettingsFromSync();

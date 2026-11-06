@@ -10,7 +10,7 @@
     "48": "icon48.png",
     "128": "icon128.png"
   },
-  "permissions": ["storage", "sync", "contextMenus", "unlimitedStorage"],
+  "permissions": ["storage", "contextMenus", "unlimitedStorage"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
