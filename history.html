@@ -41,8 +41,16 @@
     }
     h1 .clear-link:hover { color: #dc2626; background: rgba(220, 38, 38, 0.08); }
     h1 .dot {
+      flex: 0 0 auto; /* 圆点不允许被 flex 压缩成椭圆 */
       width: 12px; height: 12px; border-radius: 50%;
-      background: linear-gradient(135deg, #6366f1, #a855f7);
+      background: #6366f1; /* 打底纯色：渐变在打印光栅化时可能漏边，纯色兜底 */
+      background-image: linear-gradient(135deg, #6366f1, #a855f7);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    @media print {
+      /* 打印时用纯色填充，避免圆点边缘被裁掉一圈 */
+      h1 .dot { background-image: none; background: #6366f1; }
     }
     .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
 

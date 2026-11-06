@@ -1570,7 +1570,8 @@ const CARD_CSS = `:root{--primary:#4f46e5;--primary-soft:rgba(99,102,241,0.12);-
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,sans-serif;color:var(--text);background:linear-gradient(160deg,#f6f7ff,#eef2ff 60%,#f5f3ff);min-height:100vh;padding:32px 16px 60px}
 .wrap{max-width:720px;margin:0 auto}
 h1{font-size:20px;margin:0 0 4px;display:flex;align-items:center;gap:10px}
-h1 .dot{width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a855f7)}
+h1 .dot{flex:0 0 auto;width:12px;height:12px;border-radius:50%;background:#6366f1;background-image:linear-gradient(135deg,#6366f1,#a855f7);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+@media print{h1 .dot{background-image:none;background:#6366f1}}
 .sub{color:var(--muted);font-size:13px;margin:0 0 20px}
 .card{background:rgba(255,255,255,0.88);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,0.6);border-radius:16px;padding:16px 18px;margin-bottom:12px;box-shadow:0 8px 30px rgba(0,0,0,0.05)}
 .item-head{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;margin-bottom:8px}
