@@ -24,7 +24,8 @@ let settingsHidden = false; // 是否隐藏所有设置
 let aggOrder = {}; // 聚合模式下每来源记录的手工排序
 const PAGE_SIZE = 10; // 历史页分页：每页记录/组数
 let page = 1; // 当前页码
-let tagFilter = []; // 标签筛选（多选，选中任意一个即命中）
+const UNTAGGED = " __untagged__"; // 标签筛选里的「无标签」伪标签（带空格，不会撞真实标签名）
+let tagFilter = []; // 标签筛选（多选，选中任意一个即命中；「无标签」用 UNTAGGED 表示）
 
 // 显示设置默认值
 const DEFAULT_DISPLAY = {
@@ -681,8 +682,14 @@ function filteredList() {
     );
   }
   if (tagFilter.length) {
-    // 多选标签之间取「或」：只要命中其中任意一个就显示
-    list = list.filter((e) => (e.tags || []).some((t) => tagFilter.includes(t)));
+    // 多选标签之间取「或」：命中任意一个即显示；「无标签」筛出 tags 为空的记录
+    list = list.filter((e) => {
+      const tags = Array.isArray(e.tags) ? e.tags.filter((t) => String(t || "").trim()) : [];
+      if (tagFilter.includes(UNTAGGED)) {
+        if (!tags.length) return true;
+      }
+      return tags.some((t) => tagFilter.includes(t));
+    });
   }
   return list;
 }
@@ -699,20 +706,39 @@ function allTags() {
   return [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 
-// 顶部标签筛选条：没有标签时整条隐藏
+// 顶部标签筛选条：没有标签且也没有无标签记录时整条隐藏
 function renderTagBar() {
   const bar = $("tagBar");
   const wrap = $("tagFilters");
   const tags = allTags();
-  if (!tags.length) {
+  const untaggedCount = all.filter(
+    (e) => !(Array.isArray(e.tags) ? e.tags.filter((t) => String(t || "").trim()) : []).length
+  ).length;
+  if (!tags.length && !untaggedCount) {
     bar.hidden = true;
     wrap.innerHTML = "";
     return;
   }
-  // 筛选里选中的标签可能已被删光，清掉失效项
-  tagFilter = tagFilter.filter((t) => tags.some(([name]) => name === t));
+  // 筛选里选中的标签可能已被删光，清掉失效项（「无标签」在没有无标签记录时也清掉）
+  tagFilter = tagFilter.filter((t) =>
+    t === UNTAGGED ? untaggedCount > 0 : tags.some(([name]) => name === t)
+  );
   bar.hidden = false;
   wrap.innerHTML = "";
+  if (untaggedCount) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "tag-chip tag-chip-untagged" + (tagFilter.includes(UNTAGGED) ? " active" : "");
+    chip.textContent = "无标签（" + untaggedCount + "）";
+    chip.addEventListener("click", () => {
+      tagFilter = tagFilter.includes(UNTAGGED)
+        ? tagFilter.filter((t) => t !== UNTAGGED)
+        : [...tagFilter, UNTAGGED];
+      page = 1;
+      render();
+    });
+    wrap.appendChild(chip);
+  }
   tags.forEach(([name, num]) => {
     const chip = document.createElement("button");
     chip.type = "button";

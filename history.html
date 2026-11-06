@@ -238,6 +238,11 @@
     .tag-chip.active { background: #6366f1; border-color: #6366f1; color: #fff; }
     .tag-chip:hover { background: rgba(99, 102, 241, 0.24); }
     .tag-chip.active:hover { background: #4f46e5; }
+    /* 「无标签」用灰色调，和真实标签区分开 */
+    .tag-chip-untagged { border-color: rgba(107, 114, 128, 0.35); background: rgba(107, 114, 128, 0.1); color: #6b7280; }
+    .tag-chip-untagged:hover { background: rgba(107, 114, 128, 0.22); }
+    .tag-chip-untagged.active { background: #6b7280; border-color: #6b7280; color: #fff; }
+    .tag-chip-untagged.active:hover { background: #4b5563; }
     .item-src {
       font-size: 12px; color: var(--muted); flex: 0 1 auto;
       min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
