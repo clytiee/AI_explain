@@ -102,11 +102,28 @@ async function getConfig() {
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "sync") {
+    const payload = {};
+    for (const k of SETTINGS_SYNC_FIELDS) {
+      if (changes[k]) payload[k] = changes[k].newValue;
+    }
+    if (!Object.keys(payload).length) return;
+    getSettingsSyncEnabled().then((on) => {
+      if (on) applyRemoteSettings(payload);
+    });
+    return;
+  }
   if (area !== "local") return;
-  if (changes.config) configCache = null;
+  if (changes.config) {
+    configCache = null;
+    pushSettingsToSync();
+  }
   if (changes.paused) setActionState();
-  if (changes.extractMode) { updateExtractMenu(); setActionState(); }
-  if (changes.highlightMode) updateHighlightMenu();
+  if (changes.extractMode) { updateExtractMenu(); setActionState(); pushSettingsToSync(); }
+  if (changes.highlightMode) { updateHighlightMenu(); pushSettingsToSync(); }
+  if (changes[SETTINGS_SYNC_KEY] && changes[SETTINGS_SYNC_KEY].newValue !== false) {
+    pushSettingsToSync(); // 重新打开设置同步时补推一次
+  }
 });
 
 // ---------- 摘录模式（图标右键菜单切换） ----------
@@ -369,6 +386,72 @@ async function clearHistory() {
   if (list.length) await addTombstones(list.map((e) => e.id));
   await chrome.storage.local.set({ [HISTORY_KEY]: [] });
   scheduleSync();
+}
+
+// ---------- 设置同步（chrome.storage.sync，跟浏览器账号走） ----------
+// 只同步「设置项」：config（含提示词、接口参数、WebDAV 账号）+ 摘录/高亮两个开关。
+// 暂停状态属于单机行为，不同步，否则一端暂停会把另一端也停掉。
+const SETTINGS_SYNC_KEY = "settingsSync";
+const SETTINGS_SYNC_FIELDS = ["config", "highlightMode", "extractMode"];
+const SETTINGS_SYNC_DEBOUNCE = 1500;
+
+let settingsSyncTimer = null;
+let applyingRemoteSettings = false;
+
+async function getSettingsSyncEnabled() {
+  const res = await chrome.storage.local.get({ [SETTINGS_SYNC_KEY]: true });
+  return res[SETTINGS_SYNC_KEY] !== false;
+}
+
+async function pushSettingsToSync() {
+  if (applyingRemoteSettings) return; // 刚从远端拉下来的改动，不再回推
+  if (settingsSyncTimer) clearTimeout(settingsSyncTimer);
+  settingsSyncTimer = setTimeout(async () => {
+    settingsSyncTimer = null;
+    if (applyingRemoteSettings) return;
+    if (!(await getSettingsSyncEnabled())) return;
+    const res = await chrome.storage.local.get(SETTINGS_SYNC_FIELDS);
+    const payload = {};
+    for (const k of SETTINGS_SYNC_FIELDS) {
+      if (res[k] !== undefined) payload[k] = res[k];
+    }
+    try {
+      await chrome.storage.sync.set(payload);
+    } catch (e) {
+      // 超出配额等失败不阻塞本地使用
+    }
+  }, SETTINGS_SYNC_DEBOUNCE);
+}
+
+// 把远端设置并到本地（config 按字段浅合并，保留本地独有的字段）
+async function applyRemoteSettings(payload) {
+  if (!payload) return;
+  const patch = {};
+  if (payload.config && typeof payload.config === "object") {
+    const res = await chrome.storage.local.get({ config: null });
+    patch.config = { ...(res.config || {}), ...payload.config };
+  }
+  if (payload.highlightMode !== undefined) patch.highlightMode = !!payload.highlightMode;
+  if (payload.extractMode !== undefined) patch.extractMode = !!payload.extractMode;
+  if (!Object.keys(patch).length) return;
+  applyingRemoteSettings = true;
+  try {
+    await chrome.storage.local.set(patch);
+  } finally {
+    setTimeout(() => {
+      applyingRemoteSettings = false;
+    }, 600);
+  }
+}
+
+async function pullSettingsFromSync() {
+  if (!(await getSettingsSyncEnabled())) return;
+  try {
+    const all = await chrome.storage.sync.get(SETTINGS_SYNC_FIELDS);
+    await applyRemoteSettings(all);
+  } catch (e) {
+    // 未登录浏览器账号等情况直接跳过
+  }
 }
 
 // ---------- 云端同步（WebDAV） ----------
@@ -709,6 +792,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // 浏览器启动时先补一次同步（开了自动同步的话）
 chrome.runtime.onStartup.addListener(() => {
+  setTimeout(() => pullSettingsFromSync(), 800); // 先把别的电脑改过的设置拉下来
   setTimeout(() => runSync().catch(() => {}), 1500);
 });
 
@@ -745,6 +829,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   setActionState(); // 初始化图标状态（暂停/正常）
   updateExtractMenu(); // 初始化摘录模式菜单标题
   updateHighlightMenu(); // 初始化高亮划词菜单标题
+  pullSettingsFromSync(); // 新装/更新后把账号里已有的设置拉下来
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {

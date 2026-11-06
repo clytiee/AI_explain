@@ -278,6 +278,17 @@
       <div class="hint">坚果云：网页端「账户信息 → 安全选项 → 添加应用密码」，地址填 <code>https://dav.jianguoyun.com/dav/</code>。多台电脑填同一账号与路径；合并按 id 去重、同一条取时间较新的，删除会留墓碑，不会在另一台机器上被重新拉回来。</div>
     </div>
 
+    <div class="card">
+      <h2>⑤ 设置同步（浏览器账号）</h2>
+      <div class="switch-row">
+        <div>
+          <div class="switch-label">在本账号的其他电脑同步设置</div>
+          <div class="hint">用 <code>chrome.storage.sync</code> 走浏览器账号，同步接口地址、模型、API Key、多份提示词、摘录/高亮开关等设置项；「暂停」状态与历史记录不在此列（历史用上面的 WebDAV）。改动后约 1.5 秒自动推送，其他电脑打开浏览器时自动拉取。</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="settingsSync" checked /><span class="slider"></span></label>
+      </div>
+    </div>
+
     <div class="btns">
       <button class="primary" id="save">保存设置</button>
     </div>

@@ -130,10 +130,11 @@ function markActiveSwatch(color) {
 }
 
 function load() {
-  chrome.storage.local.get({ config: null, paused: false, highlightMode: false }, (res) => {
+  chrome.storage.local.get({ config: null, paused: false, highlightMode: false, settingsSync: true }, (res) => {
     if (res.config) currentConfig = { ...currentConfig, ...res.config };
     $("pausedSwitch").checked = !!res.paused;
     $("highlightSwitch").checked = !!res.highlightMode;
+    $("settingsSync").checked = res.settingsSync !== false;
     $("apiBaseUrl").value = currentConfig.apiBaseUrl || "";
     $("model").value = currentConfig.model || "";
     $("apiKey").value = currentConfig.apiKey || "";
@@ -282,6 +283,14 @@ $("pausedSwitch").addEventListener("change", (e) => {
 $("highlightSwitch").addEventListener("change", (e) => {
   chrome.storage.local.set({ highlightMode: e.target.checked }, () => {
     setStatus(e.target.checked ? "已开启高亮划词，去网页选中文字试试。" : "已关闭高亮划词，本页已划的线会自动清除。", true);
+  });
+});
+
+// 设置同步开关：立即写入，后台会据它决定是否推送/拉取
+$("settingsSync").addEventListener("change", (e) => {
+  const on = e.target.checked;
+  chrome.storage.local.set({ settingsSync: on }, () => {
+    setStatus(on ? "已开启设置同步（约 1.5 秒后推送）" : "已关闭设置同步（其他电脑不再自动拉取）", true);
   });
 });
 
