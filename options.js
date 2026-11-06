@@ -77,6 +77,15 @@ function normalizePrompts(cfg) {
   return { list, id };
 }
 
+const DEFAULT_SYNC = {
+  enabled: false,
+  url: "https://dav.jianguoyun.com/dav/",
+  user: "",
+  pass: "",
+  file: "AI_explain/history.json",
+  auto: true,
+};
+
 const $ = (id) => document.getElementById(id);
 
 let currentConfig = {
@@ -91,6 +100,7 @@ let currentConfig = {
   historyMax: 1000,
   systemPrompt: DEFAULT_PROMPT,
   highlightColor: HL_DEFAULT_COLOR,
+  sync: { ...DEFAULT_SYNC },
 };
 
 // 渲染常用荧光笔色一排
@@ -142,6 +152,15 @@ function load() {
     $("highlightColor").value = hlColor;
     markActiveSwatch(hlColor);
 
+    const sync = { ...DEFAULT_SYNC, ...(currentConfig.sync || {}) };
+    $("syncEnabled").checked = !!sync.enabled;
+    $("syncUrl").value = sync.url || "";
+    $("syncUser").value = sync.user || "";
+    $("syncPass").value = sync.pass || "";
+    $("syncFile").value = sync.file || "";
+    $("syncAuto").checked = sync.auto !== false;
+    showSyncState();
+
     // 按 base url 反推服务商
     const base = (currentConfig.apiBaseUrl || "").replace(/\/+$/, "");
     let provider = "custom";
@@ -180,6 +199,14 @@ function readForm() {
     prompts: list,
     activePromptId: active ? active.id : "",
     highlightColor: $("highlightColor").value,
+    sync: {
+      enabled: $("syncEnabled").checked,
+      url: $("syncUrl").value.trim(),
+      user: $("syncUser").value.trim(),
+      pass: $("syncPass").value,
+      file: $("syncFile").value.trim() || DEFAULT_SYNC.file,
+      auto: $("syncAuto").checked,
+    },
   };
 }
 
@@ -415,6 +442,71 @@ $("test").addEventListener("click", async () => {
     box.textContent = "请求出错：" + String(err && err.message ? err.message : err);
     testStatus("连接失败", false);
   }
+});
+
+// ---------- 云端同步（WebDAV） ----------
+function setSyncStatus(text, ok) {
+  const el = $("syncStatus");
+  el.textContent = text;
+  el.className = "hint " + (ok ? "ok" : "err");
+}
+
+function showSyncState() {
+  chrome.storage.local.get({ syncState: null }, (res) => {
+    const st = res.syncState;
+    if (!st || !st.lastAt) {
+      setSyncStatus("尚未同步。", true);
+      return;
+    }
+    const when = new Date(st.lastAt).toLocaleString("zh-CN", { hour12: false });
+    setSyncStatus((st.ok ? "上次同步成功 " : "上次同步失败 ") + when + "：" + (st.message || ""), !!st.ok);
+  });
+}
+
+$("syncTest").addEventListener("click", () => {
+  const cfg = readForm();
+  if (!cfg.sync.url || !cfg.sync.user || !cfg.sync.pass) {
+    setSyncStatus("请先填写 WebDAV 地址、账号与应用密码。", false);
+    return;
+  }
+  chrome.storage.local.set({ config: cfg }, () => {
+    currentConfig = cfg;
+    setSyncStatus("正在连接…", true);
+    chrome.runtime.sendMessage({ type: "sync-test" }, (res) => {
+      if (!res) {
+        setSyncStatus("后台没有响应，请刷新扩展后重试。", false);
+        return;
+      }
+      setSyncStatus((res.ok ? "✓ " : "") + (res.message || (res.ok ? "连接成功" : "连接失败")), !!res.ok);
+    });
+  });
+});
+
+$("syncNow").addEventListener("click", () => {
+  const cfg = readForm();
+  if (!cfg.sync.enabled) {
+    setSyncStatus("请先勾选「启用云端同步」。", false);
+    return;
+  }
+  if (!cfg.sync.url || !cfg.sync.user || !cfg.sync.pass) {
+    setSyncStatus("请先填写 WebDAV 地址、账号与应用密码。", false);
+    return;
+  }
+  chrome.storage.local.set({ config: cfg }, () => {
+    currentConfig = cfg;
+    setSyncStatus("正在同步…", true);
+    chrome.runtime.sendMessage({ type: "sync-now" }, (res) => {
+      if (!res) {
+        setSyncStatus("后台没有响应，请刷新扩展后重试。", false);
+        return;
+      }
+      if (res.ok) {
+        setSyncStatus("✓ 同步完成，本地共 " + res.count + " 条（新增 " + res.added + "）。", true);
+      } else {
+        setSyncStatus("同步失败：" + (res.message || "未知错误"), false);
+      }
+    });
+  });
 });
 
 document.addEventListener("DOMContentLoaded", () => {

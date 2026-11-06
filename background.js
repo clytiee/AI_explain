@@ -1,6 +1,16 @@
 // background.js —— 划词AI释义（MV3 Service Worker）
 // 负责所有对外 API 请求（content script 无页面跨域问题，由 SW 代为转发并流式回传）。
 
+// 云端同步（WebDAV，默认按坚果云填好地址）
+const DEFAULT_SYNC = {
+  enabled: false,
+  url: "https://dav.jianguoyun.com/dav/",
+  user: "", // 坚果云账号（邮箱）
+  pass: "", // 坚果云「应用密码」，不是登录密码
+  file: "AI_explain/history.json",
+  auto: true, // 历史变动后自动同步
+};
+
 const DEFAULT_CONFIG = {
   apiBaseUrl: "https://api.deepseek.com",
   apiKey: "",
@@ -11,6 +21,7 @@ const DEFAULT_CONFIG = {
   autoSaveHistory: true,
   maxLength: 500,
   historyMax: 1000,
+  sync: DEFAULT_SYNC,
   systemPrompt:
     "你是一位博学的中文释义助手。用户选中了网页上的一段文本，请用简体中文对其中可能不理解的生词、术语、难句或概念进行清晰、准确、易懂的解释。\n" +
     "请根据文本类型灵活处理：若是外文，先给出准确翻译再简要解释；若是文言文或单个汉字，请考证其本字、造字原意与字形演变；若是专业术语或缩写，用通俗语言讲解。\n" +
@@ -340,6 +351,7 @@ async function saveHistory({ text, answer, context, pageUrl, pageTitle, extract 
   const max = await getHistoryMax();
   if (list.length > max) list.length = max;
   await chrome.storage.local.set({ [HISTORY_KEY]: list });
+  scheduleSync();
   return entry;
 }
 
@@ -347,11 +359,229 @@ async function deleteHistory(id) {
   const list = await getHistory();
   const next = list.filter((e) => e.id !== id);
   await chrome.storage.local.set({ [HISTORY_KEY]: next });
+  if (id) await addTombstones([id]);
+  scheduleSync();
   return next.length;
 }
 
 async function clearHistory() {
+  const list = await getHistory();
+  if (list.length) await addTombstones(list.map((e) => e.id));
   await chrome.storage.local.set({ [HISTORY_KEY]: [] });
+  scheduleSync();
+}
+
+// ---------- 云端同步（WebDAV） ----------
+// 文件里的结构：{ version, updatedAt, records, tombstones }
+// 合并规则：按 id 求并集，同一 id 取 time 更大的；tombstones 里的 id 一律不复活。
+const SYNC_TOMBSTONE_KEY = "syncTombstones";
+const SYNC_STATE_KEY = "syncState";
+const TOMBSTONE_TTL = 90 * 24 * 3600 * 1000; // 墓碑保留 90 天
+const TOMBSTONE_MAX = 2000;
+const SYNC_DEBOUNCE = 4000;
+
+async function getSyncConfig() {
+  const cfg = await getConfig();
+  return { ...DEFAULT_SYNC, ...(cfg.sync || {}) };
+}
+
+async function getTombstones() {
+  const res = await chrome.storage.local.get({ [SYNC_TOMBSTONE_KEY]: [] });
+  const list = Array.isArray(res[SYNC_TOMBSTONE_KEY]) ? res[SYNC_TOMBSTONE_KEY] : [];
+  return list.filter((t) => t && t.id);
+}
+
+async function addTombstones(ids) {
+  if (!ids || !ids.length) return;
+  const list = await getTombstones();
+  const map = new Map(list.map((t) => [t.id, t]));
+  const now = Date.now();
+  ids.forEach((id) => {
+    if (!id) return;
+    map.set(String(id), { id: String(id), time: now });
+  });
+  const next = pruneTombstones([...map.values()]);
+  await chrome.storage.local.set({ [SYNC_TOMBSTONE_KEY]: next });
+}
+
+function pruneTombstones(list) {
+  const cutoff = Date.now() - TOMBSTONE_TTL;
+  const arr = Array.isArray(list) ? list : Array.from(list || []);
+  return arr
+    .filter((t) => t && t.id && Number(t.time) >= cutoff)
+    .sort((a, b) => Number(b.time) - Number(a.time))
+    .slice(0, TOMBSTONE_MAX);
+}
+
+// UTF-8 安全的 Base64（Basic 认证用）
+function b64utf8(str) {
+  const bytes = new TextEncoder().encode(String(str));
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+// 把 base 与文件路径拼成完整 URL，路径逐段编码
+function davUrl(cfg) {
+  const base = String(cfg.url || "").replace(/\/+$/, "");
+  const segs = String(cfg.file || "AI_explain/history.json")
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter(Boolean)
+    .map((s) => encodeURIComponent(s));
+  return base + "/" + segs.join("/");
+}
+
+function davDirUrl(url) {
+  return url.replace(/\/[^/]+$/, "");
+}
+
+async function davFetch(cfg, method, url, body) {
+  const headers = { Authorization: "Basic " + b64utf8(cfg.user + ":" + cfg.pass) };
+  if (body !== undefined) headers["Content-Type"] = "application/json; charset=utf-8";
+  return fetch(url, { method, headers, body });
+}
+
+// 逐级创建目录：坚果云不会替我们建中间目录，405 表示已存在
+async function ensureDavDir(cfg, fileUrl) {
+  const base = String(cfg.url || "").replace(/\/+$/, "");
+  const dir = davDirUrl(fileUrl);
+  if (!dir || dir === base) return;
+  const rel = dir.slice(base.length + 1);
+  const segs = rel ? rel.split("/") : [];
+  let cur = base;
+  for (const seg of segs) {
+    cur += "/" + seg;
+    const resp = await davFetch(cfg, "MKCOL", cur).catch(() => null);
+    if (resp && !resp.ok && resp.status !== 405 && resp.status !== 301) {
+      // 目录创建失败通常意味着账号/密码或路径有问题，直接抛出让上层提示
+      const text = await resp.text().catch(() => "");
+      throw new Error("创建目录失败 HTTP " + resp.status + (text ? "：" + text.slice(0, 120) : ""));
+    }
+  }
+}
+
+function normalizeRemote(raw) {
+  const data = raw && typeof raw === "object" ? raw : {};
+  const records = Array.isArray(data.records) ? data.records.filter((e) => e && e.id) : [];
+  const tombstones = Array.isArray(data.tombstones) ? data.tombstones.filter((t) => t && t.id) : [];
+  return { records, tombstones };
+}
+
+async function readRemote(cfg) {
+  const url = davUrl(cfg);
+  await ensureDavDir(cfg, url);
+  const resp = await davFetch(cfg, "GET", url);
+  if (resp.status === 404) return { records: [], tombstones: [], missing: true };
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error("读取失败 HTTP " + resp.status + (text ? "：" + text.slice(0, 120) : ""));
+  }
+  const text = await resp.text();
+  if (!text.trim()) return { records: [], tombstones: [], missing: true };
+  try {
+    return { ...normalizeRemote(JSON.parse(text)), missing: false };
+  } catch (e) {
+    throw new Error("远端文件不是合法 JSON");
+  }
+}
+
+async function writeRemote(cfg, payload) {
+  const url = davUrl(cfg);
+  await ensureDavDir(cfg, url);
+  const resp = await davFetch(cfg, "PUT", url, JSON.stringify(payload));
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error("上传失败 HTTP " + resp.status + (text ? "：" + text.slice(0, 120) : ""));
+  }
+}
+
+// 合并两端记录：id 并集，同 id 取 time 更大者（并集后再剔除墓碑）
+function mergeRecords(local, remote, tombstones) {
+  const map = new Map();
+  const add = (e) => {
+    if (!e || !e.id) return;
+    const cur = map.get(e.id);
+    if (!cur || (Number(e.time) || 0) > (Number(cur.time) || 0)) map.set(e.id, e);
+  };
+  (local || []).forEach(add);
+  (remote || []).forEach(add);
+  const dead = new Set((tombstones || []).map((t) => t.id));
+  return [...map.values()]
+    .filter((e) => !dead.has(e.id))
+    .sort((a, b) => (Number(b.time) || 0) - (Number(a.time) || 0));
+}
+
+let syncing = null; // 同一时间只跑一次，避免两端互相打架
+let syncTimer = null;
+
+async function setSyncState(patch) {
+  const res = await chrome.storage.local.get({ [SYNC_STATE_KEY]: null });
+  const state = { ...(res[SYNC_STATE_KEY] || {}), ...patch };
+  await chrome.storage.local.set({ [SYNC_STATE_KEY]: state });
+}
+
+async function runSync({ manual = false } = {}) {
+  const cfg = await getSyncConfig();
+  if (!cfg.enabled || !cfg.url || !cfg.user || !cfg.pass) {
+    if (manual) return { ok: false, message: "未启用同步或缺少 WebDAV 账号/应用密码" };
+    return { ok: false, skipped: true };
+  }
+  if (syncing) return syncing;
+  syncing = (async () => {
+    try {
+      const [local, localTomb] = await Promise.all([getHistory(), getTombstones()]);
+      const remote = await readRemote(cfg);
+      const tombstones = pruneTombstones(
+        // 两端墓碑取并集
+        [...localTomb, ...remote.tombstones].reduce((acc, t) => {
+          const prev = acc.get(t.id);
+          if (!prev || Number(t.time) > Number(prev.time)) acc.set(t.id, t);
+          return acc;
+        }, new Map()).values()
+      );
+      let merged = mergeRecords(local, remote.records, tombstones);
+      const max = await getHistoryMax();
+      if (merged.length > max) merged.length = max;
+
+      await chrome.storage.local.set({
+        [HISTORY_KEY]: merged,
+        [SYNC_TOMBSTONE_KEY]: tombstones,
+      });
+      await writeRemote(cfg, {
+        version: 1,
+        updatedAt: Date.now(),
+        source: "ai-explain",
+        records: merged,
+        tombstones,
+      });
+      const added = merged.filter((e) => !local.some((l) => l.id === e.id)).length;
+      await setSyncState({ lastAt: Date.now(), ok: true, message: "同步成功", added, count: merged.length });
+      return { ok: true, count: merged.length, added };
+    } catch (err) {
+      const message = String(err && err.message ? err.message : err);
+      await setSyncState({ lastAt: Date.now(), ok: false, message });
+      return { ok: false, message };
+    } finally {
+      syncing = null;
+    }
+  })();
+  return syncing;
+}
+
+// 历史变动后延迟合并一次，避免连续删除/保存触发多次上传
+function scheduleSync() {
+  getSyncConfig()
+    .then((cfg) => {
+      if (!cfg.enabled || !cfg.auto) return null;
+      if (syncTimer) clearTimeout(syncTimer);
+      syncTimer = setTimeout(() => {
+        syncTimer = null;
+        runSync().catch(() => {});
+      }, SYNC_DEBOUNCE);
+      return true;
+    })
+    .catch(() => {});
 }
 
 // ---------- 高亮划词：取本页历史记录（划词+摘录）原文，供 content 恢复荧光笔 ----------
@@ -442,6 +672,44 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .catch((err) => sendResponse({ ok: false, error: String(err && err.message || err) }));
     return true;
   }
+  if (msg && msg.type === "history-changed") {
+    scheduleSync(); // 历史页导入等直接改存储的入口，通知后台排一次同步
+    return;
+  }
+  if (msg && msg.type === "sync-now") {
+    runSync({ manual: true })
+      .then((res) => sendResponse(res))
+      .catch((err) => sendResponse({ ok: false, message: String(err && err.message || err) }));
+    return true;
+  }
+  // 测试连接：只读远端文件头，不上传、不改本地
+  if (msg && msg.type === "sync-test") {
+    (async () => {
+      const cfg = await getSyncConfig();
+      if (!cfg.url || !cfg.user || !cfg.pass) {
+        return { ok: false, message: "请先填写服务器地址、账号与应用密码" };
+      }
+      try {
+        const remote = await readRemote(cfg);
+        return {
+          ok: true,
+          missing: !!remote.missing,
+          count: remote.records.length,
+          message: remote.missing
+            ? "连接成功，远端还没有文件（首次同步会创建）"
+            : "连接成功，远端已有 " + remote.records.length + " 条记录",
+        };
+      } catch (err) {
+        return { ok: false, message: String(err && err.message ? err.message : err) };
+      }
+    })().then((res) => sendResponse(res));
+    return true;
+  }
+});
+
+// 浏览器启动时先补一次同步（开了自动同步的话）
+chrome.runtime.onStartup.addListener(() => {
+  setTimeout(() => runSync().catch(() => {}), 1500);
 });
 
 // 右键菜单：复制选中文本 / 打开历史记录

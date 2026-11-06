@@ -1791,6 +1791,10 @@ function doImport(mode) {
       page = 1;
       render();
       closeImportModal();
+      // 导入是直接改存储，通知后台排一次云端同步（开了同步才会有动作）
+      try {
+        chrome.runtime.sendMessage({ type: "history-changed" }).catch(() => {});
+      } catch (e) {}
       if (mode === "replace") {
         setStatus("已覆盖导入 " + next.length + " 条记录。", true);
       } else if (added) {
@@ -1888,3 +1892,12 @@ bindMainModal();
 })();
 
 document.addEventListener("DOMContentLoaded", load);
+
+// 后台云端同步会直接改写 history，页面跟着刷新（否则要手动重开才看得到）
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local" || !changes[HISTORY_KEY]) return;
+  const next = changes[HISTORY_KEY].newValue;
+  if (!Array.isArray(next)) return;
+  all = next;
+  render();
+});
