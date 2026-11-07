@@ -703,8 +703,81 @@ $("syncNow").addEventListener("click", () => {
   });
 });
 
+// ---------- 右侧悬浮导航 ----------
+// 按设置页里的卡片自动生成条目（①～⑥ + 保存设置），点击平滑滚到对应块，滚动时高亮当前块
+function buildSideNav() {
+  const nav = $("sideNav");
+  if (!nav) return;
+  const cards = [...document.querySelectorAll(".wrap .card")];
+  const items = cards.map((card, i) => {
+    if (!card.id) card.id = "card-" + (i + 1);
+    const h2 = card.querySelector("h2");
+    return { id: card.id, label: h2 ? h2.textContent.trim() : "第 " + (i + 1) + " 块" };
+  });
+  if ($("saveBar")) items.push({ id: "saveBar", label: "保存设置" });
+
+  // 让菜单顶部与第一张卡片的上边缘对齐（卡片位置随窗口宽度变化，resize 时重算）
+  const alignNav = () => {
+    const first = cards[0];
+    if (!first) return;
+    const top = Math.round(first.getBoundingClientRect().top + window.scrollY);
+    nav.style.top = Math.max(8, top) + "px";
+  };
+  alignNav();
+
+  nav.innerHTML = "";
+  items.forEach((it) => {
+    // 「保存设置」上面加一条分隔线，与菜单项分开
+    if (it.id === "saveBar") {
+      const sep = document.createElement("div");
+      sep.className = "nav-sep";
+      nav.appendChild(sep);
+    }
+    const a = document.createElement("a");
+    a.href = "#" + it.id;
+    a.textContent = it.label;
+    a.title = it.label;
+    a.dataset.target = it.id;
+    if (it.id === "saveBar") a.classList.add("is-save");
+    a.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const el = document.getElementById(it.id);
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY - 16;
+      window.scrollTo({ top, behavior: "smooth" });
+      history.replaceState(null, "", "#" + it.id);
+    });
+    nav.appendChild(a);
+  });
+
+  const setActive = () => {
+    const line = window.scrollY + window.innerHeight * 0.3;
+    let cur = items[0] ? items[0].id : "";
+    items.forEach((it) => {
+      const el = document.getElementById(it.id);
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      if (top <= line) cur = it.id;
+    });
+    // 已经滚到底的极端情况，高亮最后一项
+    if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 24) {
+      cur = items.length ? items[items.length - 1].id : cur;
+    }
+    nav.querySelectorAll("a").forEach((a) => {
+      a.classList.toggle("active", a.dataset.target === cur);
+    });
+  };
+  window.addEventListener("scroll", setActive, { passive: true });
+  window.addEventListener("resize", () => {
+    alignNav();
+    setActive();
+  });
+  setActive();
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   renderHlColors();
+  buildSideNav();
   // 打开设置页先让后台把账号里的设置拉一次，再回填表单，避免显示的是旧值
   let loaded = false;
   const doLoad = () => {

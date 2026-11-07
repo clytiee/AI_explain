@@ -25,6 +25,35 @@
     .wrap { max-width: 640px; margin: 0 auto; }
     .topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     .topbar h1 { margin-bottom: 0; }
+    /* 悬浮导航：点一条跳到对应设置块，滚动时高亮当前块 */
+    .sidenav {
+      position: fixed; top: 88px; transform: none;
+      /* 贴在正文列（max-width:640，居中）的右侧，而不是窗口最右边 */
+      left: calc(50% + 332px); right: auto;
+      display: flex; flex-direction: column; gap: 2px;
+      padding: 8px 6px; max-width: none; width: max-content;
+      background: rgba(255, 255, 255, 0.86);
+      -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.7); border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
+      z-index: 20;
+    }
+    .sidenav a {
+      font-size: 12px; line-height: 1.4; padding: 6px 9px; border-radius: 8px;
+      color: var(--muted); text-decoration: none; white-space: nowrap;
+      overflow: visible; transition: 0.15s;
+    }
+    .sidenav a:hover { color: var(--primary); background: rgba(99, 102, 241, 0.08); }
+    .sidenav a.active { color: var(--primary); background: var(--primary-soft); font-weight: 600; }
+    /* 末尾的「保存设置」做成按钮形状、居中 */
+    .sidenav .nav-sep { height: 1px; background: var(--border); margin: 6px 4px 6px; }
+    .sidenav a.is-save {
+      margin-top: 4px; text-align: center; font-weight: 600;
+      background: var(--primary); color: #fff; border-radius: 9px; padding: 8px 10px;
+    }
+    .sidenav a.is-save:hover { background: #4338ca; color: #fff; }
+    .sidenav a.is-save.active { background: var(--primary); color: #fff; }
+    @media (max-width: 1000px) { .sidenav { display: none; } }
     .key-row { display: flex; gap: 10px; align-items: center; }
     .key-row input { flex: 1 1 auto; min-width: 0; }
     .key-row button { flex: 0 0 auto; }
@@ -156,6 +185,7 @@
   </style>
 </head>
 <body>
+  <nav class="sidenav" id="sideNav"></nav>
   <div class="wrap">
     <div class="topbar">
       <h1><span class="dot"></span>划词AI释义 · 设置</h1>
@@ -337,7 +367,7 @@
       </div>
     </div>
 
-    <div class="btns">
+    <div class="btns" id="saveBar">
       <button class="primary" id="save">保存设置</button>
     </div>
     <div id="status"></div>
