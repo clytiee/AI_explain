@@ -135,23 +135,45 @@ function markActiveSwatch(color) {
   });
 }
 
-function load() {
-  chrome.storage.local.get({ config: null, paused: false, highlightMode: false, settingsSync: true }, (res) => {
+// 当前标签的候选胶囊：高亮与输入框内容一致的那一个
+function renderCurTagChips() {
+  const val = $("curTag").value.trim();
+  [...$("curTagChips").querySelectorAll(".curtag-chip")].forEach((chip) => {
+    chip.classList.toggle("active", chip.textContent === val);
+  });
+}
+
+function load() {  chrome.storage.local.get({ config: null, paused: false, highlightMode: false, settingsSync: true }, (res) => {
     if (res.config) currentConfig = { ...currentConfig, ...res.config };
     $("pausedSwitch").checked = !!res.paused;
     $("highlightSwitch").checked = !!res.highlightMode;
     $("settingsSync").checked = res.settingsSync !== false;
-    // 当前标签的候选：从历史里聚合已经用过的标签
+    // 当前标签的候选：从历史里聚合已经用过的标签，做成可点的胶囊
+    // （不用 datalist：输入框已有值时，datalist 会被过滤成只剩完全匹配的那一项）
     try {
       chrome.runtime.sendMessage({ type: "tag-list" }, (resp) => {
         const list = resp && resp.ok && Array.isArray(resp.tags) ? resp.tags : [];
-        const dl = $("curTagOptions");
-        dl.innerHTML = "";
+        const wrap = $("curTagChips");
+        wrap.innerHTML = "";
+        if (!list.length) {
+          wrap.textContent = "还没有用过的标签，直接在上面输入即可。";
+          wrap.classList.add("empty");
+          return;
+        }
+        wrap.classList.remove("empty");
         list.forEach((t) => {
-          const opt = document.createElement("option");
-          opt.value = t;
-          dl.appendChild(opt);
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "curtag-chip";
+          chip.textContent = t;
+          chip.title = "设为当前标签";
+          chip.addEventListener("click", () => {
+            $("curTag").value = t;
+            renderCurTagChips();
+          });
+          wrap.appendChild(chip);
         });
+        renderCurTagChips();
       });
     } catch (e) {}
     $("apiBaseUrl").value = currentConfig.apiBaseUrl || "";
@@ -500,6 +522,9 @@ $("test").addEventListener("click", async () => {
     testStatus("连接失败", false);
   }
 });
+
+// 手动改当前标签时同步胶囊高亮
+$("curTag").addEventListener("input", renderCurTagChips);
 
 // ---------- 云端同步（WebDAV） ----------
 function setSyncStatus(text, ok) {

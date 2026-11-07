@@ -65,6 +65,16 @@
     input:focus, select:focus, textarea:focus { border-color: var(--primary); }
     textarea { resize: vertical; min-height: 90px; line-height: 1.5; font-family: inherit; }
     .hint { font-size: 12px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+    /* 当前标签的候选胶囊 */
+    .curtag-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .curtag-chips.empty { display: block; font-size: 12px; color: var(--muted); }
+    .curtag-chip {
+      font-family: inherit; font-size: 12px; line-height: 1.4; padding: 2px 9px;
+      border-radius: 999px; cursor: pointer; color: #4338ca;
+      border: 1px solid rgba(99, 102, 241, 0.3); background: rgba(99, 102, 241, 0.08);
+    }
+    .curtag-chip:hover { background: rgba(99, 102, 241, 0.2); }
+    .curtag-chip.active { background: #6366f1; border-color: #6366f1; color: #fff; font-weight: 600; }
     .switch-row {
       display: flex; align-items: center; justify-content: space-between;
       padding: 8px 0;
@@ -198,9 +208,9 @@
       <input type="number" id="historyMax" min="1" max="1000000" step="100" value="1000" />
       <div class="hint">记录保存在本地浏览器。条数越大占用的本地存储越多。</div>
       <label>当前标签（划词与摘录会自动打上这个标签，留空则不打）</label>
-      <input type="text" id="curTag" list="curTagOptions" maxlength="24" placeholder="例如：汉字 / 诗词 / 科技" />
-      <datalist id="curTagOptions"></datalist>
-      <div class="hint">标签从历史记录里聚合，这里填已用过的或新名字都可以；网页浮层标题栏的标签 chip 是同一个开关，切换后立即生效。</div>
+      <input type="text" id="curTag" maxlength="24" placeholder="例如：汉字 / 诗词 / 科技" />
+      <div class="curtag-chips" id="curTagChips"></div>
+      <div class="hint">点下面的胶囊可直接选用历史里已有的标签，也可以在上面输入新名字；网页浮层标题栏的标签 chip 是同一个开关，切换后立即生效。</div>
       <div class="switch-row">
         <div>
           <div class="switch-label">流式输出（逐字显示）</div>
