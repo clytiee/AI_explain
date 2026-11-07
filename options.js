@@ -122,6 +122,7 @@ let currentConfig = {
   historyMax: 1000,
   systemPrompt: DEFAULT_PROMPT,
   highlightColor: HL_DEFAULT_COLOR,
+  titleRules: [],
   sync: { ...DEFAULT_SYNC },
 };
 
@@ -163,6 +164,61 @@ function markActiveSwatch(color) {
   $("hlCurrent").textContent = color;
   document.querySelectorAll(".hl-swatch").forEach((el) => {
     el.classList.toggle("active", el.dataset.color.toLowerCase() === String(color).toLowerCase());
+  });
+}
+
+// ---------- 来源标题替换规则 ----------
+let titleRules = [];
+
+// 渲染规则列表：一行 = 网址前缀 + 查找 + 替换为 + 删除
+function renderTitleRules() {
+  const wrap = $("titleRules");
+  wrap.innerHTML = "";
+  if (!titleRules.length) {
+    const empty = document.createElement("div");
+    empty.className = "rules-empty";
+    empty.textContent = "还没有规则。点下面「添加规则」新增一条。";
+    wrap.appendChild(empty);
+    return;
+  }
+  titleRules.forEach((rule, idx) => {
+    const row = document.createElement("div");
+    row.className = "title-rule";
+
+    const mkInput = (cls, placeholder, value, key) => {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = cls;
+      input.placeholder = placeholder;
+      input.value = value;
+      input.addEventListener("input", () => {
+        titleRules[idx][key] = input.value;
+      });
+      return input;
+    };
+
+    row.appendChild(mkInput("rule-prefix", "网址前缀，如 https://www.zhihu.com/", rule.prefix, "prefix"));
+    row.appendChild(mkInput("rule-from", "查找（留空=整条替换）", rule.from, "from"));
+
+    const arrow = document.createElement("span");
+    arrow.className = "rule-arrow";
+    arrow.textContent = "→";
+    row.appendChild(arrow);
+
+    row.appendChild(mkInput("rule-to", "替换为", rule.to, "to"));
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "rule-del";
+    del.textContent = "删除";
+    del.title = "删除这条规则";
+    del.addEventListener("click", () => {
+      titleRules.splice(idx, 1);
+      renderTitleRules();
+    });
+    row.appendChild(del);
+
+    wrap.appendChild(row);
   });
 }
 
@@ -226,6 +282,15 @@ function load() {  chrome.storage.local.get({ config: null, paused: false, highl
     $("highlightColor").value = hlColor;
     markActiveSwatch(hlColor);
 
+    titleRules = Array.isArray(currentConfig.titleRules)
+      ? currentConfig.titleRules.map((r) => ({
+          prefix: String(r && r.prefix ? r.prefix : ""),
+          from: String(r && r.from ? r.from : ""),
+          to: String(r && r.to ? r.to : ""),
+        }))
+      : [];
+    renderTitleRules();
+
     const sync = { ...DEFAULT_SYNC, ...(currentConfig.sync || {}) };
     $("syncEnabled").checked = !!sync.enabled;
     $("syncUrl").value = sync.url || "";
@@ -274,6 +339,13 @@ function readForm() {
     prompts: list,
     activePromptId: active ? active.id : "",
     promptsBuiltinSeeded: true, // 记住已经补过内置提示词，之后删掉不会被自动加回来
+    titleRules: titleRules
+      .map((r) => ({
+        prefix: String(r.prefix || "").trim(),
+        from: String(r.from || ""),
+        to: String(r.to || ""),
+      }))
+      .filter((r) => r.prefix),
     highlightColor: $("highlightColor").value,
     sync: {
       enabled: $("syncEnabled").checked,
@@ -556,6 +628,15 @@ $("test").addEventListener("click", async () => {
 
 // 手动改当前标签时同步胶囊高亮
 $("curTag").addEventListener("input", renderCurTagChips);
+
+// 新增一条来源标题替换规则
+$("titleRuleAdd").addEventListener("click", () => {
+  titleRules.push({ prefix: "", from: "", to: "" });
+  renderTitleRules();
+  const wrap = $("titleRules");
+  const last = wrap.querySelector(".title-rule:last-child .rule-prefix");
+  if (last) last.focus();
+});
 
 // ---------- 云端同步（WebDAV） ----------
 function setSyncStatus(text, ok) {

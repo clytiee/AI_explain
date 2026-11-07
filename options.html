@@ -95,6 +95,20 @@
     .switch input:checked + .slider { background: var(--primary); }
     .switch input:checked + .slider::before { transform: translateX(18px); }
     .btns { display: flex; gap: 10px; margin-top: 6px; }
+    /* 来源标题替换：一行一条规则 */
+    .title-rules { margin-top: 4px; }
+    .title-rule { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .title-rule input[type="text"] { padding: 6px 9px; font-size: 12px; }
+    .title-rule .rule-prefix { flex: 2 1 0; min-width: 0; }
+    .title-rule .rule-from { flex: 1 1 0; min-width: 0; }
+    .title-rule .rule-to { flex: 1 1 0; min-width: 0; }
+    .title-rule .rule-arrow { flex: 0 0 auto; color: var(--muted); font-size: 12px; }
+    .title-rule .rule-del {
+      flex: 0 0 auto; border: 1px solid var(--border); background: #fff; color: var(--muted);
+      font-size: 12px; line-height: 1; padding: 6px 8px; border-radius: 7px; cursor: pointer;
+    }
+    .title-rule .rule-del:hover { color: #dc2626; border-color: #dc2626; }
+    .title-rules .rules-empty { font-size: 12px; color: var(--muted); margin-top: 6px; }
     button.primary, button.ghost {
       border: none; cursor: pointer; font-size: 13px;
       padding: 9px 18px; border-radius: 9px; transition: 0.15s;
@@ -311,6 +325,15 @@
           <div class="hint">用 <code>chrome.storage.sync</code> 走浏览器账号，同步接口地址、模型、API Key、多份提示词、摘录/高亮开关等设置项；「暂停」状态与历史记录不在此列（历史用上面的 WebDAV）。改动后约 1.5 秒自动推送，其他电脑打开浏览器时自动拉取。</div>
         </div>
         <label class="switch"><input type="checkbox" id="settingsSync" checked /><span class="slider"></span></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>⑥ 来源标题替换</h2>
+      <div class="hint">按网址前缀匹配来源（例如 <code>https://www.zhihu.com/</code>），命中后把来源名称里的指定文本替换掉。只改显示与导出的文字，不改记录本身，也不改链接地址；「查找」留空表示整条标题替换成「替换为」。多条规则按顺序依次生效，保存设置后生效。</div>
+      <div id="titleRules" class="title-rules"></div>
+      <div class="btns">
+        <button class="ghost" id="titleRuleAdd" type="button">＋ 添加规则</button>
       </div>
     </div>
 

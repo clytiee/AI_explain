@@ -27,6 +27,7 @@ let page = 1; // 当前页码
 const UNTAGGED = " __untagged__"; // 标签筛选里的「无标签」伪标签（带空格，不会撞真实标签名）
 let tagFilter = []; // 标签筛选（默认单选取一个；选了「或 / 且」后可多选；「无标签」用 UNTAGGED 表示）
 let tagMode = ""; // 多选标签之间的关系："or"=命中任意一个，"and"=必须全部命中，空=未选模式（单选取一个）
+let titleRules = []; // 来源标题替换规则（来自 config.titleRules）：[{ prefix, from, to }]
 
 // 显示设置默认值
 const DEFAULT_DISPLAY = {
@@ -388,6 +389,27 @@ function safeHost(u) {
   }
 }
 
+// 来源标题替换：按网址前缀匹配，规则按顺序依次生效（只影响展示与导出，不改记录）
+function applyTitleRules(url, title) {
+  let out = String(title || "");
+  const u = String(url || "");
+  for (const r of titleRules) {
+    const prefix = String(r && r.prefix ? r.prefix : "").trim();
+    if (!prefix || !u.startsWith(prefix)) continue;
+    const from = String(r.from || "");
+    const to = String(r.to == null ? "" : r.to);
+    if (!from) out = to; // 查找留空 = 整条标题替换
+    else if (out.includes(from)) out = out.split(from).join(to);
+  }
+  return out;
+}
+
+// 记录在界面上展示的来源标题（原始 pageTitle 经替换规则处理）
+function displayTitle(rec) {
+  if (!rec) return "";
+  return applyTitleRules(rec.pageUrl, rec.pageTitle);
+}
+
 // ---------- 加载 ----------
 function initFontSelect() {
   const sel = $("optFontPreset");
@@ -494,9 +516,11 @@ function load() {
       [AGG_KEY]: false,
       [SETTINGS_HIDDEN_KEY]: false,
       [AGG_ORDER_KEY]: {},
+      config: {},
     },
     (res) => {
       all = Array.isArray(res[HISTORY_KEY]) ? res[HISTORY_KEY] : [];
+      titleRules = Array.isArray(res.config && res.config.titleRules) ? res.config.titleRules : [];
       exportOpts = { ...exportOpts, ...(res[EXPORT_OPTS_KEY] || {}) };
       $("optTime").checked = exportOpts.time;
       $("optPageTitle").checked = exportOpts.pageTitle;
@@ -679,6 +703,8 @@ function filteredList() {
         (e.text || "").toLowerCase().includes(q) ||
         (e.answer || "").toLowerCase().includes(q) ||
         (e.pageTitle || "").toLowerCase().includes(q) ||
+        // 搜索也认替换后的来源名，看到的文字都能搜到
+        displayTitle(e).toLowerCase().includes(q) ||
         (e.pageUrl || "").toLowerCase().includes(q)
     );
   }
@@ -825,7 +851,8 @@ function startEditSource(srcEl, records) {
   input.type = "text";
   input.className = "item-src-input";
   input.maxLength = 100;
-  input.value = first.pageTitle || (first.pageUrl ? safeHost(first.pageUrl) : "");
+  // 输入框里先放「当前看到的」来源名（已过替换规则），保存写回原始 pageTitle
+  input.value = displayTitle(first) || (first.pageUrl ? safeHost(first.pageUrl) : "");
   input.title = "改来源文本，链接地址不变；回车保存，Esc 取消";
   srcEl.classList.add("editing");
   srcEl.textContent = "来源：";
@@ -1091,9 +1118,9 @@ function buildItemCard(e) {
     if (e.pageUrl) {
       src.innerHTML =
         '来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
-        esc(e.pageTitle || safeHost(e.pageUrl)) + "</a>";
+        esc(displayTitle(e) || safeHost(e.pageUrl)) + "</a>";
     } else {
-      src.textContent = "来源：" + e.pageTitle;
+      src.textContent = "来源：" + displayTitle(e);
     }
     head.appendChild(src);
 
@@ -1404,9 +1431,9 @@ function renderAggregated(list) {
       if (first.pageUrl) {
         src.innerHTML =
           '来源：<a href="' + esc(first.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
-          esc(first.pageTitle || safeHost(first.pageUrl)) + "</a>";
+          esc(displayTitle(first) || safeHost(first.pageUrl)) + "</a>";
       } else {
-        src.textContent = "来源：" + first.pageTitle;
+        src.textContent = "来源：" + displayTitle(first);
       }
       group.appendChild(src);
 
@@ -1575,7 +1602,7 @@ function buildMarkdown(list) {
       lines.push("## " + (i + 1) + ". 「" + (e.text || "") + "」");
       lines.push("");
       if (opts.time) lines.push("- **时间**：" + formatTime(e.time));
-      if (opts.pageTitle && e.pageTitle) lines.push("- **来源页面**：" + e.pageTitle);
+      if (opts.pageTitle && displayTitle(e)) lines.push("- **来源页面**：" + displayTitle(e));
       if (opts.pageUrl && e.pageUrl) lines.push("- **页面地址**：" + e.pageUrl);
       lines.push("");
       lines.push(e.answer || ""); // 去掉「释义：」标题行，释义内容直接跟在其后
@@ -1599,7 +1626,7 @@ function buildMarkdownAggregated(list) {
   groupRecords(list).forEach(([key, recs], g) => {
     const srcKey = key.startsWith("__no_") ? "" : key;
     const first = recs[0];
-    const title = first.pageTitle || first.pageUrl || "未命名来源";
+    const title = displayTitle(first) || first.pageUrl || "未命名来源";
     lines.push("");
     lines.push("---");
     lines.push("");
@@ -1724,14 +1751,14 @@ function cardHtml(e) {
   const head = [];
   if (opts.time) head.push('<span class="item-time">' + esc(formatTime(e.time)) + "</span>");
   // 来源：勾选「来源页面」才显示；「页面地址」决定是否带超链接
-  if (opts.pageTitle && e.pageTitle) {
+  if (opts.pageTitle && displayTitle(e)) {
     if (opts.pageUrl && e.pageUrl) {
       head.push(
         '<span class="item-src">来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
-          esc(e.pageTitle) + "</a></span>"
+          esc(displayTitle(e)) + "</a></span>"
       );
     } else {
-      head.push('<span class="item-src">来源：' + esc(e.pageTitle) + "</span>");
+      head.push('<span class="item-src">来源：' + esc(displayTitle(e)) + "</span>");
     }
   }
   const srcKey = e.pageUrl || e.pageTitle || "";
@@ -1768,14 +1795,14 @@ function buildCardsHtmlAggregated(list) {
       const head = [];
       if (opts.count) head.push('<span class="item-count">' + recs.length + " 条</span>");
       // 来源：勾选「来源页面」才显示；「页面地址」决定是否带超链接
-      if (opts.pageTitle && first.pageTitle) {
+      if (opts.pageTitle && displayTitle(first)) {
         if (opts.pageUrl && first.pageUrl) {
           head.push(
             '<span class="item-src-group"><span class="item-src">来源：<a href="' + esc(first.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
-              esc(first.pageTitle) + "</a></span></span>"
+              esc(displayTitle(first)) + "</a></span></span>"
           );
         } else {
-          head.push('<span class="item-src-group"><span class="item-src">来源：' + esc(first.pageTitle) + "</span></span>");
+          head.push('<span class="item-src-group"><span class="item-src">来源：' + esc(displayTitle(first)) + "</span></span>");
         }
       }
       const main =
@@ -2312,7 +2339,14 @@ document.addEventListener("DOMContentLoaded", load);
 
 // 后台云端同步会直接改写 history，页面跟着刷新（否则要手动重开才看得到）
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== "local" || !changes[HISTORY_KEY]) return;
+  if (area !== "local") return;
+  if (changes.config) {
+    const cfg = changes.config.newValue || {};
+    titleRules = Array.isArray(cfg.titleRules) ? cfg.titleRules : [];
+    render();
+    return;
+  }
+  if (!changes[HISTORY_KEY]) return;
   const next = changes[HISTORY_KEY].newValue;
   if (!Array.isArray(next)) return;
   all = next;

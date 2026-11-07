@@ -22,6 +22,9 @@ const DEFAULT_CONFIG = {
   maxLength: 500,
   historyMax: 1000,
   currentTag: "", // 当前标签：划词/摘录入库时自动打上，空表示不打标签
+  // 来源标题替换规则：[{ prefix, from, to }]，按网址前缀匹配，命中后把来源名里的 from 替换成 to
+  // 只影响展示/导出，不改记录本身，也不改链接地址
+  titleRules: [],
   sync: DEFAULT_SYNC,
   systemPrompt:
     "你是一位博学的中文释义助手。用户选中了网页上的一段文本，请用简体中文对其中可能不理解的生词、术语、难句或概念进行清晰、准确、易懂的解释。\n" +
