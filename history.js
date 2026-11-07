@@ -1739,17 +1739,10 @@ const HEAD_BTN_CSS =
   "\n.h1-btn:hover{background:rgba(99,102,241,0.2)}" +
   "\n@media print{.h1-btn{display:none}}";
 
-function exportHtml() {
-  const statusEl = $("exportStatus");
-  const exportStatus = (text, ok) => {
-    statusEl.textContent = text;
-    statusEl.className = "export-status" + (ok ? " ok" : " err");
-  };
-  if (!filteredList().length) {
-    exportStatus("暂无记录可导出。", false);
-    return;
-  }
-  const list = filteredList();
+// 生成导出页 HTML（导出文件与「打印」预览共用，保证两者一致）
+// withPrintScript：导出文件里内联一段脚本给「打印」按钮绑事件；
+// 打印预览窗口继承扩展页 CSP，内联脚本会被拦，那边由父页直接绑事件。
+function buildExportHtml(list, withPrintScript) {
   // 勾选「卡片不跨页拆分」时，额外追加打印规则（不改动现有卡片样式）：
   // 卡片不跨页截断；每张卡片前的透明占位 div 提供 16px 顶部空隙
   // （与左右留白一致、露出页面背景色），并用 break-after:avoid 使其
@@ -1769,7 +1762,7 @@ function exportHtml() {
     "</head>\n<body>\n" +
     '<div class="wrap">\n' +
     '<h1><span class="dot"></span>划词AI释义 · 历史记录' +
-    '<button type="button" class="h1-btn" onclick="window.print()">打印</button></h1>\n' +
+    '<button type="button" class="h1-btn" id="aie-h1-print">打印</button></h1>\n' +
     '<p class="sub">共 ' + list.length + " 条 · 导出时间：" + formatTime(Date.now()) + "</p>\n" +
     (aggregate ? buildCardsHtmlAggregated(list) : buildCardsHtml(list)) +
     // 内嵌完整备份数据（JSON 数据区，仅勾选「备份数据」时输出）：
@@ -1782,8 +1775,26 @@ function exportHtml() {
         JSON.stringify({ version: 1, exportedAt: Date.now(), records: list }).replace(/</g, "\\u003c") +
         "</script>"
       : "") +
+    (withPrintScript
+      ? "\n<script>\n(function(){\n  var b = document.getElementById(\"aie-h1-print\");\n  if (b) b.addEventListener(\"click\", function(){ window.print(); });\n})();\n</" + "script>"
+      : "") +
     "\n</div>\n</body>\n</html>";
+  return html;
+}
 
+// 导出为 HTML 文件（下载）
+function exportHtml() {
+  const statusEl = $("exportStatus");
+  const exportStatus = (text, ok) => {
+    statusEl.textContent = text;
+    statusEl.className = "export-status" + (ok ? " ok" : " err");
+  };
+  const list = filteredList();
+  if (!list.length) {
+    exportStatus("暂无记录可导出。", false);
+    return;
+  }
+  const html = buildExportHtml(list, true);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1800,6 +1811,44 @@ function exportHtml() {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   exportStatus("已导出 " + list.length + " 条记录为 HTML 文件：" + name, true);
+}
+
+// 打印：打开与导出 HTML 完全相同的页面（不下载文件），并自动唤起浏览器打印窗口
+function printHistory() {
+  const statusEl = $("exportStatus");
+  const list = filteredList();
+  if (!list.length) {
+    statusEl.textContent = "暂无记录可打印。";
+    statusEl.className = "export-status err";
+    return;
+  }
+  const html = buildExportHtml(list, false);
+  // 用 about:blank 新窗口写入同一份文档，再由本页调它的 window.print()
+  // （不靠文档内联脚本：新窗口继承扩展页的 CSP，内联 script 与 onclick 都会被拦掉）
+  const win = window.open("about:blank", "_blank");
+  if (!win) {
+    statusEl.textContent = "浏览器拦截了新窗口，请允许扩展打开新标签页后重试。";
+    statusEl.className = "export-status err";
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  // 等样式与字体就绪再触发打印，避免预览还没排好版
+  setTimeout(() => {
+    try {
+      const btn = win.document.getElementById("aie-h1-print");
+      if (btn) btn.addEventListener("click", () => win.print());
+      win.focus();
+      win.print();
+    } catch (e) {
+      statusEl.textContent = "已打开打印页，但自动打印被浏览器阻止，请在页面里点右上角「打印」。";
+      statusEl.className = "export-status err";
+      return;
+    }
+    statusEl.textContent = "已在打印预览页打开 " + list.length + " 条记录。";
+    statusEl.className = "export-status ok";
+  }, 500);
 }
 
 // 只导出备份数据（JSON 文件），供另一台电脑「导入」精确还原；
@@ -2131,6 +2180,7 @@ $("searchClear").addEventListener("click", () => {
 });
 $("export").addEventListener("click", exportMd);
 $("exportHtml").addEventListener("click", exportHtml);
+$("printPage").addEventListener("click", printHistory);
 $("exportBackup").addEventListener("click", exportBackup);
 $("import").addEventListener("click", () => $("importFile").click());
 $("importFile").addEventListener("change", handleImportFile);
