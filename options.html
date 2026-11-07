@@ -114,14 +114,24 @@
     #testStatus.err { color: #dc2626; }
     .test-box { margin-top: 8px; padding: 10px 12px; background: rgba(31,41,55,0.05); border-radius: 8px; font-size: 13px; white-space: pre-wrap; word-break: break-word; display: none; }
     .test-box.show { display: block; }
-    /* 高亮划词：常用荧光笔色 */
+    /* 高亮划词：常用荧光笔色（文字 + 下半部分色带，与实际划线效果一致） */
     .hl-colors { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
     .hl-swatch {
-      width: 34px; height: 26px; border-radius: 7px; cursor: pointer;
-      border: 2px solid rgba(0,0,0,0.08); padding: 0; transition: 0.12s;
+      font-family: inherit; font-size: 14px; line-height: 1.5; color: #1f2937;
+      background: #fff; padding: 3px 10px; border-radius: 8px; cursor: pointer;
+      border: 1px dashed rgba(0,0,0,0.2); transition: 0.12s;
     }
-    .hl-swatch:hover { transform: translateY(-1px); }
-    .hl-swatch.active { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
+    .hl-swatch:hover { transform: translateY(-1px); border-style: solid; border-color: rgba(99,102,241,0.5); }
+    .hl-swatch.active { border-style: solid; border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
+    .hl-swatch-text {
+      padding: 0 2px;
+      -webkit-box-decoration-break: clone; box-decoration-break: clone;
+      background-image: linear-gradient(
+        to top,
+        var(--sw) 0, var(--sw) 42%, transparent 42%
+      );
+      background-repeat: no-repeat;
+    }
     .hl-palette-row { display: flex; align-items: center; gap: 10px; }
     .hl-palette-label { font-size: 13px; color: #374151; }
     input[type="color"] {

@@ -21,7 +21,23 @@ const DEFAULT_PROMPT =
 const HL_PRESET_COLORS = [
   "#fef08a", "#bbf7d0", "#bae6fd", "#fbcfe8",
   "#fed7aa", "#ddd6fe", "#fecaca", "#99f6e4",
+  "#d9f99d", "#ccfbf1", "#e5e7eb", "#93c5fd",
 ];
+// 常用色的中文名称（与 HL_PRESET_COLORS 一一对应，悬停时显示）
+const HL_COLOR_NAMES = {
+  "#fef08a": "浅黄",
+  "#bbf7d0": "浅绿",
+  "#bae6fd": "浅蓝",
+  "#fbcfe8": "浅粉",
+  "#fed7aa": "浅橙",
+  "#ddd6fe": "浅紫",
+  "#fecaca": "浅红",
+  "#99f6e4": "浅青",
+  "#d9f99d": "青柠",
+  "#ccfbf1": "青瓷",
+  "#e5e7eb": "中性灰",
+  "#93c5fd": "链接蓝",
+};
 const HL_DEFAULT_COLOR = "#fef08a";
 
 // 内置提示词（与 background.js 的 BUILTIN_PROMPTS 一一对应，改动需两处同步）
@@ -109,17 +125,32 @@ let currentConfig = {
   sync: { ...DEFAULT_SYNC },
 };
 
-// 渲染常用荧光笔色一排
+// 色块上的示例文字：按《诗经·蒹葭》全诗逐句依次排（不循环，色块多了就空着）
+const HL_SAMPLE_LINES = [
+  "蒹葭苍苍", "白露为霜", "所谓伊人", "在水一方",
+  "溯洄从之", "道阻且长", "溯游从之", "宛在水中央",
+  "蒹葭萋萋", "白露未晞", "所谓伊人", "在水之湄",
+  "溯洄从之", "道阻且跻", "溯游从之", "宛在水中坻",
+  "蒹葭采采", "白露未已", "所谓伊人", "在水之涘",
+  "溯洄从之", "道阻且右", "溯游从之", "宛在水中沚",
+];
+
+// 渲染常用荧光笔色：每块用示例文字配下半部分色带，所见即所得
 function renderHlColors() {
   const wrap = $("hlColors");
   wrap.innerHTML = "";
-  HL_PRESET_COLORS.forEach((color) => {
+  HL_PRESET_COLORS.forEach((color, i) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "hl-swatch";
-    btn.style.background = color;
-    btn.title = color;
+    btn.style.setProperty("--sw", color);
+    // 悬停显示中文色名，后面附色值便于对照
+    btn.title = (HL_COLOR_NAMES[color] || "自定义色") + " · " + color;
     btn.dataset.color = color;
+    const textEl = document.createElement("span");
+    textEl.className = "hl-swatch-text";
+    textEl.textContent = HL_SAMPLE_LINES[i] || "";
+    btn.appendChild(textEl);
     btn.addEventListener("click", () => {
       $("highlightColor").value = color;
       markActiveSwatch(color);
