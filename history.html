@@ -55,7 +55,7 @@
     .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
 
     .toolbar {
-      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
       background: rgba(255, 255, 255, 0.88);
       border: 1px solid rgba(255, 255, 255, 0.6);
       border-radius: 16px;
@@ -104,6 +104,8 @@
       font-size: 13px;
     }
     .opts.timebar { overflow: visible; }
+    /* 时间行没有可伸缩的占位元素，靠 margin-left:auto 把「清除」推到行尾，与标签行的观感一致 */
+    .opts.timebar #timeClear { margin-left: auto; }
     .opts.timebar .opts-hint { flex: 0 0 auto; color: var(--primary); font-size: 12px; }
     .opts.timebar .quick-links { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 12px; }
     .opts.timebar .quick-link { cursor: pointer; color: var(--muted); text-decoration: none; width: 25px; text-align: center; border-radius: 5px; }
@@ -248,14 +250,14 @@
     /* 「或 / 且」互斥模式切换 */
     .tag-mode { display: inline-flex; border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 999px; overflow: hidden; }
     .tag-mode-btn {
-      font-family: inherit; font-size: 12px; line-height: 1; padding: 3px 9px; cursor: pointer;
+      font-family: inherit; font-size: 11px; line-height: 1; padding: 3px 6px; cursor: pointer;
       border: 0; background: transparent; color: #6366f1;
     }
     .tag-mode-btn.active { background: #6366f1; color: #fff; }
     .tag-mode-btn:not(.active):hover { background: rgba(99, 102, 241, 0.12); }
     .tag-filters { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1 1 auto; }
     .tag-chip {
-      font-size: 12px; padding: 2px 9px; border-radius: 999px; cursor: pointer;
+      font-size: 12px; padding: 2px 7px; border-radius: 999px; cursor: pointer;
       border: 1px solid rgba(99, 102, 241, 0.3); background: rgba(99, 102, 241, 0.08);
       color: #4338ca; font-family: inherit;
     }
@@ -451,13 +453,13 @@
     </div>
 
     <div class="opts tagbar" id="tagBar" hidden>
-      <span class="opts-title">标签：</span>
+      <span class="opts-title">标签： </span>
       <span class="tag-mode">
         <button type="button" class="tag-mode-btn active" id="tagModeOr" title="命中任意一个选中标签即显示">或</button>
         <button type="button" class="tag-mode-btn" id="tagModeAnd" title="必须同时带有全部选中标签才显示">且</button>
       </span>
       <div class="tag-filters" id="tagFilters"></div>
-      <button type="button" class="reset-btn" id="tagClear">清除筛选</button>
+      <button type="button" class="reset-btn" id="tagClear">清除</button>
     </div>
 
     <div id="settingsArea">
