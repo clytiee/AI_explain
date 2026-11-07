@@ -69,12 +69,18 @@ function normalizePrompts(cfg) {
     const saved = String(cfg.systemPrompt || "").trim();
     list =
       saved && saved !== DEFAULT_PROMPT
-        ? [{ id: "custom", name: "我的提示词", prompt: saved }]
+        ? [{ id: "custom", name: "我的提示词", prompt: saved }, ...BUILTIN_PROMPTS.map((p) => ({ ...p }))]
         : BUILTIN_PROMPTS.map((p) => ({ ...p }));
+  }
+  // 与后台一致：老版本只留下自定义提示词时，补回缺失的内置提示词
+  if (!cfg.promptsBuiltinSeeded) {
+    const ids = new Set(list.map((p) => p.id));
+    const missing = BUILTIN_PROMPTS.filter((b) => !ids.has(b.id));
+    if (missing.length) list = [...list, ...missing.map((p) => ({ ...p }))];
   }
   let id = cfg.activePromptId;
   if (!list.some((p) => p.id === id)) id = list[0].id;
-  return { list, id };
+  return { list, id, seeded: true };
 }
 
 const DEFAULT_SYNC = {
@@ -214,6 +220,7 @@ function readForm() {
     systemPrompt: active ? active.prompt : "",
     prompts: list,
     activePromptId: active ? active.id : "",
+    promptsBuiltinSeeded: true, // 记住已经补过内置提示词，之后删掉不会被自动加回来
     highlightColor: $("highlightColor").value,
     sync: {
       enabled: $("syncEnabled").checked,
@@ -231,13 +238,17 @@ function currentEntry() {
   return prompts.find((p) => p.id === activePromptId) || prompts[0] || null;
 }
 
+// 内置提示词的 id（下拉里给它们标「内置」）
+const BUILTIN_IDS = BUILTIN_PROMPTS.map((p) => p.id);
+
 function renderPromptSelect() {
   const sel = $("promptSelect");
   sel.innerHTML = "";
   prompts.forEach((p) => {
     const opt = document.createElement("option");
     opt.value = p.id;
-    opt.textContent = p.name;
+    // 内置的三份在名称右侧标一下，方便区分自己新建的
+    opt.textContent = BUILTIN_IDS.includes(p.id) ? p.name + "　·　内置" : p.name;
     sel.appendChild(opt);
   });
   sel.value = activePromptId;
@@ -339,6 +350,28 @@ $("resetPrompt").addEventListener("click", () => {
   const cur = currentEntry();
   if (cur) cur.prompt = DEFAULT_PROMPT;
   setStatus("已把这份提示词恢复为默认正文，记得点「保存设置」生效。", true);
+});
+
+// 恢复内置提示词：缺的补回，已有的按内置正文重置（自定义的其它提示词不动）
+$("restoreBuiltins").addEventListener("click", () => {
+  if (!confirm("将把「默认释义 / 简洁速览 / 翻译优先」三份内置提示词补回或重置为内置正文，其它提示词不受影响。继续？")) return;
+  const cur = currentEntry();
+  if (cur) {
+    cur.name = $("promptName").value.trim() || cur.name;
+    cur.prompt = $("systemPrompt").value;
+  }
+  BUILTIN_PROMPTS.forEach((b) => {
+    const exist = prompts.find((p) => p.id === b.id);
+    if (exist) {
+      exist.name = b.name;
+      exist.prompt = b.prompt;
+    } else {
+      prompts.push({ ...b });
+    }
+  });
+  renderPromptSelect();
+  fillPromptForm();
+  setStatus("已恢复内置提示词，点「保存设置」写入。", true);
 });
 
 // 下拉切换提示词

@@ -70,17 +70,24 @@ function normalizePromptConfig(cfg) {
       prompt: String(p.prompt),
     }));
   if (!prompts.length) {
-    // 旧配置：只有一份 systemPrompt，用户改过就保留成「我的提示词」，没改过则铺开内置三份
+    // 旧配置：只有一份 systemPrompt。用户改过就保留成「我的提示词」，但内置三份也一并铺上
+    // （此前只留自定义那份，设置里就看不到内置提示词）
     const saved = String(cfg.systemPrompt || "").trim();
     prompts =
       saved && saved !== DEFAULT_CONFIG.systemPrompt
-        ? [{ id: "custom", name: "我的提示词", prompt: saved }]
+        ? [{ id: "custom", name: "我的提示词", prompt: saved }, ...BUILTIN_PROMPTS.map((p) => ({ ...p }))]
         : BUILTIN_PROMPTS.map((p) => ({ ...p }));
+  }
+  // 老版本迁移只留下了「我的提示词」的情况：把缺失的内置提示词补回来（一次性，记 promptsBuiltinSeeded）
+  if (!cfg.promptsBuiltinSeeded) {
+    const ids = new Set(prompts.map((p) => p.id));
+    const missing = BUILTIN_PROMPTS.filter((b) => !ids.has(b.id));
+    if (missing.length) prompts = [...prompts, ...missing.map((p) => ({ ...p }))];
   }
   let activeId = cfg.activePromptId;
   if (!prompts.some((p) => p.id === activeId)) activeId = prompts[0].id;
   const active = prompts.find((p) => p.id === activeId);
-  return { prompts, activePromptId: activeId, systemPrompt: active.prompt };
+  return { prompts, activePromptId: activeId, systemPrompt: active.prompt, promptsBuiltinSeeded: true };
 }
 
 let configCache = null;
@@ -95,6 +102,7 @@ async function getConfig() {
   if (
     !Array.isArray(saved.prompts) ||
     !saved.activePromptId ||
+    !saved.promptsBuiltinSeeded ||
     saved.systemPrompt !== configCache.systemPrompt
   ) {
     chrome.storage.local.set({ config: configCache }).catch(() => {});
