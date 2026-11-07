@@ -792,6 +792,65 @@ function saveRecordTags(id, tags) {
   saveTagsBatch([{ id, tags }]);
 }
 
+// 改写来源文本（pageTitle），链接地址 pageUrl 保持不变；一次可改多条（聚合视图按来源整组改）
+function saveRecordTitle(ids, title) {
+  const clean = String(title || "").trim();
+  const now = Date.now();
+  let touched = false;
+  (ids || []).forEach((id) => {
+    const item = all.find((e) => e.id === id);
+    if (!item) return;
+    if (clean) item.pageTitle = clean;
+    else delete item.pageTitle;
+    item.updatedAt = now;
+    touched = true;
+  });
+  if (!touched) {
+    render();
+    return;
+  }
+  chrome.storage.local.set({ [HISTORY_KEY]: all }, () => {
+    try {
+      chrome.runtime.sendMessage({ type: "history-changed" }).catch(() => {});
+    } catch (e) {}
+    render();
+  });
+}
+
+// 就地编辑来源文本：把来源区域换成输入框，回车/失焦保存，Esc 取消
+function startEditSource(srcEl, records) {
+  const first = (records || [])[0];
+  if (!first || !srcEl) return;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "item-src-input";
+  input.maxLength = 100;
+  input.value = first.pageTitle || (first.pageUrl ? safeHost(first.pageUrl) : "");
+  input.title = "改来源文本，链接地址不变；回车保存，Esc 取消";
+  srcEl.classList.add("editing");
+  srcEl.textContent = "来源：";
+  srcEl.appendChild(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    if (save) saveRecordTitle(records.map((r) => r.id), input.value);
+    else render();
+  };
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      finish(true);
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      finish(false);
+    }
+  });
+  input.addEventListener("blur", () => finish(true));
+}
+
 // 一条记录（或一组同源记录共用）的标签行：点标签移除，＋ 输入框回车/失焦提交
 // 传多条时按「来源」打标签：标签取组内并集，增删都作用到这一组的每条记录
 function buildTagsRow(targets) {
@@ -985,6 +1044,10 @@ const MAIN_BTN_ICON =
   '<svg width="12" height="12" viewBox="0 0 1024 1024" fill="currentColor" aria-hidden="true">' +
   '<path d="M408.547 205.584c12.15-7.798 21.15-8.255 30.545 3.948l21.631 28.093c5.588 7.26 3.38 16.83-2.424 21.763-87.482 56.125-187.06 176.64-194.526 220.106-7.466 43.468 35.337 32.139 105.328 64.668 69.991 32.527 127.933 151.522 31.273 245.272-96.66 93.75-287.427-10.591-259.637-223.763 17.85-136.933 107.12-256.962 267.81-360.087z m423.043 0c12.152-7.798 21.152-8.255 30.547 3.948l21.629 28.093c5.59 7.26 3.382 16.83-2.422 21.763-87.483 56.125-187.06 176.64-194.526 220.106-7.468 43.468 35.336 32.139 105.328 64.668 69.991 32.527 127.933 151.522 31.273 245.272-96.66 93.75-287.428-10.591-259.639-223.763 17.852-136.933 107.122-256.962 267.81-360.087z"/></svg>';
 
+// 「改来源文本」按钮图标：铅笔
+const EDIT_SRC_ICON =
+  '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+
 // 普通卡片（非聚合）：第一行 时间 + 来源按钮 + 来源 + 删除
 function buildItemCard(e) {
   const item = document.createElement("div");
@@ -1033,6 +1096,15 @@ function buildItemCard(e) {
       src.textContent = "来源：" + e.pageTitle;
     }
     head.appendChild(src);
+
+    // 改来源文本（只改标题，链接地址不变）
+    const editSrcBtn = document.createElement("button");
+    editSrcBtn.type = "button";
+    editSrcBtn.className = "item-src-edit";
+    editSrcBtn.title = "修改来源文本（链接地址不变）";
+    editSrcBtn.innerHTML = EDIT_SRC_ICON;
+    editSrcBtn.addEventListener("click", () => startEditSource(src, [e]));
+    head.appendChild(editSrcBtn);
   }
 
   const del = document.createElement("button");
@@ -1337,6 +1409,15 @@ function renderAggregated(list) {
         src.textContent = "来源：" + first.pageTitle;
       }
       group.appendChild(src);
+
+      // 改来源文本：聚合视图下改这一组全部记录的来源标题，链接地址不变
+      const editSrcBtn = document.createElement("button");
+      editSrcBtn.type = "button";
+      editSrcBtn.className = "item-src-edit";
+      editSrcBtn.title = "修改来源文本（链接地址不变）";
+      editSrcBtn.innerHTML = EDIT_SRC_ICON;
+      editSrcBtn.addEventListener("click", () => startEditSource(src, recs));
+      group.appendChild(editSrcBtn);
 
       head.appendChild(group);
     }
