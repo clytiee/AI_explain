@@ -1,9 +1,10 @@
 # 截图
 ## 划词浮层
-<img width="1015" height="766" alt="image" src="https://github.com/user-attachments/assets/2567d1a2-5171-494a-91ab-8441508e0e3b" />
+
+<img width="1779" height="1155" alt="image" src="https://github.com/user-attachments/assets/82c5d85d-2424-4b8f-95c9-d28cc82d0c89" />
 
 ## 历史记录
-<img width="1477" height="1113" alt="image" src="https://github.com/user-attachments/assets/299ec24e-d1a1-40f3-841a-fe677280c49b" />
+<img width="1509" height="1846" alt="image" src="https://github.com/user-attachments/assets/31906746-3e2c-42ff-a169-3bab3aa5e15f" />
 
 ## 部分设置
 <img width="1355" height="1619" alt="image" src="https://github.com/user-attachments/assets/025df163-add5-4cd2-83f9-f102c203612b" />
