@@ -1,3 +1,14 @@
+# 截图
+## 划词浮层
+<img width="1015" height="766" alt="image" src="https://github.com/user-attachments/assets/2567d1a2-5171-494a-91ab-8441508e0e3b" />
+
+## 历史记录
+<img width="1477" height="1113" alt="image" src="https://github.com/user-attachments/assets/299ec24e-d1a1-40f3-841a-fe677280c49b" />
+
+## 部分设置
+<img width="1355" height="1619" alt="image" src="https://github.com/user-attachments/assets/025df163-add5-4cd2-83f9-f102c203612b" />
+
+
 # 划词AI释义（AI_explain）
 
 一个浏览器扩展（Chrome / Edge，Manifest V3）：**选中网页上的文本 → 自动弹出浮层 → 调用你配置的大模型 API → 对所选文本进行释义、翻译或讲解**。风格类似「划词翻译」，但由 AI 自由解释，而非仅翻译。
