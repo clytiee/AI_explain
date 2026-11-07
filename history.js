@@ -25,7 +25,8 @@ let aggOrder = {}; // 聚合模式下每来源记录的手工排序
 const PAGE_SIZE = 10; // 历史页分页：每页记录/组数
 let page = 1; // 当前页码
 const UNTAGGED = " __untagged__"; // 标签筛选里的「无标签」伪标签（带空格，不会撞真实标签名）
-let tagFilter = []; // 标签筛选（多选，选中任意一个即命中；「无标签」用 UNTAGGED 表示）
+let tagFilter = []; // 标签筛选（默认单选取一个；选了「或 / 且」后可多选；「无标签」用 UNTAGGED 表示）
+let tagMode = ""; // 多选标签之间的关系："or"=命中任意一个，"and"=必须全部命中，空=未选模式（单选取一个）
 
 // 显示设置默认值
 const DEFAULT_DISPLAY = {
@@ -682,13 +683,18 @@ function filteredList() {
     );
   }
   if (tagFilter.length) {
-    // 多选标签之间取「或」：命中任意一个即显示；「无标签」筛出 tags 为空的记录
+    // or / 默认单选取一个：命中任意一个选中标签即显示；and：选中的标签必须全部具备
+    // 「无标签」单独处理：非 and 模式下也把 tags 为空的记录算进来，and 模式下要求为空
     list = list.filter((e) => {
       const tags = Array.isArray(e.tags) ? e.tags.filter((t) => String(t || "").trim()) : [];
-      if (tagFilter.includes(UNTAGGED)) {
-        if (!tags.length) return true;
+      const wantUntagged = tagFilter.includes(UNTAGGED);
+      const wantTags = tagFilter.filter((t) => t !== UNTAGGED);
+      if (tagMode === "and") {
+        if (wantUntagged && tags.length) return false;
+        return wantTags.every((t) => tags.includes(t));
       }
-      return tags.some((t) => tagFilter.includes(t));
+      if (wantUntagged && !tags.length) return true;
+      return tags.some((t) => wantTags.includes(t));
     });
   }
   return list;
@@ -704,6 +710,19 @@ function allTags() {
     }
   }
   return [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+// 点标签筛选 chip：没选「或 / 且」时是单选（再点取消）；选了模式后可多选
+function toggleTagFilter(name) {
+  if (!tagMode) {
+    tagFilter = tagFilter.length === 1 && tagFilter[0] === name ? [] : [name];
+  } else {
+    tagFilter = tagFilter.includes(name)
+      ? tagFilter.filter((t) => t !== name)
+      : [...tagFilter, name];
+  }
+  page = 1;
+  render();
 }
 
 // 顶部标签筛选条：没有标签且也没有无标签记录时整条隐藏
@@ -725,18 +744,15 @@ function renderTagBar() {
   );
   bar.hidden = false;
   wrap.innerHTML = "";
+  // 模式按钮与状态保持一致（只有一个 active）
+  $("tagModeOr").classList.toggle("active", tagMode === "or");
+  $("tagModeAnd").classList.toggle("active", tagMode === "and");
   if (untaggedCount) {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "tag-chip tag-chip-untagged" + (tagFilter.includes(UNTAGGED) ? " active" : "");
     chip.textContent = "无标签（" + untaggedCount + "）";
-    chip.addEventListener("click", () => {
-      tagFilter = tagFilter.includes(UNTAGGED)
-        ? tagFilter.filter((t) => t !== UNTAGGED)
-        : [...tagFilter, UNTAGGED];
-      page = 1;
-      render();
-    });
+    chip.addEventListener("click", () => toggleTagFilter(UNTAGGED));
     wrap.appendChild(chip);
   }
   tags.forEach(([name, num]) => {
@@ -744,13 +760,7 @@ function renderTagBar() {
     chip.type = "button";
     chip.className = "tag-chip" + (tagFilter.includes(name) ? " active" : "");
     chip.textContent = name + "（" + num + "）";
-    chip.addEventListener("click", () => {
-      tagFilter = tagFilter.includes(name)
-        ? tagFilter.filter((t) => t !== name)
-        : [...tagFilter, name];
-      page = 1;
-      render();
-    });
+    chip.addEventListener("click", () => toggleTagFilter(name));
     wrap.appendChild(chip);
   });
 }
@@ -2074,6 +2084,21 @@ $("tagClear").addEventListener("click", () => {
   tagFilter = [];
   page = 1;
   render();
+});
+// 「或 / 且」互斥，且都可以再点一次取消（取消后回到单选默认态）
+["tagModeOr", "tagModeAnd"].forEach((id) => {
+  $(id).addEventListener("click", () => {
+    const mode = id === "tagModeAnd" ? "and" : "or";
+    if (tagMode === mode) {
+      tagMode = "";
+      // 回到默认态时标签只保留一个，符合「单选」
+      tagFilter = tagFilter.slice(0, 1);
+    } else {
+      tagMode = mode;
+    }
+    page = 1;
+    render();
+  });
 });
 $("timeStart").addEventListener("change", () => { page = 1; render(); });
 $("timeEnd").addEventListener("change", () => { page = 1; render(); });
