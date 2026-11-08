@@ -660,6 +660,13 @@
       <button type="button" class="btn-mini" id="exportBackup" title="仅导出备份数据（JSON 文件），用于在另一台电脑导入还原">导出 JSON</button>
       <button type="button" class="btn-mini" id="import">导入</button>
     </div>
+    <!-- 列表显示模式：常驻显示，不受「样式设置」折叠影响 -->
+    <div class="opts">
+      <span class="opts-toggle-row">
+        <button type="button" id="toggleMain" class="reset-btn">隐藏主文</button>
+        <button type="button" id="toggleAgg" class="reset-btn">按来源聚合</button>
+      </span>
+    </div>
     <div class="opts panel-row">
       <button type="button" class="panel-toggle" id="styleToggle" aria-expanded="false" aria-controls="stylePanel" title="展开或折叠字体、颜色、圆角与样式管理">
         <span class="panel-toggle-title">样式设置</span>
@@ -704,11 +711,6 @@
       <label>样式组 <select id="presetSelect"></select></label>
       <button type="button" id="deletePreset" class="reset-btn">删除</button>
       <button type="button" id="resetDisplay" class="reset-btn">恢复默认</button>
-      <span class="opts-br opts-sep"></span>
-      <span class="opts-toggle-row">
-        <button type="button" id="toggleMain" class="reset-btn">隐藏主文</button>
-        <button type="button" id="toggleAgg" class="reset-btn">按来源聚合</button>
-      </span>
     </div>
     </div>
     </div>
