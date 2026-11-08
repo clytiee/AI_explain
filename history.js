@@ -1850,18 +1850,11 @@ function isExtractRecord(e) {
   return !a || a === EXTRACT_PLACEHOLDER;
 }
 
-// ---------- 多行选中：原文行只留摘要，完整内容放主文 ----------
-// 划词选中多行时（诗词、列表、代码），原文整段塞在「……」里很难看，
-// 卡片里只显示前 N 个字 + 省略号，完整文本用主文块展示（保留换行）。
-const MULTILINE_PREVIEW = 30;
-
+// ---------- 多行选中：整段放进主文，原文行不再显示 ----------
+// 划词选中多行时（诗词、列表、代码），原文塞在「……」里很难看：
+// 卡片里改为只用主文块显示完整文本（保留换行），原文行直接省掉。
 function isMultilineSelection(t) {
   return /\n/.test(String(t || ""));
-}
-
-function selectionPreview(t) {
-  const flat = String(t || "").replace(/\s*\n+\s*/g, " ").trim();
-  return flat.length > MULTILINE_PREVIEW ? flat.slice(0, MULTILINE_PREVIEW) + "…" : flat;
 }
 
 // 「主文」按钮图标：双引号（用户提供的 quote.svg），配合 title 提示表示“该来源的一段主文说明”
@@ -1948,11 +1941,11 @@ function buildItemCard(e) {
   head.appendChild(actions);
 
   const isExtract = isExtractRecord(e);
-  // 多行选中：原文行显示前 N 字，完整多行文本放进主文块
+  // 多行选中：整段原文改放进主文块（带换行显示），有主文就不再渲染原文行
   const multi = isMultilineSelection(e.text);
   const textEl = document.createElement("div");
   textEl.className = "item-text" + (isExtract ? " item-text-extract" : "");
-  textEl.textContent = "「" + (multi ? selectionPreview(e.text) : e.text || "") + "」";
+  textEl.textContent = "「" + (e.text || "") + "」";
 
   const selMain = multi ? document.createElement("div") : null;
   if (selMain) {
@@ -1977,7 +1970,8 @@ function buildItemCard(e) {
     item.appendChild(main);
   }
 
-  item.appendChild(textEl);
+  // 有明细主文（多行原文）时不再显示原文行
+  if (!multi) item.appendChild(textEl);
   if (selMain) item.appendChild(selMain);
   item.appendChild(ans);
   return item;
@@ -2335,8 +2329,9 @@ function renderAggregated(list) {
       const multi = isMultilineSelection(e.text);
       const textEl = document.createElement("div");
       textEl.className = "item-text" + (isExtract ? " item-text-extract" : "");
-      textEl.textContent = "「" + (multi ? selectionPreview(e.text) : e.text || "") + "」";
-      gi.appendChild(textEl);
+      textEl.textContent = "「" + (e.text || "") + "」";
+      // 有明细主文（多行原文）时不再显示原文行
+      if (!multi) gi.appendChild(textEl);
       if (multi) {
         const selMain = document.createElement("div");
         selMain.className = "item-main item-main-dim";
@@ -2658,13 +2653,15 @@ function cardHtml(e) {
       : "";
   const meta = metaAttrs(e, isExtract);
   const multi = isMultilineSelection(e.text);
-  const quoteTxt = multi ? selectionPreview(e.text) : e.text || "";
+  const quoteHtml = multi
+    ? ""
+    : '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>";
   const selMain = multi ? '<div class="item-main item-main-dim">' + esc(e.text || "") + "</div>" : "";
   return (
     '<div class="card"' + meta + ">" +
     '<div class="item-head">' + head.join("") + "</div>" +
     main +
-    '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(quoteTxt) + "」</div>" +
+    quoteHtml +
     selMain +
     (isExtract ? "" : '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>") +
     "</div>"
@@ -2713,10 +2710,11 @@ function buildCardsHtmlAggregated(list) {
           const isExtract = isExtractRecord(e);
           const meta = metaAttrs(e, isExtract, false);
           const multi = isMultilineSelection(e.text);
-          const quoteTxt = multi ? selectionPreview(e.text) : e.text || "";
           return (
             '<div class="agg-item"' + meta + ">" +
-            '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(quoteTxt) + "」</div>" +
+            (multi
+              ? ""
+              : '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>") +
             (multi ? '<div class="item-main item-main-dim">' + esc(e.text || "") + "</div>" : "") +
             (isExtract ? "" : '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>") +
             "</div>"
