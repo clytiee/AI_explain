@@ -121,7 +121,13 @@
       font-size: 13px;
     }
     .opts.timebar { overflow: visible; }
-    /* 时间范围 / 标签 / 风格模板合成一张卡片：外层是一张卡，内层每行透明、用细虚线分隔 */
+    /* 筛选与风格行并进搜索工具栏那张卡：占满整行，不画分割线 */
+    .toolbar .opts-group {
+      flex-basis: 100%; width: 100%;
+      background: transparent; border: 0; border-radius: 0; box-shadow: none;
+      padding: 2px 0 0; margin: 0;
+    }
+    /* 时间范围 / 标签 / 风格模板依次排列，行内透明、用细虚线分隔 */
     .opts-group { display: block; padding: 10px 16px; }
     .opts-group > .opts {
       background: transparent; border: 0; border-radius: 0;
@@ -129,13 +135,15 @@
       display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
       row-gap: 6px;
     }
-    .opts-group > .opts + .opts:not([hidden]) {
+    /* 筛选卡三行之间留一点呼吸空间（上下各 5px，合计约 10px） */
+    .toolbar .opts-group > .opts { padding: 5px 0; }
+    /* 只有设置区那张合并卡在行间加细虚线分隔；筛选卡（时间范围 / 标签 / 风格模板）不加间距 */
+    #settingsArea .opts-group > .opts + .opts:not([hidden]) {
       border-top: 1px dashed rgba(15, 23, 42, 0.08);
       margin-top: 6px; padding-top: 10px;
     }
     /* 时间范围与标签同属筛选，两行之间不画分隔线、也不留额外间距 */
-    /* 时间范围与标签同属筛选：不画分隔线，且用负边距把两行贴紧 */
-    .opts-group > .opts.tagbar { border-top: 0 !important; margin-top: -6px; padding-top: 0; }
+    .opts-group > .opts.tagbar { border-top: 0 !important; margin-top: 0; padding-top: 0; }
     /* 折叠面板展开后与原样式一致（不缩进，避免宽度被收窄后换行变多） */
     .opts.opt-panel { padding: 2px 0; row-gap: 7px; }
     .opts.opt-panel[hidden] { display: none !important; }
@@ -210,7 +218,7 @@
     .opts input[type="datetime-local"] {
       width: 108px; min-width: 0;
       font-size: 12px; font-variant-numeric: tabular-nums;
-      padding: 5px 6px 5px 8px; line-height: 1.4;
+      height: 26px; padding: 2px 6px 2px 8px; line-height: 1.2;
     }
     .opts input[type="datetime-local"] { width: 190px; }
     .opts input[type="date"]::-webkit-calendar-picker-indicator,
@@ -560,41 +568,40 @@
       <button class="ghost" id="export">MD</button>
       <button class="ghost" id="toggleSettings" title="显示/隐藏设置区" aria-pressed="true">设置</button>
       <input type="file" id="importFile" accept=".html,.htm,.json,text/html,application/json" hidden />
+
+      <!-- 筛选与风格：和搜索工具栏同一张卡片，组内用细虚线分行 -->
+      <div class="opts opts-group">
+      <div class="opts timebar">
+        <span class="opts-title">时间范围：</span>
+        <label><input type="date" id="timeStart" title="筛选起始日期" /></label>
+        <label><input type="date" id="timeEnd" title="筛选结束日期" /></label>
+        <span class="quick-links">
+          <a class="quick-link" data-range="today">当天</a><span class="quick-sep">|</span>
+          <a class="quick-link" data-range="1d">1天</a><span class="quick-sep">|</span>
+          <a class="quick-link" data-range="1w">1周</a><span class="quick-sep">|</span>
+          <a class="quick-link" data-range="1m">1月</a>
+        </span>
+        <button type="button" class="reset-btn" id="timeClear">清除</button>
+      </div>
+
+      <div class="opts tagbar" id="tagBar" hidden>
+        <span class="opts-title">标签： </span>
+        <span class="tag-mode">
+          <button type="button" class="tag-mode-btn active" id="tagModeOr" title="命中任意一个选中标签即显示">或</button>
+          <button type="button" class="tag-mode-btn" id="tagModeAnd" title="必须同时带有全部选中标签才显示">且</button>
+        </span>
+        <div class="tag-filters" id="tagFilters"></div>
+        <button type="button" class="reset-btn" id="tagClear">清除</button>
+      </div>
+
+      <!-- 风格模板常驻显示：不属于设置区，点「设置」隐藏设置时它仍在 -->
+      <div class="opts">
+        <span class="opts-title">风格模板：<span class="info-dot" title="切换后立即生效，导出 HTML / 打印也按当前模板">ⓘ</span></span>
+        <div class="tpl-bar" id="tplBar"></div>
+      </div>
+      </div>
     </div>
     <div id="exportStatus" class="export-status"></div>
-
-    <!-- 筛选与风格：三行合并在一张卡片里，用细虚线分行 -->
-    <div class="opts opts-group">
-    <div class="opts timebar">
-      <span class="opts-title">时间范围：</span>
-      <label><input type="date" id="timeStart" title="筛选起始日期" /></label>
-      <label><input type="date" id="timeEnd" title="筛选结束日期" /></label>
-      <span class="quick-links">
-        <a class="quick-link" data-range="today">当天</a><span class="quick-sep">|</span>
-        <a class="quick-link" data-range="1d">1天</a><span class="quick-sep">|</span>
-        <a class="quick-link" data-range="1w">1周</a><span class="quick-sep">|</span>
-        <a class="quick-link" data-range="1m">1月</a>
-      </span>
-      <button type="button" class="reset-btn" id="timeClear">清除</button>
-      
-    </div>
-
-    <div class="opts tagbar" id="tagBar" hidden>
-      <span class="opts-title">标签： </span>
-      <span class="tag-mode">
-        <button type="button" class="tag-mode-btn active" id="tagModeOr" title="命中任意一个选中标签即显示">或</button>
-        <button type="button" class="tag-mode-btn" id="tagModeAnd" title="必须同时带有全部选中标签才显示">且</button>
-      </span>
-      <div class="tag-filters" id="tagFilters"></div>
-      <button type="button" class="reset-btn" id="tagClear">清除</button>
-    </div>
-
-    <!-- 风格模板常驻显示：不属于设置区，点「设置」隐藏设置时它仍在 -->
-    <div class="opts">
-      <span class="opts-title">风格模板：<span class="info-dot" title="切换后立即生效，导出 HTML / 打印也按当前模板">ⓘ</span></span>
-      <div class="tpl-bar" id="tplBar"></div>
-    </div>
-    </div>
 
     <div id="settingsArea">
     <!-- 设置区四块合成一张卡片（导出选项 / 备份数据 / 字体与颜色 / 样式管理），行间细虚线 -->
