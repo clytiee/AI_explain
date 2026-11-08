@@ -313,9 +313,15 @@
     button.ghost { background: var(--primary-soft); color: var(--primary); }
     button.ghost:hover { background: rgba(99, 102, 241, 0.2); }
     /* 设置按钮的“打开/关闭”用按下态表示：显示时实心紫，隐藏时淡紫 */
-    #toggleSettings.is-on { background: var(--primary); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+    #toggleSettings.is-on {
+      background: var(--primary); color: #fff; border-color: var(--primary);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+    }
     /* 只读模式：卡片里不出现任何操作图标（含＋标签），标签也不再能点掉 */
-    #toggleReadonly.is-on { background: var(--primary); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+    #toggleReadonly.is-on {
+      background: var(--primary); color: #fff; border-color: var(--primary);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+    }
     body.readonly .item-head,
     body.readonly .item-tag-add,
     body.readonly .item-move,
@@ -655,8 +661,6 @@
       <button class="ghost" id="previewPage" title="打开与导出 HTML 相同的页面，只预览、不弹打印窗口">预览</button>
       <button class="ghost" id="printPage" title="打开与导出 HTML 相同的页面并直接调起打印">打印</button>
       <button class="ghost" id="export">MD</button>
-      <button class="ghost" id="toggleSettings" title="显示/隐藏设置区" aria-pressed="true">设置</button>
-      <button class="ghost" id="toggleReadonly" title="切换只读模式：只读下列表卡片不显示任何操作图标" aria-pressed="false">只读</button>
       <input type="file" id="importFile" accept=".html,.htm,.json,text/html,application/json" hidden />
 
       <!-- 筛选与风格：和搜索工具栏同一张卡片，组内用细虚线分行 -->
@@ -695,6 +699,8 @@
         <span class="opts-toggle-row">
           <button type="button" id="toggleMain" class="reset-btn">隐藏主文</button>
           <button type="button" id="toggleAgg" class="reset-btn">按来源聚合</button>
+          <button type="button" id="toggleSettings" class="reset-btn" title="显示/隐藏设置区" aria-pressed="true">设置</button>
+          <button type="button" id="toggleReadonly" class="reset-btn" title="切换只读模式：只读下列表卡片不显示任何操作图标" aria-pressed="false">只读</button>
         </span>
       </div>
       </div>
