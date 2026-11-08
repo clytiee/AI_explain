@@ -14,6 +14,7 @@ const READONLY_KEY = "readOnly"; // 只读模式（默认 false＝编辑模式�
 const AGG_ORDER_KEY = "aggOrder"; // 聚合模式下每来源记录的手工排序（{ srcKey: [记录id] }）
 const STYLE_TPL_KEY = "styleTemplate"; // 列表风格模板（见 STYLE_TEMPLATES）
 const STYLE_PANEL_KEY = "stylePanelOpen"; // 设置区里字体/颜色/圆角面板是否展开（默认收起）
+const LOCAL_FONTS_KEY = "localFontList"; // 读到的本机中文字体（Local Font Access API）
 
 const $ = (id) => document.getElementById(id);
 
@@ -85,10 +86,13 @@ const FONT_OPTIONS = [
 ];
 
 // 若字体与某个预设一致返回其值，否则返回 ""（表示自定义）
+// 本机读到的字体也当成下拉里的一个选项，切换作用域时不会被踢回输入框
 function matchFontPreset(font) {
   const f = (font || "").trim();
   const hit = FONT_OPTIONS.find((o) => o.value && o.value.trim() === f);
-  return hit ? hit.value : "";
+  if (hit) return hit.value;
+  const local = localFontList.find((name) => name === f);
+  return local || "";
 }
 
 // 字体名用于 CSS font-family：含空格且未加引号的单字体名需加引号；
@@ -312,6 +316,8 @@ function syncFontScopeValues(d) {
 let tplOverrides = {}; // { 模板 id: { 字段: 值 } }
 let tplSnapshot = { ...DEFAULT_DISPLAY }; // 当前模板的原始样式快照（面板的「模板默认值」）
 let glassDisplay = { ...DEFAULT_DISPLAY }; // 默认模板自己的显示设置（其它模板下 displayOpts 会换成模板值）
+let localFontList = []; // 本机读到的字体族名（只读一次，存 local）
+const LOCAL_FONT_FALLBACK = "sans-serif";
 
 // 面板里可调、且能映射到模板样式的字段
 const SNAP_KEYS = [
@@ -1481,6 +1487,89 @@ function initFontSelect() {
     o.textContent = f.label;
     sel.appendChild(o);
   });
+  renderLocalFontOptions();
+}
+
+// 把读到的本机字体挂到下拉里（放在末尾分组，值就是字体族名）
+function renderLocalFontOptions() {
+  const sel = $("optFontPreset");
+  if (!sel) return;
+  sel.querySelectorAll("#localFontGroup").forEach((g) => g.remove());
+  if (localFontList.length) sel.appendChild(buildFontGroup("localFontGroup", "本机字体", localFontList));
+}
+
+function buildFontGroup(id, label, names) {
+  const grp = document.createElement("optgroup");
+  grp.id = id;
+  grp.label = label;
+  names.forEach((name) => {
+    const o = document.createElement("option");
+    o.value = name;
+    o.textContent = name;
+    grp.appendChild(o);
+  });
+  return grp;
+}
+
+// 中文（以及常见 CJK 字体）的族名特征，用来从本机字体里挑出要显示的
+const CJK_FONT_RE =
+  /(宋|黑|楷|仿|雅黑|等线|明朝|隶|圆体|標楷|新細明|微软|方正|思源|华文|汉仪|汉|文鼎|苹方|冬青|兰亭|Sim|Kai|Fang|YaHei|DengXian|MingLiU|PMingLiU|Source Han|Noto (Sans|Serif) (SC|TC|CJK)|Hiragino Sans GB|PingFang|STSong|STKaiti|STHeiti|STFangsong|Yu Gothic|Meiryo|Malgun|PMing|Batang)/i;
+
+// 名字里没有中文特征的字体（如方正金陵的英文族名 FZJinLing）用画字宽的方式判一下有没有中文字形：
+// 没有中文字形时会回退到系统中文兜底字体，宽度和 monospace 基准一致；有的话宽度会不同
+function fontSupportsCJK(family) {
+  try {
+    if (!fontSupportsCJK.ctx) {
+      fontSupportsCJK.cv = document.createElement("canvas");
+      fontSupportsCJK.ctx = fontSupportsCJK.cv.getContext("2d");
+    }
+    const ctx = fontSupportsCJK.ctx;
+    const sample = "汉字";
+    ctx.font = '64px monospace';
+    const w0 = ctx.measureText(sample).width;
+    ctx.font = '64px "' + String(family).replace(/"/g, '\\"') + '", monospace';
+    const w1 = ctx.measureText(sample).width;
+    return Math.abs(w1 - w0) > 0.5;
+  } catch (e) {
+    return false;
+  }
+}
+
+// 读取本机字体：Local Font Access API，首次需要用户授权；不支持或拒绝时静默回退
+async function scanLocalFonts() {
+  const btn = $("fontScan");
+  if (!window.queryLocalFonts) {
+    if (btn) btn.title = "当前浏览器不支持读取本机字体（需 Chrome/Edge 103+）";
+    return;
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "读取中…";
+  }
+  try {
+    const fonts = await window.queryLocalFonts();
+    const all = new Set();
+    fonts.forEach((f) => {
+      const fam = String(f.family || "").trim();
+      if (fam) all.add(fam);
+    });
+    // 一个「本机字体」组放全部读到的字体：中文在前，其它按名称排在后面
+    localFontList = [...all].sort((a, b) => {
+      const ca = CJK_FONT_RE.test(a), cb = CJK_FONT_RE.test(b);
+      if (ca !== cb) return ca ? -1 : 1;
+      return a.localeCompare(b, "zh");
+    });
+    chrome.storage.local.set({ [LOCAL_FONTS_KEY]: localFontList });
+    renderLocalFontOptions();
+    if (btn) btn.title = "已读取 " + localFontList.length + " 个字体，可再次读取";
+  } catch (e) {
+    if (btn) btn.title = "没有取得字体列表（授权被拒绝或浏览器不支持）";
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "读取本机字体";
+    }
+  }
 }
 
 // 按当前 displayOpts 同步各显示控件
@@ -1637,6 +1726,18 @@ function load() {
 
       displayPresets = Array.isArray(res[DISPLAY_PRESETS_KEY]) ? res[DISPLAY_PRESETS_KEY] : [];
       refreshPresetSelect();
+
+      // 上次读到的本机字体：直接挂回字体下拉（兼容之前分组存过的 cjk/other 形式）
+      const savedFonts = res[LOCAL_FONTS_KEY];
+      if (Array.isArray(savedFonts)) {
+        localFontList = savedFonts;
+      } else if (savedFonts && typeof savedFonts === "object") {
+        const cjk = Array.isArray(savedFonts.cjk) ? savedFonts.cjk : [];
+        const other = Array.isArray(savedFonts.other) ? savedFonts.other : [];
+        localFontList = [...cjk, ...other];
+      }
+      renderLocalFontOptions();
+      syncFontScopeControls();
 
       sourceTexts = (res[SOURCE_TEXTS_KEY] && typeof res[SOURCE_TEXTS_KEY] === "object") ? res[SOURCE_TEXTS_KEY] : {};
       showMainText = res[SHOW_MAIN_KEY] !== false;
@@ -3661,6 +3762,7 @@ initColorSwatches("extractSwatches", "optExtractBg", BG_PALETTE);
 initColorSwatches("fontSwatches", "optFontColor", FONT_RECOMMEND);
 bindExportOpts();
 bindDisplay();
+$("fontScan").addEventListener("click", scanLocalFonts);
 // 字体作用域切换：原文 | 释义 | 主文
 [...document.querySelectorAll("#fontScopeBar .seg-btn")].forEach((b) => {
   b.addEventListener("click", () => setFontScope(b.dataset.scope));

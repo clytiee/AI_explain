@@ -279,6 +279,8 @@
     .agg-item-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
     .agg-item-time { font-size: 12px; color: var(--muted); flex: 1 1 auto; white-space: nowrap; }
     .bg-swatches { display: inline-flex; gap: 4px; align-items: center; }
+    /* 字体颜色和它的快捷色块锁在一组里，色块多的时候也不掉到下一行 */
+    .font-color-group { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; white-space: nowrap; }
     .bg-swatch {
       width: 16px; height: 16px; padding: 0; border-radius: 4px; cursor: pointer;
       border: 1px solid rgba(0, 0, 0, 0.12); flex: 0 0 auto;
@@ -675,6 +677,13 @@
           <option value="second">精确到秒</option>
         </select>
       </label>
+      <label class="opt-lbl">时间显示
+        <select id="optTimeDisplay" title="卡片与导出里的时间格式：到秒、到日，或精简的年/月/日">
+          <option value="second">到秒</option>
+          <option value="date">到日</option>
+          <option value="short">精简 YY/M/D</option>
+        </select>
+      </label>
       <span class="opts-hint">按天筛选时，起始日从 00:00:00 算起，结束日到 23:59:59</span>
     </div>
     <div class="opts">
@@ -714,18 +723,16 @@
         <button type="button" class="seg-btn" data-scope="answer">释义</button>
         <button type="button" class="seg-btn" data-scope="main">主文</button>
       </span>
-      <label class="opt-lbl">字体 <select id="optFontPreset"></select></label>
-      <label><input type="text" id="optFontFamily" placeholder="或输入自定义字体" spellcheck="false" /></label>
-      <label class="opt-lbl">字体颜色 <input type="color" id="optFontColor" value="#1f2937" /></label>
-      <span class="bg-swatches" id="fontSwatches"></span>
       <span class="opts-br"></span>
-      <label class="opt-lbl opt-rowstart">字体大小 <input type="range" id="optFontSize" min="12" max="20" step="1" value="13" /> <span id="optFontSizeVal">13</span>px</label>
+      <label class="opt-lbl">字体 <select id="optFontPreset"></select></label>
+      <button type="button" id="fontScan" class="reset-btn" title="读取本机已安装的中文字体，加入字体下拉（首次需要授权）">读取本机字体</button>
+      <label><input type="text" id="optFontFamily" placeholder="或输入自定义字体" spellcheck="false" /></label>
+      <span class="font-color-group">
+        <label class="opt-lbl opt-rowstart">字体颜色 <input type="color" id="optFontColor" value="#1f2937" /></label>
+        <span class="bg-swatches" id="fontSwatches"></span>
+      </span>
+      <label class="opt-lbl">字体大小 <input type="range" id="optFontSize" min="12" max="20" step="1" value="13" /> <span id="optFontSizeVal">13</span>px</label>
       <label class="opt-lbl">行高 <input type="range" id="optLineHeight" min="1.0" max="2.4" step="0.1" value="1.2" /> <span id="optLineHeightVal">1.2</span></label>
-      <label class="opt-lbl opt-rowstart">时间显示 <select id="optTimeDisplay" title="卡片与导出里的时间格式：到秒、到日，或精简的年/月/日">
-        <option value="second">到秒</option>
-        <option value="date">到日</option>
-        <option value="short">精简 YY/M/D</option>
-      </select></label>
       <span class="opts-br"></span>
       <span class="opts-title">页面背景色：</span>
       <label><input type="color" id="optPageBg" value="#eef2ff" /></label>
