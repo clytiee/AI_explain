@@ -2185,7 +2185,14 @@ const HEAD_BTN_CSS =
 // 生成导出页 HTML（导出文件与「打印」预览共用，保证两者一致）
 // withPrintScript：导出文件里内联一段脚本给「打印」按钮绑事件；
 // 打印预览窗口继承扩展页 CSP，内联脚本会被拦，那边由父页直接绑事件。
-function buildExportHtml(list, withPrintScript) {
+function buildExportHtml(list, withPrintScript, titleWithTime) {
+  // 预览 / 打印页把时间（到秒）写进 <title>：浏览器「另存为 PDF」默认用标题做文件名
+  // 命名格式与导出的 HTML 文件一致：_YYYYMMDD_HHMMSS
+  const now = new Date();
+  const stamp =
+    now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + "_" +
+    pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
+  const docTitle = titleWithTime ? "划词释义历史_" + stamp : "划词AI释义 · 历史记录";
   // 勾选「卡片不跨页拆分」时，额外追加打印规则（不改动现有卡片样式）：
   // 卡片不跨页截断；每张卡片前的透明占位 div 提供 16px 顶部空隙
   // （与左右留白一致、露出页面背景色），并用 break-after:avoid 使其
@@ -2203,7 +2210,7 @@ function buildExportHtml(list, withPrintScript) {
     '<html lang="zh-CN">\n<head>\n' +
     '<meta charset="UTF-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n' +
-    "<title>划词AI释义 · 历史记录</title>\n" +
+    "<title>" + docTitle + "</title>\n" +
     "<style>\n" + CARD_CSS + noSplitCss + displayCss + HEAD_BTN_CSS + tplCss + "\n</style>\n" +
     "</head>\n" + '<body data-tpl="' + esc(styleTemplate) + '">\n' +
     '<div class="wrap">\n' +
@@ -2269,7 +2276,7 @@ function previewHistory() {
     statusEl.className = "export-status err";
     return;
   }
-  const html = buildExportHtml(list, false);
+  const html = buildExportHtml(list, false, true);
   const win = window.open("about:blank", "_blank");
   if (!win) {
     statusEl.textContent = "浏览器拦截了新窗口，请允许扩展打开新标签页后重试。";
@@ -2299,7 +2306,7 @@ function printHistory() {
     statusEl.className = "export-status err";
     return;
   }
-  const html = buildExportHtml(list, false);
+  const html = buildExportHtml(list, false, true);
   // 用 about:blank 新窗口写入同一份文档，再由本页调它的 window.print()
   // （不靠文档内联脚本：新窗口继承扩展页的 CSP，内联 script 与 onclick 都会被拦掉）
   const win = window.open("about:blank", "_blank");
