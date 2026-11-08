@@ -9,6 +9,7 @@ const SOURCE_TEXTS_KEY = "sourceTexts"; // 来源主文：{ srcKey: 文本 }
 const SHOW_MAIN_KEY = "showMainText"; // 是否显示来源主文
 const AGG_KEY = "aggregate"; // 是否按来源聚合
 const SETTINGS_HIDDEN_KEY = "settingsHidden"; // 是否隐藏所有设置
+const READONLY_KEY = "readOnly"; // 只读模式（默认 false＝编辑模式）
 const AGG_ORDER_KEY = "aggOrder"; // 聚合模式下每来源记录的手工排序（{ srcKey: [记录id] }）
 const STYLE_TPL_KEY = "styleTemplate"; // 列表风格模板（见 STYLE_TEMPLATES）
 const STYLE_PANEL_KEY = "stylePanelOpen"; // 设置区里字体/颜色/圆角面板是否展开（默认收起）
@@ -23,6 +24,7 @@ let mainModalKey = ""; // 当前正在编辑主文的 srcKey
 let showMainText = true; // 列表是否显示来源主文
 let aggregate = false; // 是否按来源聚合
 let settingsHidden = false; // 是否隐藏所有设置
+let readOnly = false; // 只读模式：卡片里不显示任何操作图标
 let aggOrder = {}; // 聚合模式下每来源记录的手工排序
 const PAGE_SIZE = 10; // 历史页分页：每页记录/组数
 let page = 1; // 当前页码
@@ -281,6 +283,7 @@ const STYLE_TEMPLATES = [
     name: "文档",
     desc: "白底细边框 + 左侧色条",
     css:
+      'body[data-tpl="doc"] #list{background:#f7f8fa}' +
       'body[data-tpl="doc"] .card{background:#fff;border:1px solid #e6e8ee;border-left:3px solid #6366f1;' +
       "border-radius:6px;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}" +
       'body[data-tpl="doc"] .item-src{color:#4b5563}' +
@@ -301,6 +304,7 @@ const STYLE_TEMPLATES = [
     name: "引用",
     desc: "无卡片底色，原文加引文竖线",
     css:
+      'body[data-tpl="quote"] #list{background:#fff}' +
       'body[data-tpl="quote"] .card{background:transparent;border:0;border-bottom:1px dashed #e5e7eb;' +
       "border-radius:0;box-shadow:none;padding:14px 2px 16px;-webkit-backdrop-filter:none;backdrop-filter:none}" +
       'body[data-tpl="quote"] .item-src{color:#7a8394}' +
@@ -315,6 +319,26 @@ const STYLE_TEMPLATES = [
       'body[data-tpl="quote"] .item-tag{background:transparent;border:1px solid #e1e5ec;color:#6b7280}' +
       'body[data-tpl="quote"] .item-main{background:transparent;border-left:3px solid #e5e7eb;border-radius:0;' +
       "color:#6b7280;font-size:13px;line-height:1.75;padding:2px 0 2px 12px}",
+  },
+  {
+    id: "compact",
+    name: "紧凑",
+    desc: "无卡片、细分隔线、释义两行截断",
+    css:
+      'body[data-tpl="compact"] #list{background:#fff}' +
+      'body[data-tpl="compact"] .card{background:transparent;border:0;border-bottom:1px solid #eef0f4;' +
+      "border-radius:0;box-shadow:none;padding:10px 2px;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="compact"] .item-head{margin-bottom:4px;font-size:11px}' +
+      'body[data-tpl="compact"] .item-text{background:transparent;border:0;padding:0;margin:4px 0;' +
+      "font-weight:400;font-size:13px;line-height:1.6;border-radius:0}" +
+      'body[data-tpl="compact"] .item-text-extract{background:transparent!important;border-left:2px solid #d7dbe3;' +
+      "padding-left:10px}" +
+      'body[data-tpl="compact"] .item-answer{font-size:12px;color:#6b7280;line-height:1.65;display:-webkit-box;' +
+      "-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}" +
+      'body[data-tpl="compact"] .item-answer p{margin:0}' +
+      'body[data-tpl="compact"] .item-tag{background:transparent;border:1px dashed #d6dae3;color:#8b93a3}' +
+      'body[data-tpl="compact"] .item-main{background:transparent;border-left:2px solid #eef0f4;border-radius:0;' +
+      "color:#8b93a3;font-size:12px;line-height:1.65}",
   },
   {
     id: "paper",
@@ -383,25 +407,6 @@ const STYLE_TEMPLATES = [
       'body[data-tpl="dark"] .item-main{background:#20242d;color:#cbd5e1;border-left:3px solid #3b4252;' +
       "border-radius:8px;font-size:13px;line-height:1.75}",
   },
-  {
-    id: "compact",
-    name: "紧凑",
-    desc: "无卡片、细分隔线、释义两行截断",
-    css:
-      'body[data-tpl="compact"] .card{background:transparent;border:0;border-bottom:1px solid #eef0f4;' +
-      "border-radius:0;box-shadow:none;padding:10px 2px;-webkit-backdrop-filter:none;backdrop-filter:none}" +
-      'body[data-tpl="compact"] .item-head{margin-bottom:4px;font-size:11px}' +
-      'body[data-tpl="compact"] .item-text{background:transparent;border:0;padding:0;margin:4px 0;' +
-      "font-weight:400;font-size:13px;line-height:1.6;border-radius:0}" +
-      'body[data-tpl="compact"] .item-text-extract{background:transparent!important;border-left:2px solid #d7dbe3;' +
-      "padding-left:10px}" +
-      'body[data-tpl="compact"] .item-answer{font-size:12px;color:#6b7280;line-height:1.65;display:-webkit-box;' +
-      "-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}" +
-      'body[data-tpl="compact"] .item-answer p{margin:0}' +
-      'body[data-tpl="compact"] .item-tag{background:transparent;border:1px dashed #d6dae3;color:#8b93a3}' +
-      'body[data-tpl="compact"] .item-main{background:transparent;border-left:2px solid #eef0f4;border-radius:0;' +
-      "color:#8b93a3;font-size:12px;line-height:1.65}",
-  },
 ];
 let styleTemplate = "glass";
 
@@ -412,6 +417,9 @@ function styleTemplateCss(id) {
 
 // 导出页整页只有一个记录区，模板的页面底色/字体直接落在 body 上（历史页则只落在 #list，不影响插件自身界面）
 function templateExportPageCss(id) {
+  if (id === "doc") return "body{background:#f7f8fa}";
+  if (id === "quote") return "body{background:#fff}";
+  if (id === "compact") return "body{background:#fff}";
   if (id === "paper") return "body{background:#f6f0e2;font-family:Georgia,'Songti SC','SimSun',serif}";
   if (id === "sticky") return "body{background:#eef1f5}";
   if (id === "dark") return "body{background:#0f1115;color:#e5e7eb}";
@@ -709,6 +717,7 @@ function load() {
       [SHOW_MAIN_KEY]: true,
       [AGG_KEY]: false,
       [SETTINGS_HIDDEN_KEY]: false,
+      [READONLY_KEY]: false,
       [AGG_ORDER_KEY]: {},
       [STYLE_TPL_KEY]: "glass",
       [STYLE_PANEL_KEY]: false,
@@ -743,6 +752,7 @@ function load() {
       syncAggBtn();
       settingsHidden = res[SETTINGS_HIDDEN_KEY] === true;
       syncSettingsBtn();
+      syncReadonly(res[READONLY_KEY] === true);
       aggOrder = (res[AGG_ORDER_KEY] && typeof res[AGG_ORDER_KEY] === "object") ? res[AGG_ORDER_KEY] : {};
 
       // 列表风格模板：渲染按钮并套用（不再写回存储）
@@ -1152,6 +1162,7 @@ function buildTagsRow(targets) {
     chip.textContent = t;
     chip.title = list.length > 1 ? "点击从这 " + list.length + " 条移除这个标签" : "点击移除这个标签";
     chip.addEventListener("click", () => {
+      if (readOnly) return; // 只读模式下标签不可移除
       saveTagsBatch(
         list.map((e) => ({
           id: e.id,
@@ -1161,6 +1172,8 @@ function buildTagsRow(targets) {
     });
     row.appendChild(chip);
   });
+
+  if (readOnly) return row; // 只读模式不显示「＋标签」
 
   const addBtn = document.createElement("button");
   addBtn.type = "button";
@@ -1824,6 +1837,24 @@ function toggleSettings() {
   settingsHidden = !settingsHidden;
   chrome.storage.local.set({ [SETTINGS_HIDDEN_KEY]: settingsHidden });
   syncSettingsBtn();
+}
+
+// 只读模式：卡片里不显示操作图标，标签也不能点掉；默认编辑模式
+function syncReadonly(on) {
+  readOnly = on;
+  document.body.classList.toggle("readonly", on);
+  const btn = $("toggleReadonly");
+  if (!btn) return;
+  btn.classList.toggle("is-on", on);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  btn.title = on ? "当前只读：点一下切回编辑模式" : "切换只读模式：只读下列表卡片不显示任何操作图标";
+}
+
+function toggleReadonly() {
+  syncReadonly(!readOnly);
+  chrome.storage.local.set({ [READONLY_KEY]: readOnly });
+  page = 1;
+  render();
 }
 
 // 设置区里「字体设置」开始往后的面板：默认收起，点按钮展开/折叠
@@ -2653,6 +2684,7 @@ $("deletePreset").addEventListener("click", deletePreset);
 $("toggleMain").addEventListener("click", toggleMain);
 $("toggleAgg").addEventListener("click", toggleAgg);
 $("toggleSettings").addEventListener("click", toggleSettings);
+$("toggleReadonly").addEventListener("click", toggleReadonly);
 $("styleToggle").addEventListener("click", toggleStylePanel);
 $("previewPage").addEventListener("click", previewHistory);
 bindMainModal();
