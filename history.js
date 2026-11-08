@@ -4,6 +4,7 @@
 const HISTORY_KEY = "history";
 const EXPORT_OPTS_KEY = "exportOpts"; // 导出选项：是否包含 时间/来源页面/页面地址
 const DISPLAY_OPTS_KEY = "displayOpts"; // 显示设置：页面背景色/原文背景色/字体颜色/字体大小/字体
+const TPL_OVERRIDES_KEY = "tplStyleOverrides"; // 各模板下用户改过的样式字段（空表示没改，用模板原样式）
 const DISPLAY_PRESETS_KEY = "displayPresets"; // 已保存的显示样式组列表
 const SOURCE_TEXTS_KEY = "sourceTexts"; // 来源主文：{ srcKey: 文本 }
 const SHOW_MAIN_KEY = "showMainText"; // 是否显示来源主文
@@ -17,7 +18,7 @@ const STYLE_PANEL_KEY = "stylePanelOpen"; // 设置区里字体/颜色/圆角面
 const $ = (id) => document.getElementById(id);
 
 let all = []; // 当前全部记录（新→旧）
-let exportOpts = { time: true, pageTitle: true, pageUrl: true, count: true, tags: true, sep: true, compact: false, noSplit: false, backup: false }; // 导出选项
+let exportOpts = { time: true, pageTitle: true, pageUrl: true, count: true, tags: true, sep: true, compact: false, noSplit: false, printBlack: true, backup: false }; // 导出选项
 let displayPresets = []; // [{ name, opts }] 已保存的样式组
 let sourceTexts = {}; // { srcKey: 主文 } 按来源保存的主文
 let mainModalKey = ""; // 当前正在编辑主文的 srcKey
@@ -34,6 +35,7 @@ let tagMode = ""; // 多选标签之间的关系："or"=命中任意一个，"an
 let titleRules = []; // 来源标题替换规则（来自 config.titleRules）：[{ prefix, from, to }]
 
 // 显示设置默认值
+// 字体设置分三个作用域：原文（fontXxx）、释义（ansFontXxx）、主文（mainFontXxx）
 const DEFAULT_DISPLAY = {
   pageBg: "#eef2ff",
   quoteBg: "#e0e7ff",
@@ -42,6 +44,10 @@ const DEFAULT_DISPLAY = {
   fontColor: "#1f2937",
   fontSize: 13,
   lineHeight: 1.2,
+  ansFontColor: "#1f2937",
+  ansFontSize: 13,
+  ansLineHeight: 1.2,
+  mainFontColor: "#1f2937",
   mainFontSize: 13,
   mainLineHeight: 1.7,
   // 卡片与导出里的时间格式：second 到秒 / date 到日 / short 精简 YY/M/D
@@ -51,7 +57,19 @@ const DEFAULT_DISPLAY = {
   extractRadius: 0,
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif",
+  ansFontFamily:
+    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif",
+  mainFontFamily:
+    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif",
 };
+
+// 字体作用域：tab → 字段名映射
+const FONT_SCOPES = {
+  quote: { family: "fontFamily", color: "fontColor", size: "fontSize", line: "lineHeight", label: "原文" },
+  answer: { family: "ansFontFamily", color: "ansFontColor", size: "ansFontSize", line: "ansLineHeight", label: "释义" },
+  main: { family: "mainFontFamily", color: "mainFontColor", size: "mainFontSize", line: "mainLineHeight", label: "主文" },
+};
+let fontScope = "quote";
 let displayOpts = { ...DEFAULT_DISPLAY };
 
 // 字体预设选项（value 为空表示自定义）
@@ -194,19 +212,43 @@ const BG_PALETTE = [
 
 // 推荐字体颜色（深色、适合正文阅读）
 const FONT_RECOMMEND = [
-  "#000000", // 纯黑
-  "#374151", // 深灰
-  "#1e3a8a", // 深蓝
+  { c: "#000000", name: "纯黑" },
+  { c: "#374151", name: "深灰" },
+  { c: "#1e3a8a", name: "深蓝" },
 ];
+
+// 各模板用到的字体颜色（[{c,name}]），随模板切换刷新到字体颜色快捷色块
+let tplFontPalette = [];
+
+// 字体颜色快捷色块：常驻推荐色 + 当前模板在「当前作用域」用到的字色
+function refreshFontSwatches() {
+  const box = $("fontSwatches");
+  if (!box) return;
+  const colors = FONT_RECOMMEND.slice();
+  const scopeLabel = (FONT_SCOPES[fontScope] || FONT_SCOPES.quote).label;
+  const push = (item) => {
+    const v = String(item.c || "").trim().toLowerCase();
+    if (!/^#[0-9a-f]{6}$/.test(v)) return;
+    if (colors.some((x) => String(x.c).toLowerCase() === v)) return;
+    colors.push({ c: v, name: item.name || "" });
+  };
+  tplFontPalette.filter((p) => String(p.name || "").indexOf(scopeLabel) >= 0).forEach(push);
+  box.innerHTML = "";
+  initColorSwatches("fontSwatches", "optFontColor", colors);
+  syncColorSwatches("fontSwatches", "optFontColor");
+}
 
 function initColorSwatches(containerId, inputId, colors) {
   const box = $(containerId);
-  colors.forEach((c) => {
+  colors.forEach((item) => {
+    const c = typeof item === "string" ? item : item.c;
+    const name = typeof item === "string" ? "" : item.name || "";
     const b = document.createElement("button");
     b.type = "button";
     b.className = "bg-swatch";
     b.style.background = c;
-    b.title = c;
+    b.dataset.color = String(c).toLowerCase();
+    b.title = name ? name + "（" + c + "）" : c;
     b.addEventListener("click", () => {
       $(inputId).value = c;
       $(inputId).dispatchEvent(new Event("input", { bubbles: true })); // 复用已有持久化逻辑
@@ -219,7 +261,7 @@ function initColorSwatches(containerId, inputId, colors) {
 function syncColorSwatches(containerId, inputId) {
   const cur = ($(inputId).value || "").toLowerCase();
   document.querySelectorAll("#" + containerId + " .bg-swatch").forEach((b) => {
-    b.classList.toggle("active", b.title.toLowerCase() === cur);
+    b.classList.toggle("active", (b.dataset.color || b.title).toLowerCase() === cur);
   });
 }
 
@@ -236,23 +278,267 @@ function applyDisplay(d) {
   s.setProperty("--font-size", d.fontSize + "px");
   s.setProperty("--font-family", toFontFamilyCss(d.fontFamily));
   s.setProperty("--line-height", d.lineHeight);
+  s.setProperty("--ans-font-color", d.ansFontColor || DEFAULT_DISPLAY.ansFontColor);
+  s.setProperty("--ans-font-size", (d.ansFontSize || DEFAULT_DISPLAY.ansFontSize) + "px");
+  s.setProperty("--ans-font-family", toFontFamilyCss(d.ansFontFamily || d.fontFamily));
+  s.setProperty("--ans-line-height", d.ansLineHeight || DEFAULT_DISPLAY.ansLineHeight);
+  s.setProperty("--main-font-color", d.mainFontColor || DEFAULT_DISPLAY.mainFontColor);
   s.setProperty("--main-font-size", (d.mainFontSize || DEFAULT_DISPLAY.mainFontSize) + "px");
+  s.setProperty("--main-font-family", toFontFamilyCss(d.mainFontFamily || d.fontFamily));
   s.setProperty("--main-line-height", d.mainLineHeight || DEFAULT_DISPLAY.mainLineHeight);
   s.setProperty("--card-radius", (Number(d.cardRadius) || 0) + "px");
   s.setProperty("--quote-radius", (Number(d.quoteRadius) || 0) + "px");
   s.setProperty("--extract-radius", (Number(d.extractRadius) || 0) + "px");
-  $("optFontSizeVal").textContent = d.fontSize;
-  $("optLineHeightVal").textContent = d.lineHeight;
-  $("optMainFontSizeVal").textContent = d.mainFontSize || DEFAULT_DISPLAY.mainFontSize;
-  $("optMainLineHeightVal").textContent = d.mainLineHeight || DEFAULT_DISPLAY.mainLineHeight;
+  syncFontScopeValues(d);
   $("optCardRadiusVal").textContent = Number(d.cardRadius) || 0;
   $("optQuoteRadiusVal").textContent = Number(d.quoteRadius) || 0;
   $("optExtractRadiusVal").textContent = Number(d.extractRadius) || 0;
 }
 
+// 字体作用域里的两个数值标签（跟着当前 tab 走）
+function syncFontScopeValues(d) {
+  const sc = FONT_SCOPES[fontScope] || FONT_SCOPES.quote;
+  const size = d[sc.size] || DEFAULT_DISPLAY[sc.size];
+  const line = d[sc.line] || DEFAULT_DISPLAY[sc.line];
+  if ($("optFontSizeVal")) $("optFontSizeVal").textContent = size;
+  if ($("optLineHeightVal")) $("optLineHeightVal").textContent = line;
+}
+
+// ---------- 模板样式 ↔ 样式设置 ----------
+// 选中某个风格模板后，把该模板实际的底色/字号/行高等读进样式设置面板；
+// 用户在面板上的改动只作为「覆盖层」记录（tplOverrides[模板]），生成一条更高优先级的 CSS，
+// 不改动模板本身的 CSS。没改过的字段不生成覆盖，模板原样式原封不动。
+
+let tplOverrides = {}; // { 模板 id: { 字段: 值 } }
+let tplSnapshot = { ...DEFAULT_DISPLAY }; // 当前模板的原始样式快照（面板的「模板默认值」）
+let glassDisplay = { ...DEFAULT_DISPLAY }; // 默认模板自己的显示设置（其它模板下 displayOpts 会换成模板值）
+
+// 面板里可调、且能映射到模板样式的字段
+const SNAP_KEYS = [
+  "pageBg", "quoteBg", "extractBg", "mainBg",
+  // 原文
+  "fontFamily", "fontColor", "fontSize", "lineHeight",
+  // 释义
+  "ansFontFamily", "ansFontColor", "ansFontSize", "ansLineHeight",
+  // 主文
+  "mainFontFamily", "mainFontColor", "mainFontSize", "mainLineHeight",
+  // 圆角
+  "cardRadius", "quoteRadius", "extractRadius",
+];
+
+function parseCssColor(c) {
+  const m = String(c || "").match(/^rgba?\([\s]*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+))?[\s]*\)$/i);
+  if (!m) return null;
+  return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] };
+}
+
+function blendColor(fg, bg) {
+  if (!fg) return bg;
+  if (fg.a >= 1) return fg;
+  return {
+    r: fg.r * fg.a + bg.r * (1 - fg.a),
+    g: fg.g * fg.a + bg.g * (1 - fg.a),
+    b: fg.b * fg.a + bg.b * (1 - fg.a),
+    a: 1,
+  };
+}
+
+function colorToHex(c) {
+  const n = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0");
+  return "#" + n(c.r) + n(c.g) + n(c.b);
+}
+
+function cssPx(v) {
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : Math.round(n * 10) / 10;
+}
+
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
+
+// 离屏探针：用真实 DOM 让模板 CSS 生效，再读计算样式
+function templateProbe() {
+  let p = document.getElementById("tplProbe");
+  if (p) return p;
+  p = document.createElement("div");
+  p.id = "tplProbe";
+  p.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;width:600px";
+  p.innerHTML =
+    '<div class="card">' +
+    '<div class="item-text">探针文字</div>' +
+    '<div class="item-text item-text-extract">探针文字</div>' +
+    '<div class="item-main">探针文字</div>' +
+    '<div class="item-answer"><p>探针文字</p></div>' +
+    "</div>";
+  document.body.appendChild(p);
+  return p;
+}
+
+function captureTemplateStyle() {
+  const probe = templateProbe();
+  const card = probe.querySelector(".card");
+  const q = probe.querySelector(".item-text");
+  const ex = probe.querySelector(".item-text-extract");
+  const mn = probe.querySelector(".item-main");
+  const listEl = $("list") || document.body;
+  const cs = (el) => getComputedStyle(el);
+
+  const white = { r: 255, g: 255, b: 255, a: 1 };
+  const page = blendColor(parseCssColor(cs(listEl).backgroundColor), white);
+  const cardBg = blendColor(parseCssColor(cs(card).backgroundColor), page);
+  const quoteBg = blendColor(parseCssColor(cs(q).backgroundColor), cardBg);
+  const extractBg = blendColor(parseCssColor(cs(ex).backgroundColor), cardBg);
+  const mainBg = blendColor(parseCssColor(cs(mn).backgroundColor), cardBg);
+
+  const fs = parseFloat(cs(q).fontSize) || 13;
+  const lh = cs(q).lineHeight;
+  const lineHeight = lh === "normal" ? 1.5 : round2(parseFloat(lh) / fs);
+  const mfs = parseFloat(cs(mn).fontSize) || 13;
+  const mlh = cs(mn).lineHeight;
+  const mainLineHeight = mlh === "normal" ? 1.7 : round2(parseFloat(mlh) / mfs);
+
+  const answerColor = colorToHex(parseCssColor(cs(probe.querySelector(".item-answer")).color) || { r: 31, g: 41, b: 55, a: 1 });
+  const mainColor = colorToHex(parseCssColor(cs(mn).color) || { r: 31, g: 41, b: 55, a: 1 });
+  const textColor = colorToHex(parseCssColor(cs(q).color) || { r: 31, g: 41, b: 55, a: 1 });
+  const an = probe.querySelector(".item-answer");
+  const afs = parseFloat(cs(an).fontSize) || 13;
+  const alh = cs(an).lineHeight;
+  return {
+    palette: [
+      { c: textColor, name: "模板原文色" },
+      { c: answerColor, name: "模板释义色" },
+      { c: mainColor, name: "模板主文色" },
+    ],
+    pageBg: colorToHex(page),
+    quoteBg: colorToHex(quoteBg),
+    extractBg: colorToHex(extractBg),
+    mainBg: colorToHex(mainBg),
+    // 原文
+    fontColor: textColor,
+    fontSize: Math.round(fs),
+    lineHeight,
+    fontFamily: cs(q).fontFamily,
+    // 释义
+    ansFontColor: answerColor,
+    ansFontSize: Math.round(afs),
+    ansLineHeight: alh === "normal" ? 1.5 : round2(parseFloat(alh) / afs),
+    ansFontFamily: cs(an).fontFamily,
+    // 主文
+    mainFontColor: mainColor,
+    mainFontSize: Math.round(mfs),
+    mainLineHeight,
+    mainFontFamily: cs(mn).fontFamily,
+    cardRadius: cssPx(cs(card).borderTopLeftRadius),
+    quoteRadius: cssPx(cs(q).borderTopLeftRadius),
+    extractRadius: cssPx(cs(ex).borderTopLeftRadius),
+  };
+}
+
+// 覆盖层 CSS：选择器比模板规则更具体（多一层 .card / #list），所以一定盖得住
+function tplOverrideCss(id, ov, forExport) {
+  const sel = 'body[data-tpl="' + id + '"] ';
+  const parts = [];
+  if (ov.pageBg) {
+    parts.push(forExport ? "body{background:" + ov.pageBg + "}" : sel + "#list{background:" + ov.pageBg + "}");
+  }
+  if (ov.quoteBg) parts.push(sel + ".card .item-text{background:" + ov.quoteBg + "}");
+  if (ov.extractBg) parts.push(sel + ".item-text-extract{background:" + ov.extractBg + "}");
+  // 原文
+  if (ov.fontColor) parts.push(sel + ".card .item-text{color:" + ov.fontColor + "}");
+  if (ov.fontSize) parts.push(sel + ".card .item-text{font-size:" + ov.fontSize + "px}");
+  if (ov.lineHeight) parts.push(sel + ".card .item-text{line-height:" + ov.lineHeight + "}");
+  if (ov.fontFamily) parts.push(sel + ".card .item-text{font-family:" + toFontFamilyCss(ov.fontFamily) + "}");
+  // 释义
+  if (ov.ansFontColor) parts.push(sel + ".card .item-answer{color:" + ov.ansFontColor + "}");
+  if (ov.ansFontSize) parts.push(sel + ".card .item-answer{font-size:" + ov.ansFontSize + "px}");
+  if (ov.ansLineHeight) parts.push(sel + ".card .item-answer{line-height:" + ov.ansLineHeight + "}");
+  if (ov.ansFontFamily)
+    parts.push(sel + ".card .item-answer{font-family:" + toFontFamilyCss(ov.ansFontFamily) + "}");
+  // 主文
+  if (ov.mainFontColor) parts.push(sel + ".card .item-main{color:" + ov.mainFontColor + "}");
+  if (ov.mainFontSize) parts.push(sel + ".card .item-main{font-size:" + ov.mainFontSize + "px}");
+  if (ov.mainLineHeight) parts.push(sel + ".card .item-main{line-height:" + ov.mainLineHeight + "}");
+  if (ov.mainFontFamily)
+    parts.push(sel + ".card .item-main{font-family:" + toFontFamilyCss(ov.mainFontFamily) + "}");
+  if (ov.cardRadius !== undefined) parts.push(sel + ".card{border-radius:" + (Number(ov.cardRadius) || 0) + "px}");
+  if (ov.quoteRadius !== undefined) parts.push(sel + ".card .item-text{border-radius:" + (Number(ov.quoteRadius) || 0) + "px}");
+  if (ov.extractRadius !== undefined)
+    parts.push(sel + ".item-text-extract{border-radius:" + (Number(ov.extractRadius) || 0) + "px}");
+  return parts.join("\n");
+}
+
+function injectTemplateOverrideStyle() {
+  let style = document.getElementById("tplOverrideStyle");
+  if (!style) {
+    style = document.createElement("style");
+    style.id = "tplOverrideStyle";
+    document.head.appendChild(style);
+  }
+  const ov = styleTemplate === "glass" ? null : tplOverrides[styleTemplate];
+  style.textContent = ov && Object.keys(ov).length ? tplOverrideCss(styleTemplate, ov, false) : "";
+}
+
+// 数值型字段允许一点取整误差（滑块步长、计算后的 line-height 小数）
+function styleValueDiffers(key, a, b) {
+  if (a === undefined || b === undefined) return false;
+  if (typeof a === "number" || typeof b === "number") {
+    const x = Number(a);
+    const y = Number(b);
+    if (!isFinite(x) || !isFinite(y)) return true;
+    const tol = key === "lineHeight" || key === "mainLineHeight" ? 0.06 : 0.6;
+    return Math.abs(x - y) > tol;
+  }
+  return String(a || "").trim().toLowerCase() !== String(b || "").trim().toLowerCase();
+}
+
+// 当前面板值与「模板默认值」的差异（默认模板以 DEFAULT_DISPLAY 为基准）
+function currentStyleDiff() {
+  const base = styleTemplate === "glass" ? DEFAULT_DISPLAY : tplSnapshot;
+  const diff = {};
+  SNAP_KEYS.forEach((k) => {
+    if (styleValueDiffers(k, displayOpts[k], base[k])) diff[k] = displayOpts[k];
+  });
+  return diff;
+}
+
+function updateStyleModifiedHint() {
+  const hint = $("styleModified");
+  if (!hint) return;
+  const modified = Object.keys(currentStyleDiff()).length > 0;
+  hint.hidden = !modified;
+}
+
+// 切换模板后，把该模板的默认样式灌进面板（叠加该模板已保存的改动）
+function syncTemplateStyleState() {
+  const keepTimeDisplay = displayOpts && displayOpts.timeDisplay;
+  if (styleTemplate === "glass") {
+    tplSnapshot = { ...DEFAULT_DISPLAY };
+    tplFontPalette = [];
+    displayOpts = { ...DEFAULT_DISPLAY, ...glassDisplay, ...(tplOverrides.glass || {}) };
+  } else {
+    // 先把 CSS 变量还原成默认，避免上一个模板/设置的值被读进快照
+    applyDisplay(DEFAULT_DISPLAY);
+    tplSnapshot = captureTemplateStyle();
+    tplFontPalette = Array.isArray(tplSnapshot.palette) ? tplSnapshot.palette : [];
+    delete tplSnapshot.palette; // palette 只给色块用，不进显示设置
+    displayOpts = { ...DEFAULT_DISPLAY, ...tplSnapshot, ...(tplOverrides[styleTemplate] || {}) };
+  }
+  if (keepTimeDisplay) displayOpts.timeDisplay = keepTimeDisplay;
+  if (styleTemplate === "glass") glassDisplay = { ...displayOpts };
+  applyDisplay(displayOpts);
+  syncDisplayControls();
+  refreshFontSwatches();
+  injectTemplateOverrideStyle();
+  updateStyleModifiedHint();
+  if (styleTemplate === "glass") chrome.storage.local.set({ [DISPLAY_OPTS_KEY]: glassDisplay });
+}
+
 // 导出 HTML 时，把显示设置写成覆盖规则追加到样式末尾
 function buildDisplayCss(d) {
   const ff = toFontFamilyCss(d.fontFamily);
+  const aff = toFontFamilyCss(d.ansFontFamily || d.fontFamily);
+  const mff = toFontFamilyCss(d.mainFontFamily || d.fontFamily);
   const cardR = Number(d.cardRadius) || 0;
   const quoteR = Number(d.quoteRadius) || 0;
   const extractR = Number(d.extractRadius) || 0;
@@ -261,13 +547,19 @@ function buildDisplayCss(d) {
       ";font-family:" + ff + ";font-size:" + d.fontSize + "px}" +
     ".card{border-radius:" + cardR + "px}" +
     ".item-text{background:" + d.quoteBg + ";color:" + d.fontColor +
-      ";font-size:" + d.fontSize + "px;border-radius:" + quoteR + "px}" +
-    ".item-answer{color:" + d.fontColor + ";font-size:" + d.fontSize +
-      "px;line-height:" + d.lineHeight + "}" +
-    ".item-main{background:" + d.mainBg + ";color:" + d.fontColor +
+      ";font-size:" + d.fontSize + "px;line-height:" + d.lineHeight +
+      ";font-family:" + ff + ";border-radius:" + quoteR + "px}" +
+    // 释义：独立作用域的字体/颜色/大小/行高
+    ".item-answer{color:" + (d.ansFontColor || d.fontColor) +
+      ";font-size:" + (d.ansFontSize || d.fontSize) + "px" +
+      ";line-height:" + (d.ansLineHeight || d.lineHeight) +
+      ";font-family:" + aff + "}" +
+    // 主文：独立作用域的字体/颜色/大小/行高
+    ".item-main{background:" + d.mainBg + ";color:" + (d.mainFontColor || d.fontColor) +
       ";border-left:3px solid " + darken(d.mainBg, 0.12) +
       ";font-size:" + (d.mainFontSize || DEFAULT_DISPLAY.mainFontSize) + "px" +
-      ";line-height:" + (d.mainLineHeight || DEFAULT_DISPLAY.mainLineHeight) + "}" +
+      ";line-height:" + (d.mainLineHeight || DEFAULT_DISPLAY.mainLineHeight) +
+      ";font-family:" + mff + "}" +
     // 明细主文：同一底色淡出（默认模板按用户设置的主文底色算）
     ".item-main-dim{background:color-mix(in srgb," + d.mainBg + " 40%,transparent)" +
       ";border-left-color:color-mix(in srgb," + darken(d.mainBg, 0.12) + " 35%,transparent)}" +
@@ -934,6 +1226,8 @@ function applyStyleTemplate(id, persist = true) {
     b.classList.toggle("active", b.dataset.tpl === styleTemplate);
   });
   if (persist) chrome.storage.local.set({ [STYLE_TPL_KEY]: styleTemplate });
+  // 把该模板的样式回填到样式设置面板（面板只记录“改动”，模板默认值作为恢复基准）
+  syncTemplateStyleState();
 }
 
 function renderTplBar() {
@@ -1136,28 +1430,55 @@ function syncDisplayControls() {
   $("optQuoteBg").value = displayOpts.quoteBg;
   $("optMainBg").value = displayOpts.mainBg;
   $("optExtractBg").value = displayOpts.extractBg || DEFAULT_DISPLAY.extractBg;
-  $("optFontColor").value = displayOpts.fontColor;
-  $("optFontSize").value = displayOpts.fontSize;
-  $("optLineHeight").value = displayOpts.lineHeight;
-  $("optMainFontSize").value = displayOpts.mainFontSize || DEFAULT_DISPLAY.mainFontSize;
-  $("optMainLineHeight").value = displayOpts.mainLineHeight || DEFAULT_DISPLAY.mainLineHeight;
+  syncFontScopeControls();
   $("optTimeDisplay").value = recordTimeMode();
   $("optCardRadius").value = displayOpts.cardRadius ?? DEFAULT_DISPLAY.cardRadius;
   $("optQuoteRadius").value = displayOpts.quoteRadius ?? DEFAULT_DISPLAY.quoteRadius;
   $("optExtractRadius").value = displayOpts.extractRadius ?? DEFAULT_DISPLAY.extractRadius;
-  const storedFont = displayOpts.fontFamily || DEFAULT_DISPLAY.fontFamily;
-  if (matchFontPreset(storedFont)) {
-    $("optFontPreset").value = matchFontPreset(storedFont);
-    $("optFontFamily").value = "";
-  } else {
-    $("optFontPreset").value = ""; // 自定义…
-    $("optFontFamily").value = storedFont;
-  }
   syncColorSwatches("bgSwatches", "optPageBg");
   syncColorSwatches("quoteSwatches", "optQuoteBg");
   syncColorSwatches("mainSwatches", "optMainBg");
   syncColorSwatches("extractSwatches", "optExtractBg");
   syncColorSwatches("fontSwatches", "optFontColor");
+}
+
+// 字体控件（字体 / 颜色 / 大小 / 行高）按当前作用域回填
+function syncFontScopeControls() {
+  const sc = FONT_SCOPES[fontScope] || FONT_SCOPES.quote;
+  $("optFontColor").value = displayOpts[sc.color] || DEFAULT_DISPLAY[sc.color];
+  $("optFontSize").value = displayOpts[sc.size] || DEFAULT_DISPLAY[sc.size];
+  $("optLineHeight").value = displayOpts[sc.line] || DEFAULT_DISPLAY[sc.line];
+  const storedFont = displayOpts[sc.family] || displayOpts.fontFamily || DEFAULT_DISPLAY.fontFamily;
+  const preset = matchFontPreset(storedFont);
+  if (preset) {
+    $("optFontPreset").value = preset;
+    $("optFontFamily").value = "";
+  } else {
+    $("optFontPreset").value = ""; // 自定义…
+    $("optFontFamily").value = storedFont;
+  }
+  syncFontScopeValues(displayOpts);
+  syncColorSwatches("fontSwatches", "optFontColor");
+}
+
+// 把字体控件上的值写回当前作用域
+function readFontScopeInto(opts) {
+  const sc = FONT_SCOPES[fontScope] || FONT_SCOPES.quote;
+  opts[sc.family] = currentFontFamily();
+  opts[sc.color] = $("optFontColor").value;
+  opts[sc.size] = Number($("optFontSize").value);
+  opts[sc.line] = Number($("optLineHeight").value);
+}
+
+// 切换字体作用域
+function setFontScope(scope) {
+  if (!FONT_SCOPES[scope]) return;
+  fontScope = scope;
+  [...document.querySelectorAll("#fontScopeBar .seg-btn")].forEach((b) => {
+    b.classList.toggle("active", b.dataset.scope === fontScope);
+  });
+  syncFontScopeControls();
+  refreshFontSwatches();
 }
 
 function refreshPresetSelect() {
@@ -1200,7 +1521,8 @@ function applyPreset() {
   displayOpts = { ...DEFAULT_DISPLAY, ...displayPresets[i].opts };
   syncDisplayControls();
   applyDisplay(displayOpts);
-  chrome.storage.local.set({ [DISPLAY_OPTS_KEY]: displayOpts });
+  $("presetSelect").value = String(i);
+  saveStyleState();
 }
 
 // 删除选中的样式组
@@ -1246,9 +1568,11 @@ function load() {
       $("optSep").checked = exportOpts.sep;
       $("optCompact").checked = exportOpts.compact;
       $("optNoSplit").checked = exportOpts.noSplit;
+      $("optPrintBlack").checked = exportOpts.printBlack !== false;
       $("optBackup").checked = exportOpts.backup;
 
       displayOpts = { ...DEFAULT_DISPLAY, ...(res[DISPLAY_OPTS_KEY] || {}) };
+      glassDisplay = { ...displayOpts };
       syncDisplayControls();
       applyDisplay(displayOpts);
 
@@ -1266,6 +1590,7 @@ function load() {
       aggOrder = (res[AGG_ORDER_KEY] && typeof res[AGG_ORDER_KEY] === "object") ? res[AGG_ORDER_KEY] : {};
 
       // 列表风格模板：渲染按钮并套用（不再写回存储）
+      tplOverrides = (res[TPL_OVERRIDES_KEY] && typeof res[TPL_OVERRIDES_KEY] === "object") ? res[TPL_OVERRIDES_KEY] : {};
       styleTemplate = res[STYLE_TPL_KEY] || "glass";
       renderTplBar();
       applyStyleTemplate(styleTemplate, false);
@@ -1294,6 +1619,7 @@ function bindExportOpts() {
       sep: $("optSep").checked,
       compact: $("optCompact").checked,
       noSplit: $("optNoSplit").checked,
+      printBlack: $("optPrintBlack").checked,
       backup: $("optBackup").checked,
     };
     chrome.storage.local.set({ [EXPORT_OPTS_KEY]: exportOpts });
@@ -1309,25 +1635,65 @@ function bindExportOpts() {
   $("optBackup").addEventListener("change", persist);
 }
 
+// ---------- 保存 / 恢复 ----------
+// 默认模板：改动直接写进 displayOpts（走 CSS 变量）；
+// 其它模板：改动记成「覆盖层」，只保存与模板默认值的差异，模板原样式不动。
+function saveStyleState() {
+  if (styleTemplate === "glass") {
+    glassDisplay = { ...displayOpts };
+    chrome.storage.local.set({ [DISPLAY_OPTS_KEY]: glassDisplay });
+  } else {
+    const diff = currentStyleDiff();
+    if (Object.keys(diff).length) tplOverrides[styleTemplate] = diff;
+    else delete tplOverrides[styleTemplate];
+    chrome.storage.local.set({ [TPL_OVERRIDES_KEY]: tplOverrides });
+    injectTemplateOverrideStyle();
+  }
+  updateStyleModifiedHint();
+}
+
+// 恢复到当前模板的默认样式
+function resetToTemplateStyle() {
+  const keepTimeDisplay = displayOpts.timeDisplay;
+  if (styleTemplate === "glass") {
+    displayOpts = { ...DEFAULT_DISPLAY };
+    glassDisplay = { ...displayOpts };
+  } else {
+    delete tplOverrides[styleTemplate];
+    displayOpts = { ...DEFAULT_DISPLAY, ...tplSnapshot };
+  }
+  displayOpts.timeDisplay = keepTimeDisplay;
+  applyDisplay(displayOpts);
+  syncDisplayControls();
+  $("presetSelect").value = "";
+  syncColorSwatches("bgSwatches", "optPageBg");
+  syncColorSwatches("quoteSwatches", "optQuoteBg");
+  syncColorSwatches("mainSwatches", "optMainBg");
+  syncColorSwatches("extractSwatches", "optExtractBg");
+  syncColorSwatches("fontSwatches", "optFontColor");
+  injectTemplateOverrideStyle();
+  if (styleTemplate === "glass") {
+    chrome.storage.local.set({ [DISPLAY_OPTS_KEY]: glassDisplay, [TPL_OVERRIDES_KEY]: tplOverrides });
+  } else {
+    chrome.storage.local.set({ [TPL_OVERRIDES_KEY]: tplOverrides });
+  }
+  updateStyleModifiedHint();
+}
+
 // 显示设置变更时即时生效并保存
 function bindDisplay() {
   const persist = () => {
-    displayOpts = {
-      pageBg: $("optPageBg").value,
-      quoteBg: $("optQuoteBg").value,
-      mainBg: $("optMainBg").value,
-      extractBg: $("optExtractBg").value,
-      fontColor: $("optFontColor").value,
-      fontSize: Number($("optFontSize").value),
-      lineHeight: Number($("optLineHeight").value),
-      mainFontSize: Number($("optMainFontSize").value),
-      mainLineHeight: Number($("optMainLineHeight").value),
-      timeDisplay: $("optTimeDisplay").value,
-      cardRadius: Number($("optCardRadius").value),
-      quoteRadius: Number($("optQuoteRadius").value),
-      extractRadius: Number($("optExtractRadius").value),
-      fontFamily: currentFontFamily(),
-    };
+    const next = { ...displayOpts };
+    next.pageBg = $("optPageBg").value;
+    next.quoteBg = $("optQuoteBg").value;
+    next.mainBg = $("optMainBg").value;
+    next.extractBg = $("optExtractBg").value;
+    next.timeDisplay = $("optTimeDisplay").value;
+    next.cardRadius = Number($("optCardRadius").value);
+    next.quoteRadius = Number($("optQuoteRadius").value);
+    next.extractRadius = Number($("optExtractRadius").value);
+    readFontScopeInto(next); // 只改当前 tab（原文/释义/主文）对应的字段
+    displayOpts = next;
     applyDisplay(displayOpts);
     $("presetSelect").value = ""; // 手动调整后，样式组下拉不再指向任何已存组
     syncColorSwatches("bgSwatches", "optPageBg");
@@ -1335,7 +1701,7 @@ function bindDisplay() {
     syncColorSwatches("mainSwatches", "optMainBg");
     syncColorSwatches("extractSwatches", "optExtractBg");
     syncColorSwatches("fontSwatches", "optFontColor");
-    chrome.storage.local.set({ [DISPLAY_OPTS_KEY]: displayOpts });
+    saveStyleState();
   };
   $("optPageBg").addEventListener("input", persist);
   $("optQuoteBg").addEventListener("input", persist);
@@ -1344,8 +1710,6 @@ function bindDisplay() {
   $("optFontColor").addEventListener("input", persist);
   $("optFontSize").addEventListener("input", persist);
   $("optLineHeight").addEventListener("input", persist);
-  $("optMainFontSize").addEventListener("input", persist);
-  $("optMainLineHeight").addEventListener("input", persist);
   // 时间显示格式改了要重渲染列表（时间文字是渲染时生成的）
   $("optTimeDisplay").addEventListener("change", () => {
     persist();
@@ -1369,33 +1733,10 @@ function bindDisplay() {
     $("optFontPreset").value = matchFontPreset(raw || DEFAULT_DISPLAY.fontFamily);
     persist();
   });
-  // 恢复默认显示样式（带确认）
+  // 恢复当前模板的默认样式（带确认）
   $("resetDisplay").addEventListener("click", () => {
-    if (!window.confirm("确定恢复默认显示样式吗？当前自定义设置将被清除。")) return;
-    displayOpts = { ...DEFAULT_DISPLAY };
-    $("optPageBg").value = displayOpts.pageBg;
-    $("optQuoteBg").value = displayOpts.quoteBg;
-    $("optMainBg").value = displayOpts.mainBg;
-    $("optExtractBg").value = displayOpts.extractBg;
-    $("optFontColor").value = displayOpts.fontColor;
-    $("optFontSize").value = displayOpts.fontSize;
-    $("optLineHeight").value = displayOpts.lineHeight;
-    $("optMainFontSize").value = displayOpts.mainFontSize;
-    $("optMainLineHeight").value = displayOpts.mainLineHeight;
-    $("optTimeDisplay").value = displayOpts.timeDisplay;
-    $("optCardRadius").value = displayOpts.cardRadius;
-    $("optQuoteRadius").value = displayOpts.quoteRadius;
-    $("optExtractRadius").value = displayOpts.extractRadius;
-    $("optFontPreset").value = FONT_OPTIONS[0].value; // 默认
-    $("optFontFamily").value = "";
-    $("presetSelect").value = ""; // 恢复默认后不再指向已存样式组
-    syncColorSwatches("bgSwatches", "optPageBg");
-    syncColorSwatches("quoteSwatches", "optQuoteBg");
-    syncColorSwatches("mainSwatches", "optMainBg");
-    syncColorSwatches("extractSwatches", "optExtractBg");
-    syncColorSwatches("fontSwatches", "optFontColor");
-    applyDisplay(displayOpts);
-    chrome.storage.local.set({ [DISPLAY_OPTS_KEY]: displayOpts });
+    if (!window.confirm("恢复到当前模板的默认样式吗？你在样式设置里的修改会被清除。")) return;
+    resetToTemplateStyle();
   });
 }
 
@@ -2744,7 +3085,7 @@ const HEAD_BTN_CSS =
 // 生成导出页 HTML（导出文件与「打印」预览共用，保证两者一致）
 // withPrintScript：导出文件里内联一段脚本给「打印」按钮绑事件；
 // 打印预览窗口继承扩展页 CSP，内联脚本会被拦，那边由父页直接绑事件。
-function buildExportHtml(list, withPrintScript, titleWithTime) {
+function buildExportHtml(list, withPrintScript, titleWithTime, previewBlack) {
   // 预览 / 打印页把时间（到秒）写进 <title>：浏览器「另存为 PDF」默认用标题做文件名
   // 命名格式与导出的 HTML 文件一致：_YYYYMMDD_HHMMSS
   const now = new Date();
@@ -2763,14 +3104,29 @@ function buildExportHtml(list, withPrintScript, titleWithTime) {
   const displayCss = buildDisplayCss(displayOpts);
   // 风格模板：导出页与历史页共用同一份样式，靠 body 上的 data-tpl 生效；
   // 导出页再追加整页底色（历史页的页面底色只作用于 #list）
-  const tplCss = styleTemplateCss(styleTemplate) + mainDimCss(styleTemplate) + templateExportPageCss(styleTemplate);
+  const tplOverridesCss =
+    styleTemplate !== "glass" && tplOverrides[styleTemplate]
+      ? tplOverrideCss(styleTemplate, tplOverrides[styleTemplate], true)
+      : "";
+  const tplCss =
+    styleTemplateCss(styleTemplate) + mainDimCss(styleTemplate) + templateExportPageCss(styleTemplate) + tplOverridesCss;
+  // 打印用黑色字：纸上用颜料墨更清楚、也防水；只影响打印，屏幕与导出的 HTML 仍按模板配色
+  const blackRules =
+    ".item-text,.item-text-extract,.item-answer,.item-answer p,.item-answer li,.item-main,.item-main-dim{" +
+    "color:#000!important}" +
+    "h1,.h1-sub,.card .item-text,.card .item-answer,.card .item-main{text-shadow:none!important}";
+  const printBlackCss = exportOpts.printBlack === false
+    ? ""
+    : "\n@media print{" + blackRules + "}" +
+      // 预览 / 打印窗口另开一份“所见即打印”的规则，屏幕上就能看出打印出来的纯黑效果
+      (previewBlack ? "\n" + blackRules : "");
   const html =
     "<!DOCTYPE html>\n" +
     '<html lang="zh-CN">\n<head>\n' +
     '<meta charset="UTF-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n' +
     "<title>" + docTitle + "</title>\n" +
-    "<style>\n" + CARD_CSS + noSplitCss + displayCss + HEAD_BTN_CSS + tplCss + "\n</style>\n" +
+    "<style>\n" + CARD_CSS + noSplitCss + displayCss + HEAD_BTN_CSS + tplCss + printBlackCss + "\n</style>\n" +
     "</head>\n" + '<body data-tpl="' + esc(styleTemplate) + '">\n' +
     '<div class="wrap">\n' +
     '<h1><span class="dot"></span><span class="h1-title">划词AI释义 · 历史记录</span>' +
@@ -2835,7 +3191,7 @@ function previewHistory() {
     statusEl.className = "export-status err";
     return;
   }
-  const html = buildExportHtml(list, false, true);
+  const html = buildExportHtml(list, false, true, exportOpts.printBlack !== false);
   const win = window.open("about:blank", "_blank");
   if (!win) {
     statusEl.textContent = "浏览器拦截了新窗口，请允许扩展打开新标签页后重试。";
@@ -2863,7 +3219,7 @@ function printHistory() {
     statusEl.className = "export-status err";
     return;
   }
-  const html = buildExportHtml(list, false, true);
+  const html = buildExportHtml(list, false, true, exportOpts.printBlack !== false);
   // 用 about:blank 新窗口写入同一份文档，再由本页调它的 window.print()
   // （不靠文档内联脚本：新窗口继承扩展页的 CSP，内联 script 与 onclick 都会被拦掉）
   const win = window.open("about:blank", "_blank");
@@ -3241,6 +3597,10 @@ initColorSwatches("extractSwatches", "optExtractBg", BG_PALETTE);
 initColorSwatches("fontSwatches", "optFontColor", FONT_RECOMMEND);
 bindExportOpts();
 bindDisplay();
+// 字体作用域切换：原文 | 释义 | 主文
+[...document.querySelectorAll("#fontScopeBar .seg-btn")].forEach((b) => {
+  b.addEventListener("click", () => setFontScope(b.dataset.scope));
+});
 $("saveDisplay").addEventListener("click", saveDisplay);
 $("presetSelect").addEventListener("change", applyPreset);
 $("deletePreset").addEventListener("click", deletePreset);

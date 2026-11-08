@@ -20,6 +20,14 @@
         "Microsoft YaHei", Roboto, sans-serif;
       --line-height: 1.2;
       --main-line-height: 1.7;
+      --ans-font-color: #1f2937;
+      --ans-font-size: 13px;
+      --ans-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", Roboto, sans-serif;
+      --ans-line-height: 1.2;
+      --main-font-color: #1f2937;
+      --main-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", Roboto, sans-serif;
       --main-bg: #f4f4fe;
       --main-border: #6366f1;
       --extract-bg: #dcfce7;
@@ -159,6 +167,7 @@
     }
     .panel-toggle:hover { color: var(--primary); }
     .panel-toggle-title { justify-self: start; letter-spacing: 0.02em; }
+    #styleModified { color: #b45309; font-size: 11px; margin-left: 2px; }
     /* 展开状态文字居中显示，收起时「打开」、展开后「折叠」 */
     .panel-toggle-state {
       justify-self: center; font-size: 12px; color: var(--muted);
@@ -177,6 +186,15 @@
       width: 80px; flex-shrink: 0;
     }
     .opts-br { flex-basis: 100%; width: 100%; height: 0; }
+    /* 字体作用域切换（原文/释义/主文）：胶囊分段按钮 */
+    .seg { display: inline-flex; gap: 0; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; background: #fff; }
+    .seg-btn {
+      border: 0; background: #fff; color: var(--muted); cursor: pointer;
+      font-size: 12px; font-family: inherit; padding: 3px 10px; line-height: 1.5;
+    }
+    .seg-btn + .seg-btn { border-left: 1px solid var(--border); }
+    .seg-btn.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+    .seg-btn:hover:not(.active) { background: #f8f9fc; }
     /* 小标题旁的带圈 i：只用悬浮提示补充说明 */
     .info-dot {
       display: inline-block; margin-left: 2px; color: #9aa3b2;
@@ -462,7 +480,8 @@
     }
     .item-main-btn:hover { color: var(--primary); background: rgba(99, 102, 241, 0.1); }
     .item-main {
-      font-size: var(--main-font-size); line-height: var(--main-line-height); color: var(--font-color);
+      font-size: var(--main-font-size); line-height: var(--main-line-height);
+      color: var(--main-font-color); font-family: var(--main-font-family);
       background: var(--main-bg);
       border-left: 3px solid var(--main-border);
       border-radius: 6px; padding: 6px 10px; margin-bottom: 8px;
@@ -497,6 +516,7 @@
 
     .item-text {
       font-size: var(--font-size); font-weight: 600; color: var(--font-color);
+      font-family: var(--font-family); line-height: var(--line-height);
       background: var(--quote-bg);
       border-radius: var(--quote-radius, 8px);
       padding: 6px 10px;
@@ -512,7 +532,10 @@
       padding-left: 12px;
       font-weight: normal;
     }
-    .item-answer { font-size: var(--font-size); line-height: var(--line-height); color: var(--font-color); }
+    .item-answer {
+      font-size: var(--ans-font-size); line-height: var(--ans-line-height);
+      color: var(--ans-font-color); font-family: var(--ans-font-family);
+    }
     /* 明细主文（多行选中原文）：默认模板按当前主文底色淡出；其它模板见 history.js 的 MAIN_DIM_CSS */
     .item-main-dim {
       background: var(--main-bg) !important;
@@ -665,6 +688,7 @@
       <span class="opts-br"></span>
       <span class="opts-title">导出为HTML：</span>
       <label><input type="checkbox" id="optNoSplit" />卡片不跨页拆分</label>
+      <label title="打印预览、打印或另存为 PDF 时，正文文字统一用纯黑，颜色更实、防水"><input type="checkbox" id="optPrintBlack" checked />打印用纯黑字</label>
       <span class="opts-br"></span>
       <span class="opts-title">导出为MD：</span>
       <label><input type="checkbox" id="optCompact" />紧凑模式</label>
@@ -679,12 +703,17 @@
     <!-- 列表显示模式已随风格模板移到工具栏卡片，不在设置区内 -->
     <div class="opts panel-row">
       <button type="button" class="panel-toggle" id="styleToggle" aria-expanded="false" aria-controls="stylePanel" title="展开或折叠字体、颜色、圆角与样式管理">
-        <span class="panel-toggle-title">样式设置</span>
+        <span class="panel-toggle-title">样式设置<span id="styleModified" hidden>（有修改）</span></span>
         <span class="panel-toggle-state">打开</span>
         <span class="panel-toggle-tail" aria-hidden="true"></span>
       </button>
     </div>
     <div class="opts opt-panel" id="stylePanel" hidden>
+      <span class="seg" id="fontScopeBar" title="切换要调整字体的区域">
+        <button type="button" class="seg-btn active" data-scope="quote">原文</button>
+        <button type="button" class="seg-btn" data-scope="answer">释义</button>
+        <button type="button" class="seg-btn" data-scope="main">主文</button>
+      </span>
       <label class="opt-lbl">字体 <select id="optFontPreset"></select></label>
       <label><input type="text" id="optFontFamily" placeholder="或输入自定义字体" spellcheck="false" /></label>
       <label class="opt-lbl">字体颜色 <input type="color" id="optFontColor" value="#1f2937" /></label>
@@ -692,8 +721,6 @@
       <span class="opts-br"></span>
       <label class="opt-lbl opt-rowstart">字体大小 <input type="range" id="optFontSize" min="12" max="20" step="1" value="13" /> <span id="optFontSizeVal">13</span>px</label>
       <label class="opt-lbl">行高 <input type="range" id="optLineHeight" min="1.0" max="2.4" step="0.1" value="1.2" /> <span id="optLineHeightVal">1.2</span></label>
-      <label class="opt-lbl opt-rowstart">主文字号 <input type="range" id="optMainFontSize" min="11" max="20" step="1" value="13" /> <span id="optMainFontSizeVal">13</span>px</label>
-      <label class="opt-lbl">主文行高 <input type="range" id="optMainLineHeight" min="1.0" max="2.4" step="0.1" value="1.7" /> <span id="optMainLineHeightVal">1.7</span></label>
       <label class="opt-lbl opt-rowstart">时间显示 <select id="optTimeDisplay" title="卡片与导出里的时间格式：到秒、到日，或精简的年/月/日">
         <option value="second">到秒</option>
         <option value="date">到日</option>
@@ -722,10 +749,10 @@
       <label class="opt-lbl">摘录 <input type="range" id="optExtractRadius" min="0" max="24" step="1" value="0" /> <span id="optExtractRadiusVal">0</span>px</label>
       <span class="opts-br"></span>
       <span class="opts-title">样式管理：</span>
-      <button type="button" id="saveDisplay" class="reset-btn">保存显示设置</button>
+      <button type="button" id="saveDisplay" class="reset-btn">保存样式组</button>
       <label>样式组 <select id="presetSelect"></select></label>
       <button type="button" id="deletePreset" class="reset-btn">删除</button>
-      <button type="button" id="resetDisplay" class="reset-btn">恢复默认</button>
+      <button type="button" id="resetDisplay" class="reset-btn">恢复模板默认</button>
     </div>
     </div>
     </div>
