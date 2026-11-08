@@ -268,6 +268,9 @@ function buildDisplayCss(d) {
       ";border-left:3px solid " + darken(d.mainBg, 0.12) +
       ";font-size:" + (d.mainFontSize || DEFAULT_DISPLAY.mainFontSize) + "px" +
       ";line-height:" + (d.mainLineHeight || DEFAULT_DISPLAY.mainLineHeight) + "}" +
+    // 明细主文：同一底色淡出（默认模板按用户设置的主文底色算）
+    ".item-main-dim{background:color-mix(in srgb," + d.mainBg + " 40%,transparent)" +
+      ";border-left-color:color-mix(in srgb," + darken(d.mainBg, 0.12) + " 35%,transparent)}" +
     // 摘录记录：左侧深色竖线的引文样式，底色与主文不同，置于最后确保覆盖上面的原文底色
     ".item-text-extract{background:" + d.extractBg +
       ";border-left:3px solid " + deepBorder(d.extractBg) +
@@ -878,12 +881,48 @@ function templateExportPageCss(id) {
   return "";
 }
 
+// 明细主文（多行选中原文）：各模板的 .item-main 底色差别很大，通用底色会难看，
+// 所以这里给每个模板单独一份「淡版」：底色和左边线变淡，文字颜色沿用模板原色。
+// 只在渲染层的独立类上生效，不改动各模板已有的 .item-main 规则。
+const MAIN_DIM_CSS = {
+  doc: "background:#fbfcfe!important;border-left-color:#ecf0f7!important",
+  quote: "background:rgba(0,0,0,.012)!important;border-left-color:#f0f1f3!important",
+  compact: "background:transparent!important;border-left-color:#f5f6f8!important",
+  paper: "background:rgba(120,100,70,.03)!important;border-left-color:#e8dcc4!important",
+  sticky: "background:rgba(245,215,110,.1)!important;border-left-color:#ecd98f!important",
+  dark: "background:#1b1f26!important;border-left-color:#2b3140!important",
+  news: "background:rgba(0,0,0,.01)!important;border-left-color:#e3e0d9!important",
+  grid: "background:rgba(120,170,220,.05)!important;border-left-color:#c9dbee!important",
+  ruled: "background:rgba(120,170,220,.05)!important;border-left-color:#c9dbee!important",
+  mono: "background:#fcfcfd!important;border-left-color:#e8ebef!important",
+  kraft: "background:rgba(106,82,48,.05)!important;border-left-color:#d8c4a8!important",
+  ink: "background:rgba(120,110,90,.04)!important;border-left-color:#e0d9cb!important",
+  warmdark: "background:#26221c!important;border-left-color:#4b443a!important",
+  legal: "background:rgba(90,140,190,.05)!important;border-left-color:#c9dbee!important",
+  seyes: "background:rgba(140,170,210,.05)!important;border-left-color:#cfdcf0!important",
+  carre: "background:rgba(120,140,160,.04)!important;border-left-color:#dbe2e9!important",
+  dots: "background:rgba(90,90,80,.03)!important;border-left-color:#e6e1d6!important",
+  typer: "background:#f6f3ea!important;border-left-color:#e2dccd!important",
+  book: "background:#fcfaf5!important;border-left-color:#ece7dc!important",
+  magazine: "background:#fbfbfa!important;border-left-color:#e4e6e9!important",
+  terminal: "background:#161a1f!important;border-left-color:#20272d!important",
+  cards: "background:#fafbfc!important;border-left-color:#e9ebef!important",
+};
+
+function mainDimCss(id) {
+  const body = MAIN_DIM_CSS[id];
+  return body ? 'body[data-tpl="' + id + '"] .item-main-dim{' + body + "}" : "";
+}
+
 // 把模板样式注入历史页（一次即可，切换靠 body 上的 data-tpl）
 function ensureTemplateStyle() {
   if (document.getElementById("tplStyle")) return;
   const style = document.createElement("style");
   style.id = "tplStyle";
-  style.textContent = STYLE_TEMPLATES.map((t) => t.css).join("\n");
+  style.textContent =
+    STYLE_TEMPLATES.map((t) => t.css).join("\n") +
+    "\n" +
+    STYLE_TEMPLATES.map((t) => mainDimCss(t.id)).join("\n");
   document.head.appendChild(style);
 }
 
@@ -1811,6 +1850,20 @@ function isExtractRecord(e) {
   return !a || a === EXTRACT_PLACEHOLDER;
 }
 
+// ---------- 多行选中：原文行只留摘要，完整内容放主文 ----------
+// 划词选中多行时（诗词、列表、代码），原文整段塞在「……」里很难看，
+// 卡片里只显示前 N 个字 + 省略号，完整文本用主文块展示（保留换行）。
+const MULTILINE_PREVIEW = 30;
+
+function isMultilineSelection(t) {
+  return /\n/.test(String(t || ""));
+}
+
+function selectionPreview(t) {
+  const flat = String(t || "").replace(/\s*\n+\s*/g, " ").trim();
+  return flat.length > MULTILINE_PREVIEW ? flat.slice(0, MULTILINE_PREVIEW) + "…" : flat;
+}
+
 // 「主文」按钮图标：双引号（用户提供的 quote.svg），配合 title 提示表示“该来源的一段主文说明”
 const MAIN_BTN_ICON =
   '<svg width="12" height="12" viewBox="0 0 1024 1024" fill="currentColor" aria-hidden="true">' +
@@ -1895,9 +1948,17 @@ function buildItemCard(e) {
   head.appendChild(actions);
 
   const isExtract = isExtractRecord(e);
+  // 多行选中：原文行显示前 N 字，完整多行文本放进主文块
+  const multi = isMultilineSelection(e.text);
   const textEl = document.createElement("div");
   textEl.className = "item-text" + (isExtract ? " item-text-extract" : "");
-  textEl.textContent = "「" + (e.text || "") + "」";
+  textEl.textContent = "「" + (multi ? selectionPreview(e.text) : e.text || "") + "」";
+
+  const selMain = multi ? document.createElement("div") : null;
+  if (selMain) {
+    selMain.className = "item-main item-main-dim";
+    selMain.textContent = e.text || "";
+  }
 
   const ans = document.createElement("div");
   ans.className = "item-answer";
@@ -1917,6 +1978,7 @@ function buildItemCard(e) {
   }
 
   item.appendChild(textEl);
+  if (selMain) item.appendChild(selMain);
   item.appendChild(ans);
   return item;
 }
@@ -2270,10 +2332,17 @@ function renderAggregated(list) {
       gi.appendChild(giHead);
 
       const isExtract = isExtractRecord(e);
+      const multi = isMultilineSelection(e.text);
       const textEl = document.createElement("div");
       textEl.className = "item-text" + (isExtract ? " item-text-extract" : "");
-      textEl.textContent = "「" + (e.text || "") + "」";
+      textEl.textContent = "「" + (multi ? selectionPreview(e.text) : e.text || "") + "」";
       gi.appendChild(textEl);
+      if (multi) {
+        const selMain = document.createElement("div");
+        selMain.className = "item-main item-main-dim";
+        selMain.textContent = e.text || "";
+        gi.appendChild(selMain);
+      }
 
       const ans = document.createElement("div");
       ans.className = "item-answer";
@@ -2409,7 +2478,7 @@ function buildMarkdown(list) {
     } else {
       lines.push("---");
       lines.push("");
-      lines.push("## " + (i + 1) + ". 「" + (e.text || "") + "」");
+      lines.push("## " + (i + 1) + ". 「" + String(e.text || "").replace(/\s*\r?\n\s*/g, " ") + "」");
       lines.push("");
       if (opts.time) lines.push("- **时间**：" + formatRecordTime(e.time));
       if (opts.pageTitle && displayTitle(e)) lines.push("- **来源页面**：" + displayTitle(e));
@@ -2451,7 +2520,7 @@ function buildMarkdownAggregated(list) {
     }
     recs.forEach((e, j) => {
       if (opts.sep && j > 0) lines.push("---");
-      lines.push("### " + (j + 1) + ". 「" + (e.text || "") + "」");
+      lines.push("### " + (j + 1) + ". 「" + String(e.text || "").replace(/\s*\r?\n\s*/g, " ") + "」");
       if (opts.time) lines.push("- **时间**：" + formatRecordTime(e.time));
       lines.push("");
       lines.push(e.answer || "");
@@ -2515,7 +2584,7 @@ h1 .h1-sub{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;whit
 .item-tag{font-size:11px;line-height:1.4;padding:1px 7px;border-radius:999px;color:#4338ca;background:rgba(99,102,241,0.14);border:1px solid rgba(99,102,241,0.3);white-space:nowrap}
 .item-src a{color:var(--muted);text-decoration:none}
 .item-src a:hover{color:var(--primary);text-decoration:underline}
-.item-text{font-size:13px;font-weight:600;color:#374151;background:var(--primary-soft);border-radius:8px;padding:6px 10px;margin-bottom:8px;word-break:break-word}
+.item-text{font-size:13px;font-weight:600;color:#374151;background:var(--primary-soft);border-radius:8px;padding:6px 10px;margin-bottom:8px;word-break:break-word;white-space:pre-wrap}
 .item-answer{font-size:13px;line-height:1.65;color:#1f2937}
 .item-answer p{margin:4px 0}
 .item-answer h1,.item-answer h2,.item-answer h3,.item-answer h4{margin:8px 0 4px;font-size:14px}
@@ -2528,6 +2597,7 @@ h1 .h1-sub{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;whit
 .item-answer a{color:#4f46e5;text-decoration:none}
 .item-answer a:hover{text-decoration:underline}
 .item-main{font-size:13px;color:#1f2937;background:rgba(99,102,241,0.07);border-left:3px solid #6366f1;border-radius:6px;padding:6px 10px;margin-bottom:8px;white-space:pre-wrap;word-break:break-word}
+.item-main-dim{background:color-mix(in srgb,var(--main-bg) 40%,transparent);border-left-color:color-mix(in srgb,var(--main-border) 35%,transparent)}
 .item-main-label{font-size:11px;color:var(--muted);margin-bottom:2px}.agg-items.no-sep .agg-item{border-top:none;padding-top:0}
 .agg-items{display:flex;flex-direction:column;gap:10px}
 .agg-item{border-top:1px dashed rgba(99,102,241,0.28);padding-top:10px}
@@ -2587,11 +2657,15 @@ function cardHtml(e) {
       ? '<div class="item-main">' + esc(sourceTexts[srcKey]) + "</div>"
       : "";
   const meta = metaAttrs(e, isExtract);
+  const multi = isMultilineSelection(e.text);
+  const quoteTxt = multi ? selectionPreview(e.text) : e.text || "";
+  const selMain = multi ? '<div class="item-main item-main-dim">' + esc(e.text || "") + "</div>" : "";
   return (
     '<div class="card"' + meta + ">" +
     '<div class="item-head">' + head.join("") + "</div>" +
     main +
-    '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>" +
+    '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(quoteTxt) + "」</div>" +
+    selMain +
     (isExtract ? "" : '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>") +
     "</div>"
   );
@@ -2638,9 +2712,12 @@ function buildCardsHtmlAggregated(list) {
         .map((e) => {
           const isExtract = isExtractRecord(e);
           const meta = metaAttrs(e, isExtract, false);
+          const multi = isMultilineSelection(e.text);
+          const quoteTxt = multi ? selectionPreview(e.text) : e.text || "";
           return (
             '<div class="agg-item"' + meta + ">" +
-            '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>" +
+            '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(quoteTxt) + "」</div>" +
+            (multi ? '<div class="item-main item-main-dim">' + esc(e.text || "") + "</div>" : "") +
             (isExtract ? "" : '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>") +
             "</div>"
           );
@@ -2688,7 +2765,7 @@ function buildExportHtml(list, withPrintScript, titleWithTime) {
   const displayCss = buildDisplayCss(displayOpts);
   // 风格模板：导出页与历史页共用同一份样式，靠 body 上的 data-tpl 生效；
   // 导出页再追加整页底色（历史页的页面底色只作用于 #list）
-  const tplCss = styleTemplateCss(styleTemplate) + templateExportPageCss(styleTemplate);
+  const tplCss = styleTemplateCss(styleTemplate) + mainDimCss(styleTemplate) + templateExportPageCss(styleTemplate);
   const html =
     "<!DOCTYPE html>\n" +
     '<html lang="zh-CN">\n<head>\n' +

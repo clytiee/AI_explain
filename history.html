@@ -502,6 +502,7 @@
       padding: 6px 10px;
       margin-bottom: 8px;
       word-break: break-word;
+      white-space: pre-wrap; /* 多行选中的换行要保留 */
     }
     /* 摘录记录：左侧深色竖线的引文样式，底色与主文不同 */
     .item-text-extract {
@@ -512,6 +513,13 @@
       font-weight: normal;
     }
     .item-answer { font-size: var(--font-size); line-height: var(--line-height); color: var(--font-color); }
+    /* 明细主文（多行选中原文）：默认模板按当前主文底色淡出；其它模板见 history.js 的 MAIN_DIM_CSS */
+    .item-main-dim {
+      background: var(--main-bg) !important;
+      background: color-mix(in srgb, var(--main-bg) 40%, transparent) !important;
+      border-left-color: var(--main-border) !important;
+      border-left-color: color-mix(in srgb, var(--main-border) 35%, transparent) !important;
+    }
     .item-answer p { margin: 4px 0; }
     .item-answer h1, .item-answer h2, .item-answer h3, .item-answer h4 { margin: 8px 0 4px; font-size: 14px; }
     .item-answer ul, .item-answer ol { margin: 4px 0; padding-left: 20px; }

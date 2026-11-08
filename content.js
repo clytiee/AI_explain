@@ -72,10 +72,59 @@
   });
 
   // ---------- 选择检测 ----------
+  // 浏览器自带的 Selection.toString() 会把块级换行压成空格，
+  // 多行选中（诗词、列表、代码块）贴到浮层/历史里就串成一行了。
+  // 这里遍历克隆出来的 DOM，块级元素与 <br> 都还原成换行。
+  const BLOCK_TAGS =
+    /^(P|DIV|LI|UL|OL|DL|DT|DD|H1|H2|H3|H4|H5|H6|SECTION|ARTICLE|BLOCKQUOTE|PRE|FIGURE|TABLE|TR|HEADER|FOOTER|ASIDE|NAV|MAIN|FORM|FIELDSET|CAPTION)$/;
+  function nodeTextWithBreaks(node, preformatted) {
+    if (!node) return "";
+    if (node.nodeType === 3) {
+      const s = node.nodeValue || "";
+      // 普通文本里的连续空白按浏览器习惯压成一个空格；<pre> 里原样保留
+      return preformatted ? s : s.replace(/[ \t\r\n\f]+/g, " ");
+    }
+    if (node.nodeType !== 1) return "";
+    const tag = (node.tagName || "").toUpperCase();
+    if (tag === "BR") return "\n";
+    const inner = Array.from(node.childNodes)
+      .map((c) => nodeTextWithBreaks(c, preformatted || tag === "PRE"))
+      .join("");
+    if (tag === "TD" || tag === "TH") return " " + inner;
+    if (BLOCK_TAGS.test(tag)) return "\n" + inner + "\n";
+    return inner;
+  }
+
+  function cleanSelectedText(raw) {
+    return String(raw || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n[ \t]+/g, "\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/\s+$/, "")
+      .replace(/^\s+/, "");
+  }
+
+  function selectionText(sel) {
+    if (!sel || sel.rangeCount === 0) return "";
+    try {
+      const frag = sel.getRangeAt(0).cloneContents();
+      const box = document.createElement("div");
+      box.appendChild(frag);
+      const raw = nodeTextWithBreaks(box, false);
+      const cleaned = cleanSelectedText(raw);
+      // 万一遍历出来是空的（少数特殊节点），退回浏览器实现
+      return cleaned || sel.toString().trim();
+    } catch {
+      return sel.toString().trim();
+    }
+  }
+
   function getSelectionInfo() {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
-    const text = sel.toString().trim();
+    const text = selectionText(sel);
     if (!text) return null;
     const range = sel.getRangeAt(0);
     const rect = range.getBoundingClientRect();
@@ -193,7 +242,9 @@
     userMoved = false;
     savedThisExplain = true; // 悬停不产生新释义，禁止写入历史
     lastSelectedText = text;
-    selTextEl.textContent = text.length > 40 ? "「" + text.slice(0, 40) + "…」" : "「" + text + "」";
+    // 标题里只放一行摘要：多行选中把换行压成空格再截断
+    const flat = String(text).replace(/\s*\n+\s*/g, " ");
+    selTextEl.textContent = flat.length > 40 ? "「" + flat.slice(0, 40) + "…」" : "「" + flat + "」";
     selTextEl.title = text;
     resultEl.innerHTML = "";
     rawAnswer = "";
