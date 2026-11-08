@@ -15,9 +15,11 @@
       --quote-bg: #e0e7ff;
       --font-color: #1f2937;
       --font-size: 13px;
+      --main-font-size: 13px;
       --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
         "Microsoft YaHei", Roboto, sans-serif;
       --line-height: 1.2;
+      --main-line-height: 1.7;
       --main-bg: #f4f4fe;
       --main-border: #6366f1;
       --extract-bg: #dcfce7;
@@ -39,10 +41,19 @@
     .wrap { max-width: 720px; margin: 0 auto; }
     h1 { font-size: 20px; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
     h1 .clear-link {
-      margin-left: auto; font-size: 12px; font-weight: 400; color: var(--muted);
+      margin-left: 2px; font-size: 12px; font-weight: 400; color: var(--muted);
       border: none; background: none; cursor: pointer; padding: 3px 8px; border-radius: 6px;
     }
     h1 .clear-link:hover { color: #dc2626; background: rgba(220, 38, 38, 0.08); }
+    /* 标题栏的刷新图标按钮 */
+    h1 .icon-btn {
+      margin-left: auto; /* 独占标题行最右，就是原来「清空记录」的位置 */
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px; padding: 0; border: 0; border-radius: 7px;
+      background: transparent; color: var(--muted); font-size: 15px; line-height: 1;
+      cursor: pointer; transition: transform 0.2s ease, color 0.2s ease;
+    }
+    h1 .icon-btn:hover { color: var(--primary); background: rgba(99, 102, 241, 0.1); transform: rotate(180deg); }
     h1 .dot {
       flex: 0 0 auto; /* 圆点不允许被 flex 压缩成椭圆 */
       width: 12px; height: 12px; border-radius: 50%;
@@ -67,9 +78,12 @@
       box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
     }
     .search-wrap { position: relative; flex: 1 1 200px; min-width: 160px; }
-    /* 工具栏按钮收紧左右内边距，给统计信息腾位置，减少换行 */
+    /* 工具栏按钮收紧左右内边距，给统计信息腾位置，减少换行；统一高度避免短文案（MD）显得矮一截 */
     .toolbar button.primary, .toolbar button.ghost {
       padding-left: 12px; padding-right: 12px;
+      min-height: 34px; line-height: 1.25;
+      display: inline-flex; align-items: center; justify-content: center;
+      box-sizing: border-box;
     }
     .search {
       width: 100%;
@@ -111,15 +125,19 @@
     .opts-group { display: block; padding: 10px 16px; }
     .opts-group > .opts {
       background: transparent; border: 0; border-radius: 0;
-      padding: 2px 0; margin-bottom: 0;
+      padding: 0; margin-bottom: 0;
       display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      row-gap: 6px;
     }
     .opts-group > .opts + .opts:not([hidden]) {
       border-top: 1px dashed rgba(15, 23, 42, 0.08);
       margin-top: 6px; padding-top: 10px;
     }
+    /* 时间范围与标签同属筛选，两行之间不画分隔线、也不留额外间距 */
+    /* 时间范围与标签同属筛选：不画分隔线，且用负边距把两行贴紧 */
+    .opts-group > .opts.tagbar { border-top: 0 !important; margin-top: -6px; padding-top: 0; }
     /* 折叠面板展开后与原样式一致（不缩进，避免宽度被收窄后换行变多） */
-    .opts.opt-panel { padding: 2px 0; }
+    .opts.opt-panel { padding: 2px 0; row-gap: 7px; }
     .opts.opt-panel[hidden] { display: none !important; }
     /* 折叠条：整行可点，右侧一个尖角图标表示展开 / 收起 */
     .opts.panel-row { padding: 0; }
@@ -211,7 +229,7 @@
       border-radius: 7px;
       cursor: pointer;
     }
-    .opts input[type="range"] { width: 100px; }
+    .opts input[type="range"] { width: 73px; }
     /* 下拉框与其选项的字号比输入框小一号（放在控件规则之后，避免被 13px 覆盖） */
     .opts select, .opts select option { font-size: 12px; }
     .opts-hint { color: var(--muted); font-size: 12px; }
@@ -281,9 +299,12 @@
     }
     .item-head {
       display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
-      margin-bottom: 8px;
+      /* 操作图标行整体上移一点，下面用一道淡实线跟时间/来源行分开 */
+      margin: -12px 0 10px; padding-bottom: 2px;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.07);
     }
-    .item-time { font-size: 12px; color: var(--muted); flex: 1 0 auto; white-space: nowrap; }
+    /* 时间不占富余空间：来源紧跟其后靠左，按钮组才靠右 */
+    .item-time { font-size: 12px; color: var(--muted); flex: 0 0 auto; white-space: nowrap; }
     .item-tag {
       flex: 0 0 auto; font-size: 11px; line-height: 1.4; padding: 1px 7px;
       border-radius: 999px; color: #4338ca;
@@ -292,7 +313,17 @@
       white-space: nowrap;
     }
     /* 每张卡片上的标签行：点标签即移除，＋ 可新增 */
-    .item-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
+    /* 标签行本体：默认靠右，放在来源那一行的行尾 */
+    .item-tags {
+      display: flex; align-items: center; justify-content: flex-end;
+      gap: 6px; flex-wrap: wrap; margin: 0 0 8px; margin-left: auto;
+    }
+    /* 第二行：来源居左，标签推到最右 */
+    .item-meta {
+      display: flex; align-items: center; gap: 10px;
+      margin: 0 0 8px; min-width: 0;
+    }
+    .item-meta .item-tags { margin: 0 0 0 auto; flex: 0 1 auto; }
     .item-tags .item-tag { cursor: pointer; }
     .item-tags .item-tag:hover { background: rgba(220, 38, 38, 0.12); border-color: rgba(220, 38, 38, 0.35); color: #b91c1c; }
     .item-tag-add {
@@ -358,8 +389,13 @@
     .tag-chip-untagged.active { background: #6b7280; border-color: #6b7280; color: #fff; }
     .tag-chip-untagged.active:hover { background: #4b5563; }
     .item-src {
-      font-size: 12px; color: var(--muted); flex: 0 1 auto;
+      font-size: 12px; color: var(--muted); flex: 1 1 auto;
       min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    /* 卡片头部行尾的按钮组：靠右、间距统一 */
+    .item-actions {
+      display: inline-flex; align-items: center; gap: 6px;
+      flex: 0 0 auto; margin-left: auto;
     }
     .item-src a { color: var(--muted); text-decoration: none; }
     .item-src a:hover { color: var(--primary); text-decoration: underline; }
@@ -397,7 +433,7 @@
     }
     .item-main-btn:hover { color: var(--primary); background: rgba(99, 102, 241, 0.1); }
     .item-main {
-      font-size: 13px; color: var(--font-color);
+      font-size: var(--main-font-size); line-height: var(--main-line-height); color: var(--font-color);
       background: var(--main-bg);
       border-left: 3px solid var(--main-border);
       border-radius: 6px; padding: 6px 10px; margin-bottom: 8px;
@@ -509,7 +545,7 @@
 </head>
 <body>
   <div class="wrap">
-    <h1><span class="dot"></span>划词AI释义 · 历史记录<button type="button" class="clear-link" id="clear">清空记录</button></h1>
+    <h1><span class="dot"></span>划词AI释义 · 历史记录<button type="button" class="clear-link" id="clear">清空记录</button><button type="button" class="icon-btn" id="refresh" title="刷新列表（保留当前搜索、时间范围与标签筛选）" aria-label="刷新">⟳</button></h1>
     <p class="sub">这里保存了你每次划词释义的原文与 AI 结果，可搜索、删除，也可一键导出为 HTML 或 Markdown 文件。</p>
 
     <div class="toolbar">
@@ -610,6 +646,8 @@
       <span class="opts-br"></span>
       <label class="opt-lbl opt-rowstart">字体大小 <input type="range" id="optFontSize" min="12" max="20" step="1" value="13" /> <span id="optFontSizeVal">13</span>px</label>
       <label class="opt-lbl">行高 <input type="range" id="optLineHeight" min="1.0" max="2.4" step="0.1" value="1.2" /> <span id="optLineHeightVal">1.2</span></label>
+      <label class="opt-lbl opt-rowstart">主文字号 <input type="range" id="optMainFontSize" min="11" max="20" step="1" value="13" /> <span id="optMainFontSizeVal">13</span>px</label>
+      <label class="opt-lbl">主文行高 <input type="range" id="optMainLineHeight" min="1.0" max="2.4" step="0.1" value="1.7" /> <span id="optMainLineHeightVal">1.7</span></label>
       <span class="opts-br"></span>
       <span class="opts-title">页面背景色：</span>
       <label><input type="color" id="optPageBg" value="#eef2ff" /></label>

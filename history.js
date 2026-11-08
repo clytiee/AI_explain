@@ -40,6 +40,8 @@ const DEFAULT_DISPLAY = {
   fontColor: "#1f2937",
   fontSize: 13,
   lineHeight: 1.2,
+  mainFontSize: 13,
+  mainLineHeight: 1.7,
   cardRadius: 16,
   quoteRadius: 8,
   extractRadius: 0,
@@ -230,11 +232,15 @@ function applyDisplay(d) {
   s.setProperty("--font-size", d.fontSize + "px");
   s.setProperty("--font-family", toFontFamilyCss(d.fontFamily));
   s.setProperty("--line-height", d.lineHeight);
+  s.setProperty("--main-font-size", (d.mainFontSize || DEFAULT_DISPLAY.mainFontSize) + "px");
+  s.setProperty("--main-line-height", d.mainLineHeight || DEFAULT_DISPLAY.mainLineHeight);
   s.setProperty("--card-radius", (Number(d.cardRadius) || 0) + "px");
   s.setProperty("--quote-radius", (Number(d.quoteRadius) || 0) + "px");
   s.setProperty("--extract-radius", (Number(d.extractRadius) || 0) + "px");
   $("optFontSizeVal").textContent = d.fontSize;
   $("optLineHeightVal").textContent = d.lineHeight;
+  $("optMainFontSizeVal").textContent = d.mainFontSize || DEFAULT_DISPLAY.mainFontSize;
+  $("optMainLineHeightVal").textContent = d.mainLineHeight || DEFAULT_DISPLAY.mainLineHeight;
   $("optCardRadiusVal").textContent = Number(d.cardRadius) || 0;
   $("optQuoteRadiusVal").textContent = Number(d.quoteRadius) || 0;
   $("optExtractRadiusVal").textContent = Number(d.extractRadius) || 0;
@@ -255,7 +261,9 @@ function buildDisplayCss(d) {
     ".item-answer{color:" + d.fontColor + ";font-size:" + d.fontSize +
       "px;line-height:" + d.lineHeight + "}" +
     ".item-main{background:" + d.mainBg + ";color:" + d.fontColor +
-      ";border-left:3px solid " + darken(d.mainBg, 0.12) + "}" +
+      ";border-left:3px solid " + darken(d.mainBg, 0.12) +
+      ";font-size:" + (d.mainFontSize || DEFAULT_DISPLAY.mainFontSize) + "px" +
+      ";line-height:" + (d.mainLineHeight || DEFAULT_DISPLAY.mainLineHeight) + "}" +
     // 摘录记录：左侧深色竖线的引文样式，底色与主文不同，置于最后确保覆盖上面的原文底色
     ".item-text-extract{background:" + d.extractBg +
       ";border-left:3px solid " + deepBorder(d.extractBg) +
@@ -614,6 +622,8 @@ function syncDisplayControls() {
   $("optFontColor").value = displayOpts.fontColor;
   $("optFontSize").value = displayOpts.fontSize;
   $("optLineHeight").value = displayOpts.lineHeight;
+  $("optMainFontSize").value = displayOpts.mainFontSize || DEFAULT_DISPLAY.mainFontSize;
+  $("optMainLineHeight").value = displayOpts.mainLineHeight || DEFAULT_DISPLAY.mainLineHeight;
   $("optCardRadius").value = displayOpts.cardRadius ?? DEFAULT_DISPLAY.cardRadius;
   $("optQuoteRadius").value = displayOpts.quoteRadius ?? DEFAULT_DISPLAY.quoteRadius;
   $("optExtractRadius").value = displayOpts.extractRadius ?? DEFAULT_DISPLAY.extractRadius;
@@ -790,6 +800,8 @@ function bindDisplay() {
       fontColor: $("optFontColor").value,
       fontSize: Number($("optFontSize").value),
       lineHeight: Number($("optLineHeight").value),
+      mainFontSize: Number($("optMainFontSize").value),
+      mainLineHeight: Number($("optMainLineHeight").value),
       cardRadius: Number($("optCardRadius").value),
       quoteRadius: Number($("optQuoteRadius").value),
       extractRadius: Number($("optExtractRadius").value),
@@ -811,6 +823,8 @@ function bindDisplay() {
   $("optFontColor").addEventListener("input", persist);
   $("optFontSize").addEventListener("input", persist);
   $("optLineHeight").addEventListener("input", persist);
+  $("optMainFontSize").addEventListener("input", persist);
+  $("optMainLineHeight").addEventListener("input", persist);
   $("optCardRadius").addEventListener("input", persist);
   $("optQuoteRadius").addEventListener("input", persist);
   $("optExtractRadius").addEventListener("input", persist);
@@ -840,6 +854,8 @@ function bindDisplay() {
     $("optFontColor").value = displayOpts.fontColor;
     $("optFontSize").value = displayOpts.fontSize;
     $("optLineHeight").value = displayOpts.lineHeight;
+    $("optMainFontSize").value = displayOpts.mainFontSize;
+    $("optMainLineHeight").value = displayOpts.mainLineHeight;
     $("optCardRadius").value = displayOpts.cardRadius;
     $("optQuoteRadius").value = displayOpts.quoteRadius;
     $("optExtractRadius").value = displayOpts.extractRadius;
@@ -1322,10 +1338,28 @@ function buildItemCard(e) {
   const timeEl = document.createElement("span");
   timeEl.className = "item-time";
   timeEl.textContent = formatTime(e.time);
-  head.appendChild(timeEl);
 
-  // 来源左侧的搜索图标：点击筛选同来源记录
+  // 第一行：只在右侧放操作图标组；第二行左侧是时间、来源，右侧是标签
+  const actions = document.createElement("div");
+  actions.className = "item-actions";
+
+  const meta = document.createElement("div");
+  meta.className = "item-meta";
+  meta.appendChild(timeEl);
+
   if (srcKey) {
+    const src = document.createElement("span");
+    src.className = "item-src";
+    if (e.pageUrl) {
+      src.innerHTML =
+        '来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+        esc(displayTitle(e) || safeHost(e.pageUrl)) + "</a>";
+    } else {
+      src.textContent = "来源：" + displayTitle(e);
+    }
+    meta.appendChild(src);
+
+    // 来源左侧的搜索图标：点击筛选同来源记录
     const srcBtn = document.createElement("button");
     srcBtn.type = "button";
     srcBtn.className = "item-src-search";
@@ -1336,7 +1370,7 @@ function buildItemCard(e) {
       $("search").value = srcKey;
       render();
     });
-    head.appendChild(srcBtn);
+    actions.appendChild(srcBtn);
 
     // 来源主文按钮：编辑/查看该来源的主文
     const mainBtn = document.createElement("button");
@@ -1345,18 +1379,7 @@ function buildItemCard(e) {
     mainBtn.title = "来源主文：为这个来源填写一段主文";
     mainBtn.innerHTML = MAIN_BTN_ICON;
     mainBtn.addEventListener("click", () => openMainModal(srcKey));
-    head.appendChild(mainBtn);
-
-    const src = document.createElement("span");
-    src.className = "item-src";
-    if (e.pageUrl) {
-      src.innerHTML =
-        '来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
-        esc(displayTitle(e) || safeHost(e.pageUrl)) + "</a>";
-    } else {
-      src.textContent = "来源：" + displayTitle(e);
-    }
-    head.appendChild(src);
+    actions.appendChild(mainBtn);
 
     // 改来源文本（只改标题，链接地址不变）
     const editSrcBtn = document.createElement("button");
@@ -1365,7 +1388,7 @@ function buildItemCard(e) {
     editSrcBtn.title = "修改来源文本（链接地址不变）";
     editSrcBtn.innerHTML = EDIT_SRC_ICON;
     editSrcBtn.addEventListener("click", () => startEditSource(src, [e]));
-    head.appendChild(editSrcBtn);
+    actions.appendChild(editSrcBtn);
   }
 
   const del = document.createElement("button");
@@ -1373,7 +1396,8 @@ function buildItemCard(e) {
   del.title = "删除这条";
   del.textContent = "✕";
   del.addEventListener("click", () => removeOne(e.id));
-  head.appendChild(del);
+  actions.appendChild(del);
+  head.appendChild(actions);
 
   const isExtract = isExtractRecord(e);
   const textEl = document.createElement("div");
@@ -1385,7 +1409,9 @@ function buildItemCard(e) {
   if (!isExtract) ans.innerHTML = renderMarkdown(e.answer || "");
 
   item.appendChild(head);
-  item.appendChild(buildTagsRow([e]));
+  // 标签在第二行最右
+  meta.appendChild(buildTagsRow([e]));
+  item.appendChild(meta);
 
   // 同源主文：该来源保存过主文时，同源所有卡片都显示（受“显示/隐藏主文”开关控制）
   if (showMainText && sourceTexts[srcKey]) {
@@ -1626,18 +1652,34 @@ function renderAggregated(list) {
     const item = document.createElement("div");
     item.className = "card card-agg";
 
-    // 头部：左记录数，右来源及按钮
+    // 第一行：只在右侧放操作图标组；第二行左侧是记录数、来源，右侧是标签
     const head = document.createElement("div");
     head.className = "item-head item-head-agg";
+
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+
+    const meta = document.createElement("div");
+    meta.className = "item-meta";
 
     const countEl = document.createElement("span");
     countEl.className = "item-count";
     countEl.textContent = recs.length + " 条";
-    head.appendChild(countEl);
+    meta.appendChild(countEl);
 
     if (srcKey) {
-      const group = document.createElement("span");
-      group.className = "item-src-group";
+      // 来源接在记录数后面
+      const src = document.createElement("span");
+      src.className = "item-src";
+      const first = recs[0];
+      if (first.pageUrl) {
+        src.innerHTML =
+          '来源：<a href="' + esc(first.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+          esc(displayTitle(first) || safeHost(first.pageUrl)) + "</a>";
+      } else {
+        src.textContent = "来源：" + displayTitle(first);
+      }
+      meta.appendChild(src);
 
       const srcBtn = document.createElement("button");
       srcBtn.type = "button";
@@ -1649,7 +1691,7 @@ function renderAggregated(list) {
         $("search").value = srcKey;
         render();
       });
-      group.appendChild(srcBtn);
+      actions.appendChild(srcBtn);
 
       const mainBtn = document.createElement("button");
       mainBtn.type = "button";
@@ -1657,19 +1699,7 @@ function renderAggregated(list) {
       mainBtn.title = "来源主文：为这个来源填写一段主文";
       mainBtn.innerHTML = MAIN_BTN_ICON;
       mainBtn.addEventListener("click", () => openMainModal(srcKey));
-      group.appendChild(mainBtn);
-
-      const src = document.createElement("span");
-      src.className = "item-src";
-      const first = recs[0];
-      if (first.pageUrl) {
-        src.innerHTML =
-          '来源：<a href="' + esc(first.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
-          esc(displayTitle(first) || safeHost(first.pageUrl)) + "</a>";
-      } else {
-        src.textContent = "来源：" + displayTitle(first);
-      }
-      group.appendChild(src);
+      actions.appendChild(mainBtn);
 
       // 改来源文本：聚合视图下改这一组全部记录的来源标题，链接地址不变
       const editSrcBtn = document.createElement("button");
@@ -1678,13 +1708,13 @@ function renderAggregated(list) {
       editSrcBtn.title = "修改来源文本（链接地址不变）";
       editSrcBtn.innerHTML = EDIT_SRC_ICON;
       editSrcBtn.addEventListener("click", () => startEditSource(src, recs));
-      group.appendChild(editSrcBtn);
-
-      head.appendChild(group);
+      actions.appendChild(editSrcBtn);
     }
+    head.appendChild(actions);
     item.appendChild(head);
-    // 聚合模式按「来源」打标签：一组同源记录共用一行，增删作用于组内每条
-    item.appendChild(buildTagsRow(recs));
+    // 聚合模式按「来源」打标签：一组同源记录共用一行，单独一行靠右
+    meta.appendChild(buildTagsRow(recs));
+    item.appendChild(meta);
 
     // 主文只显示一次
     if (showMainText && sourceTexts[srcKey]) {
@@ -1812,6 +1842,16 @@ function toggleStylePanel() {
   const open = $("stylePanel").hidden;
   syncStylePanel(open);
   chrome.storage.local.set({ [STYLE_PANEL_KEY]: open });
+}
+
+// 刷新列表：只重新读取记录与来源标题规则后重渲染，搜索词、时间范围、标签筛选都保持原样
+function refreshHistory() {
+  chrome.storage.local.get({ [HISTORY_KEY]: [], config: {} }, (res) => {
+    all = Array.isArray(res[HISTORY_KEY]) ? res[HISTORY_KEY] : [];
+    titleRules = Array.isArray(res.config && res.config.titleRules) ? res.config.titleRules : [];
+    render();
+    setStatus("已刷新，共 " + all.length + " 条记录（筛选条件保持不变）。", true);
+  });
 }
 
 function clearAll() {
@@ -2598,6 +2638,7 @@ $("importModal").addEventListener("click", (ev) => {
   if (ev.target === $("importModal")) closeImportModal();
 });
 $("clear").addEventListener("click", clearAll);
+$("refresh").addEventListener("click", refreshHistory);
 initFontSelect();
 initColorSwatches("bgSwatches", "optPageBg", BG_PALETTE);
 initColorSwatches("quoteSwatches", "optQuoteBg", BG_PALETTE);
