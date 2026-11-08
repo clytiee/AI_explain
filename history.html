@@ -26,10 +26,13 @@
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: var(--font-family);
-      color: var(--font-color);
+      /* 插件自身界面固定用系统字体与深灰字色；显示设置的字体族/字色只作用于记录区 #list */
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", Roboto, sans-serif;
+      color: #1f2937;
       font-size: var(--font-size);
-      background: var(--page-bg);
+      /* 页面底色只作用于记录区（#list），工具栏与设置区始终是插件自己的浅色界面 */
+      background: #f4f5fa;
       min-height: 100vh;
       padding: 32px 16px 60px;
     }
@@ -104,6 +107,35 @@
       font-size: 13px;
     }
     .opts.timebar { overflow: visible; }
+    /* 时间范围 / 标签 / 风格模板合成一张卡片：外层是一张卡，内层每行透明、用细虚线分隔 */
+    .opts-group { display: block; padding: 10px 16px; }
+    .opts-group > .opts {
+      background: transparent; border: 0; border-radius: 0;
+      padding: 2px 0; margin-bottom: 0;
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    }
+    .opts-group > .opts + .opts:not([hidden]) {
+      border-top: 1px dashed rgba(15, 23, 42, 0.08);
+      margin-top: 6px; padding-top: 10px;
+    }
+    /* 折叠面板展开后与原样式一致（不缩进，避免宽度被收窄后换行变多） */
+    .opts.opt-panel { padding: 2px 0; }
+    .opts.opt-panel[hidden] { display: none !important; }
+    /* 折叠条：整行可点，右侧一个尖角图标表示展开 / 收起 */
+    .opts.panel-row { padding: 0; }
+    .panel-toggle {
+      display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px;
+      width: 100%; padding: 9px 0; border: 0; background: transparent;
+      font-family: inherit; font-size: 12px; color: var(--muted); cursor: pointer;
+    }
+    .panel-toggle:hover { color: var(--primary); }
+    .panel-toggle-title { justify-self: start; letter-spacing: 0.02em; }
+    /* 展开状态文字居中显示，收起时「打开」、展开后「折叠」 */
+    .panel-toggle-state {
+      justify-self: center; font-size: 12px; color: var(--muted);
+      padding: 0 6px; letter-spacing: 0.05em;
+    }
+    .panel-toggle:hover .panel-toggle-state { color: var(--primary); }
     /* 时间行没有可伸缩的占位元素，靠 margin-left:auto 把「清除」推到行尾，与标签行的观感一致 */
     .opts.timebar #timeClear { margin-left: auto; }
     .opts.timebar .opts-hint { flex: 0 0 auto; color: var(--primary); font-size: 12px; }
@@ -113,9 +145,14 @@
     .opts.timebar .quick-sep { color: var(--border); }
     .opts-title {
       color: var(--muted); font-size: 12px;
-      width: 88px; flex-shrink: 0;
+      width: 80px; flex-shrink: 0;
     }
     .opts-br { flex-basis: 100%; width: 100%; height: 0; }
+    /* 小标题旁的带圈 i：只用悬浮提示补充说明 */
+    .info-dot {
+      display: inline-block; margin-left: 2px; color: #9aa3b2;
+      font-size: 13px; line-height: 1; cursor: help; vertical-align: -1px;
+    }
     .opts-sep { border-top: 1px dashed var(--border); margin: 5px 0;}
     .opts-toggle-row {
       display: inline-flex; align-items: center; justify-content: center;
@@ -124,11 +161,18 @@
     .opts label {
       display: inline-flex; align-items: center; gap: 5px;
       color: var(--text); cursor: pointer; user-select: none;
+      /* 勾选项统一字号/字重/行高，避免短标签（条数、标签、分隔线）看起来与前后不一致 */
+      font-size: 13px; font-family: inherit; font-weight: 400; line-height: 1.4;
     }
     .opts input { accent-color: var(--primary); cursor: pointer; }
+    .opts input[type="checkbox"] { margin: 0; width: 13px; height: 13px; flex: 0 0 auto; }
+    /* 输入框里的浅灰提示文字比正文小一号 */
+    .opts input::placeholder, .opts textarea::placeholder { font-size: 11.5px; color: var(--muted); }
+    .search::placeholder { font-size: 12px; color: var(--muted); }
     /* 设置控件：与搜索框一致的浅色外观 */
     .opts select,
     .opts input[type="text"],
+    .opts input[type="date"],
     .opts input[type="datetime-local"] {
       background: #fff;
       border: 1px solid var(--border);
@@ -141,7 +185,25 @@
     }
     .opts select:focus,
     .opts input[type="text"]:focus,
+    .opts input[type="date"]:focus,
     .opts input[type="datetime-local"]:focus { border-color: var(--primary); }
+    /* 日期类输入框：统一宽度、数字等宽、日历图标弱化成灰线，避免浏览器默认控件显脏 */
+    .opts input[type="date"],
+    .opts input[type="datetime-local"] {
+      width: 108px; min-width: 0;
+      font-size: 12px; font-variant-numeric: tabular-nums;
+      padding: 5px 6px 5px 8px; line-height: 1.4;
+    }
+    .opts input[type="datetime-local"] { width: 190px; }
+    .opts input[type="date"]::-webkit-calendar-picker-indicator,
+    .opts input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+      opacity: 0.45; cursor: pointer; margin-left: 2px;
+    }
+    .opts input[type="date"]::-webkit-calendar-picker-indicator:hover,
+    .opts input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover { opacity: 0.8; }
+    /* 聚焦时文字用深色，未选值的占位由浏览器自己画成灰色 */
+    .opts input[type="date"]:focus,
+    .opts input[type="datetime-local"]:focus { color: var(--text); }
     .opts input[type="color"] {
       width: 40px; height: 26px; padding: 2px;
       background: #fff;
@@ -150,6 +212,8 @@
       cursor: pointer;
     }
     .opts input[type="range"] { width: 100px; }
+    /* 下拉框与其选项的字号比输入框小一号（放在控件规则之后，避免被 13px 覆盖） */
+    .opts select, .opts select option { font-size: 12px; }
     .opts-hint { color: var(--muted); font-size: 12px; }
     .opts .reset-btn {
       border: 1px solid var(--border); background: #fff; color: var(--muted);
@@ -187,8 +251,23 @@
     button.primary:hover { background: #4338ca; }
     button.ghost { background: var(--primary-soft); color: var(--primary); }
     button.ghost:hover { background: rgba(99, 102, 241, 0.2); }
+    /* 设置按钮的“打开/关闭”用按下态表示：显示时实心紫，隐藏时淡紫 */
+    #toggleSettings.is-on { background: var(--primary); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
     button.danger { background: rgba(220, 38, 38, 0.1); color: #dc2626; }
     button.danger:hover { background: rgba(220, 38, 38, 0.18); }
+    /* 样式设置行里的字段名（字体/字体颜色/字体大小/行高）与「页面背景色」这类小标题同字号同色 */
+    .opts label.opt-lbl { font-size: 12px; color: var(--muted); gap: 6px; }
+    /* 展开面板不再缩进，换行后的字段与第一行左对齐即可 */
+    .opts label.opt-rowstart { margin-left: 0; }
+    /* 记录区：样式设置里的「页面背景色」与风格模板的底色都只落在这里，不影响工具栏/设置区 */
+    #list {
+      background: var(--page-bg);
+      border-radius: 16px;
+      padding: 16px 16px 4px;
+      font-family: var(--font-family);
+      color: var(--font-color);
+    }
+    #list:empty { display: none; }
 
     .card {
       background: rgba(255, 255, 255, 0.88);
@@ -247,6 +326,15 @@
     .item-tag-menu-item:hover { background: rgba(99, 102, 241, 0.12); color: #4338ca; }
     /* 标签筛选条 */
     .tagbar[hidden] { display: none !important; }
+    /* 风格模板：一排小胶囊 */
+    .tpl-bar { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; }
+    .tpl-btn {
+      font-family: inherit; font-size: 12px; line-height: 1; padding: 5px 10px; cursor: pointer;
+      border-radius: 999px; border: 1px solid rgba(99, 102, 241, 0.3);
+      background: rgba(99, 102, 241, 0.08); color: #4338ca; transition: 0.15s;
+    }
+    .tpl-btn:hover { background: rgba(99, 102, 241, 0.18); }
+    .tpl-btn.active { background: #6366f1; border-color: #6366f1; color: #fff; font-weight: 600; }
     /* 「或 / 且」互斥模式切换 */
     .tag-mode { display: inline-flex; border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 999px; overflow: hidden; }
     .tag-mode-btn {
@@ -431,17 +519,20 @@
       </div>
       <span class="count" id="count"></span>
       <button class="primary" id="exportHtml">导出 HTML</button>
+      <button class="ghost" id="previewPage" title="打开与导出 HTML 相同的页面，只预览、不弹打印窗口">预览</button>
       <button class="ghost" id="printPage" title="打开与导出 HTML 相同的页面并直接调起打印">打印</button>
-      <button class="ghost" id="export">导出 MD</button>
-      <button class="ghost" id="toggleSettings">隐藏设置</button>
+      <button class="ghost" id="export">MD</button>
+      <button class="ghost" id="toggleSettings" title="显示/隐藏设置区" aria-pressed="true">设置</button>
       <input type="file" id="importFile" accept=".html,.htm,.json,text/html,application/json" hidden />
     </div>
     <div id="exportStatus" class="export-status"></div>
 
+    <!-- 筛选与风格：三行合并在一张卡片里，用细虚线分行 -->
+    <div class="opts opts-group">
     <div class="opts timebar">
       <span class="opts-title">时间范围：</span>
-      <label><input type="datetime-local" id="timeStart" step="1" title="筛选起始时间（精确到秒）" /></label>
-      <label><input type="datetime-local" id="timeEnd" step="1" title="筛选结束时间（精确到秒）" /></label>
+      <label><input type="date" id="timeStart" title="筛选起始日期" /></label>
+      <label><input type="date" id="timeEnd" title="筛选结束日期" /></label>
       <span class="quick-links">
         <a class="quick-link" data-range="today">当天</a><span class="quick-sep">|</span>
         <a class="quick-link" data-range="1d">1天</a><span class="quick-sep">|</span>
@@ -462,17 +553,34 @@
       <button type="button" class="reset-btn" id="tagClear">清除</button>
     </div>
 
+    <!-- 风格模板常驻显示：不属于设置区，点「设置」隐藏设置时它仍在 -->
+    <div class="opts">
+      <span class="opts-title">风格模板：<span class="info-dot" title="切换后立即生效，导出 HTML / 打印也按当前模板">ⓘ</span></span>
+      <div class="tpl-bar" id="tplBar"></div>
+    </div>
+    </div>
+
     <div id="settingsArea">
+    <!-- 设置区四块合成一张卡片（导出选项 / 备份数据 / 字体与颜色 / 样式管理），行间细虚线 -->
+    <div class="opts opts-group">
+    <div class="opts">
+      <span class="opts-title">时间筛选：</span>
+      <label class="opt-lbl">范围精度
+        <select id="optTimeMode" title="选「日期」按天筛选；选「精确到秒」可按时分秒筛选">
+          <option value="date">日期</option>
+          <option value="second">精确到秒</option>
+        </select>
+      </label>
+      <span class="opts-hint">按天筛选时，起始日从 00:00:00 算起，结束日到 23:59:59</span>
+    </div>
     <div class="opts">
       <span class="opts-title">导出时包含：</span>
       <label><input type="checkbox" id="optTime" checked />时间</label>
       <label><input type="checkbox" id="optPageTitle" checked />来源页面</label>
       <label><input type="checkbox" id="optPageUrl" checked />页面地址</label>
       <label><input type="checkbox" id="optCount" checked />条数</label>
+      <label><input type="checkbox" id="optTags" checked />标签</label>
       <label><input type="checkbox" id="optSep" checked />分隔线</label>
-      <label><input type="checkbox" id="optBackup" title="勾选后，导出的 HTML 文件末尾会内嵌一份完整 JSON 备份，可在另一台电脑用「导入」精确还原历史记录" />备份数据</label>
-      <button type="button" class="btn-mini" id="exportBackup" title="仅导出备份数据（JSON 文件），用于在另一台电脑导入还原">导出</button>
-      <button type="button" class="btn-mini" id="import">导入</button>
       <span class="opts-br"></span>
       <span class="opts-title">导出为HTML：</span>
       <label><input type="checkbox" id="optNoSplit" />卡片不跨页拆分</label>
@@ -482,13 +590,26 @@
       <span class="opts-hint">时间在原文右边，无来源页面和地址</span>
     </div>
     <div class="opts">
-      <span class="opts-title">显示设置：</span>
-      <label>字体 <select id="optFontPreset"></select></label>
+      <span class="opts-title">备份数据：</span>
+      <label><input type="checkbox" id="optBackup" title="勾选后，导出的 HTML 文件末尾会内嵌一份完整 JSON 备份，可在另一台电脑用「导入」精确还原历史记录" />导出 HTML 时内嵌备份</label>
+      <button type="button" class="btn-mini" id="exportBackup" title="仅导出备份数据（JSON 文件），用于在另一台电脑导入还原">导出 JSON</button>
+      <button type="button" class="btn-mini" id="import">导入</button>
+    </div>
+    <div class="opts panel-row">
+      <button type="button" class="panel-toggle" id="styleToggle" aria-expanded="false" aria-controls="stylePanel" title="展开或折叠字体、颜色、圆角与样式管理">
+        <span class="panel-toggle-title">样式设置</span>
+        <span class="panel-toggle-state">打开</span>
+        <span class="panel-toggle-tail" aria-hidden="true"></span>
+      </button>
+    </div>
+    <div class="opts opt-panel" id="stylePanel" hidden>
+      <label class="opt-lbl">字体 <select id="optFontPreset"></select></label>
       <label><input type="text" id="optFontFamily" placeholder="或输入自定义字体" spellcheck="false" /></label>
-      <label>字体颜色 <input type="color" id="optFontColor" value="#1f2937" /></label>
+      <label class="opt-lbl">字体颜色 <input type="color" id="optFontColor" value="#1f2937" /></label>
       <span class="bg-swatches" id="fontSwatches"></span>
-      <label>字体大小 <input type="range" id="optFontSize" min="12" max="20" step="1" value="13" /> <span id="optFontSizeVal">13</span>px</label>
-      <label>行高 <input type="range" id="optLineHeight" min="1.0" max="2.4" step="0.1" value="1.2" /> <span id="optLineHeightVal">1.2</span></label>
+      <span class="opts-br"></span>
+      <label class="opt-lbl opt-rowstart">字体大小 <input type="range" id="optFontSize" min="12" max="20" step="1" value="13" /> <span id="optFontSizeVal">13</span>px</label>
+      <label class="opt-lbl">行高 <input type="range" id="optLineHeight" min="1.0" max="2.4" step="0.1" value="1.2" /> <span id="optLineHeightVal">1.2</span></label>
       <span class="opts-br"></span>
       <span class="opts-title">页面背景色：</span>
       <label><input type="color" id="optPageBg" value="#eef2ff" /></label>
@@ -507,9 +628,9 @@
       <span class="bg-swatches" id="extractSwatches"></span>
       <span class="opts-br"></span>
       <span class="opts-title">圆角设置：</span>
-      <label>卡片 <input type="range" id="optCardRadius" min="0" max="24" step="1" value="16" /> <span id="optCardRadiusVal">16</span>px</label>
-      <label>原文 <input type="range" id="optQuoteRadius" min="0" max="24" step="1" value="8" /> <span id="optQuoteRadiusVal">8</span>px</label>
-      <label>摘录 <input type="range" id="optExtractRadius" min="0" max="24" step="1" value="0" /> <span id="optExtractRadiusVal">0</span>px</label>
+      <label class="opt-lbl">卡片 <input type="range" id="optCardRadius" min="0" max="24" step="1" value="16" /> <span id="optCardRadiusVal">16</span>px</label>
+      <label class="opt-lbl">原文 <input type="range" id="optQuoteRadius" min="0" max="24" step="1" value="8" /> <span id="optQuoteRadiusVal">8</span>px</label>
+      <label class="opt-lbl">摘录 <input type="range" id="optExtractRadius" min="0" max="24" step="1" value="0" /> <span id="optExtractRadiusVal">0</span>px</label>
       <span class="opts-br"></span>
       <span class="opts-title">样式管理：</span>
       <button type="button" id="saveDisplay" class="reset-btn">保存显示设置</button>
@@ -521,6 +642,7 @@
         <button type="button" id="toggleMain" class="reset-btn">隐藏主文</button>
         <button type="button" id="toggleAgg" class="reset-btn">按来源聚合</button>
       </span>
+    </div>
     </div>
     </div>
 

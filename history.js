@@ -10,11 +10,13 @@ const SHOW_MAIN_KEY = "showMainText"; // 是否显示来源主文
 const AGG_KEY = "aggregate"; // 是否按来源聚合
 const SETTINGS_HIDDEN_KEY = "settingsHidden"; // 是否隐藏所有设置
 const AGG_ORDER_KEY = "aggOrder"; // 聚合模式下每来源记录的手工排序（{ srcKey: [记录id] }）
+const STYLE_TPL_KEY = "styleTemplate"; // 列表风格模板（见 STYLE_TEMPLATES）
+const STYLE_PANEL_KEY = "stylePanelOpen"; // 设置区里字体/颜色/圆角面板是否展开（默认收起）
 
 const $ = (id) => document.getElementById(id);
 
 let all = []; // 当前全部记录（新→旧）
-let exportOpts = { time: true, pageTitle: true, pageUrl: true, count: true, sep: true, compact: false, noSplit: false, backup: false }; // 导出选项
+let exportOpts = { time: true, pageTitle: true, pageUrl: true, count: true, tags: true, sep: true, compact: false, noSplit: false, backup: false }; // 导出选项
 let displayPresets = []; // [{ name, opts }] 已保存的样式组
 let sourceTexts = {}; // { srcKey: 主文 } 按来源保存的主文
 let mainModalKey = ""; // 当前正在编辑主文的 srcKey
@@ -259,6 +261,188 @@ function buildDisplayCss(d) {
       ";border-left:3px solid " + deepBorder(d.extractBg) +
       ";border-radius:" + extractR + "px;padding-left:12px;font-weight:normal}"
   );
+}
+
+// ---------- 列表风格模板 ----------
+// 每个模板是一段 CSS，选择器统一以 body[data-tpl="id"] 开头：历史页与导出的 HTML 都挂这个属性，
+// 所以同一份样式两处通用（导出时按当前模板取其中一段写进导出文件）。
+const STYLE_TEMPLATES = [
+  { id: "glass", name: "默认", desc: "毛玻璃淡紫，默认观感", css: "" },
+  {
+    id: "doc",
+    name: "文档",
+    desc: "白底细边框 + 左侧色条",
+    css:
+      'body[data-tpl="doc"] .card{background:#fff;border:1px solid #e6e8ee;border-left:3px solid #6366f1;' +
+      "border-radius:6px;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="doc"] .item-src{color:#4b5563}' +
+      'body[data-tpl="doc"] .item-src a{color:#4b5563}' +
+      'body[data-tpl="doc"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:6px 0 8px;' +
+      "font-size:14px;line-height:1.7;color:#111827;font-weight:400}" +
+      // 竖线只在卡片左侧保留一根 3px 粗色条；原文/摘录/主文的左线改成 1px 细线，靠底色区分层级
+      'body[data-tpl="doc"] .item-text-extract{background:rgba(134,185,139,.08)!important;border-left:1px solid #a8cfad;' +
+      "padding:6px 0 6px 12px;border-radius:0}" +
+      'body[data-tpl="doc"] .item-answer{line-height:1.75;color:#1f2937}' +
+      'body[data-tpl="doc"] .item-answer p{margin:0 0 6px}' +
+      'body[data-tpl="doc"] .item-tag{background:#f1f3f7;border-color:#e6e8ee;color:#55607a}' +
+      'body[data-tpl="doc"] .item-main{background:#f7f9fd;border-left:1px solid #dfe3f0;border-radius:4px;' +
+      "padding:6px 10px;color:#4b5563;font-size:13px;line-height:1.7}",
+  },
+  {
+    id: "quote",
+    name: "引用",
+    desc: "无卡片底色，原文加引文竖线",
+    css:
+      'body[data-tpl="quote"] .card{background:transparent;border:0;border-bottom:1px dashed #e5e7eb;' +
+      "border-radius:0;box-shadow:none;padding:14px 2px 16px;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="quote"] .item-src{color:#7a8394}' +
+      'body[data-tpl="quote"] .item-src a{color:#7a8394}' +
+      'body[data-tpl="quote"] .item-text{background:transparent;border:0;border-left:3px solid #d7dbe3;' +
+      "border-radius:0;padding:2px 0 2px 12px;font-size:15px;line-height:1.75;color:#374151;" +
+      "font-family:Georgia,'Songti SC','SimSun',serif;font-weight:400}" +
+      'body[data-tpl="quote"] .item-text-extract{background:transparent!important;border-left:3px solid #d7dbe3;' +
+      "padding-left:12px}" +
+      'body[data-tpl="quote"] .item-answer{line-height:1.75}' +
+      'body[data-tpl="quote"] .item-answer p{margin:0 0 6px}' +
+      'body[data-tpl="quote"] .item-tag{background:transparent;border:1px solid #e1e5ec;color:#6b7280}' +
+      'body[data-tpl="quote"] .item-main{background:transparent;border-left:3px solid #e5e7eb;border-radius:0;' +
+      "color:#6b7280;font-size:13px;line-height:1.75;padding:2px 0 2px 12px}",
+  },
+  {
+    id: "paper",
+    name: "米纸",
+    desc: "米色纸底 + 衬线字，适合诗词古籍",
+    css:
+      'body[data-tpl="paper"] #list{background:#f6f0e2;font-family:Georgia,\'Songti SC\',\'SimSun\',serif;' +
+      "padding:18px;border-radius:10px}" +
+      'body[data-tpl="paper"] .card{background:#fffdf7;border:0;border-radius:3px;' +
+      "box-shadow:0 2px 0 rgba(180,160,120,.18),0 10px 24px rgba(120,100,70,.08);" +
+      "-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="paper"] .item-time{color:#a89878}' +
+      'body[data-tpl="paper"] .item-src{color:#6d5f47}' +
+      'body[data-tpl="paper"] .item-src a{color:#6d5f47}' +
+      'body[data-tpl="paper"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:6px 0 10px;' +
+      "font-size:15px;line-height:1.9;color:#3f3527;font-weight:400}" +
+      'body[data-tpl="paper"] .item-text-extract{background:transparent!important;border-left:2px solid #d9c8a2;' +
+      "padding-left:12px}" +
+      'body[data-tpl="paper"] .item-answer{color:#4a4032;line-height:1.85}' +
+      'body[data-tpl="paper"] .item-answer p{margin:0 0 7px}' +
+      // 衬线字体下标签文字会偏上，用行内 flex + 稍大行高把文字压回垂直居中
+      'body[data-tpl="paper"] .item-tag{background:rgba(200,86,74,.04);border:1px solid #c8564a;color:#b04a3e;border-radius:3px;' +
+      "display:inline-flex;align-items:center;line-height:1.5;padding:1px 7px 0px}" +
+      'body[data-tpl="paper"] .item-main{background:rgba(120,100,70,.07);border-left:3px solid #d9c8a2;border-radius:3px;' +
+      "color:#5b4f3c;font-size:13px;line-height:1.85}",
+  },
+  {
+    id: "sticky",
+    name: "便签",
+    desc: "淡黄便签、轻微旋转，手账感",
+    css:
+      'body[data-tpl="sticky"] #list{background:#eef1f5;padding:18px;border-radius:12px}' +
+      'body[data-tpl="sticky"] .card{background:#fffbe8;border:0;border-top:3px solid #f5d76e;border-radius:4px;' +
+      "box-shadow:0 8px 18px rgba(120,110,60,.14);" +
+      "-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="sticky"] .item-src{color:#7a6c46}' +
+      'body[data-tpl="sticky"] .item-src a{color:#7a6c46}' +
+      'body[data-tpl="sticky"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:6px 0 8px;' +
+      "font-size:15px;line-height:1.8;color:#4a3f22;font-weight:400}" +
+      'body[data-tpl="sticky"] .item-text-extract{background:transparent!important;border-left:2px solid #e0c463;' +
+      "padding-left:12px}" +
+      'body[data-tpl="sticky"] .item-answer{line-height:1.8}' +
+      'body[data-tpl="sticky"] .item-answer p{margin:0 0 6px}' +
+      'body[data-tpl="sticky"] .item-tag{background:rgba(245,215,110,.55);border-color:rgba(210,180,80,.5);color:#6b5a1f}' +
+      'body[data-tpl="sticky"] .item-main{background:rgba(245,215,110,.22);border-left:3px solid #e0c463;border-radius:3px;' +
+      "color:#5a4c22;font-size:13px;line-height:1.8}",
+  },
+  {
+    id: "dark",
+    name: "夜间",
+    desc: "深底低饱和，长时阅读",
+    css:
+      'body[data-tpl="dark"] #list{background:#0f1115;color:#e5e7eb;padding:18px;border-radius:14px}' +
+      'body[data-tpl="dark"] .card{background:#1a1d24;border:1px solid #262a34;border-radius:10px;' +
+      "box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="dark"] .item-time{color:#6b7280}' +
+      'body[data-tpl="dark"] .item-src{color:#9aa3b2}' +
+      'body[data-tpl="dark"] .item-src a{color:#9aa3b2}' +
+      'body[data-tpl="dark"] .item-text{background:#23262f;border:0;border-radius:8px;padding:8px 10px;' +
+      "font-size:14px;line-height:1.7;color:#e5e7eb;font-weight:400}" +
+      'body[data-tpl="dark"] .item-text-extract{background:#1f2731!important;border-left:3px solid #4b6572;' +
+      "border-radius:0;padding-left:12px}" +
+      'body[data-tpl="dark"] .item-answer{color:#d1d5db;line-height:1.75}' +
+      'body[data-tpl="dark"] .item-answer p{margin:0 0 6px}' +
+      'body[data-tpl="dark"] .item-tag{background:rgba(129,140,248,.18);border-color:rgba(129,140,248,.35);color:#a5b4fc}' +
+      'body[data-tpl="dark"] .item-main{background:#20242d;color:#cbd5e1;border-left:3px solid #3b4252;' +
+      "border-radius:8px;font-size:13px;line-height:1.75}",
+  },
+  {
+    id: "compact",
+    name: "紧凑",
+    desc: "无卡片、细分隔线、释义两行截断",
+    css:
+      'body[data-tpl="compact"] .card{background:transparent;border:0;border-bottom:1px solid #eef0f4;' +
+      "border-radius:0;box-shadow:none;padding:10px 2px;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="compact"] .item-head{margin-bottom:4px;font-size:11px}' +
+      'body[data-tpl="compact"] .item-text{background:transparent;border:0;padding:0;margin:4px 0;' +
+      "font-weight:400;font-size:13px;line-height:1.6;border-radius:0}" +
+      'body[data-tpl="compact"] .item-text-extract{background:transparent!important;border-left:2px solid #d7dbe3;' +
+      "padding-left:10px}" +
+      'body[data-tpl="compact"] .item-answer{font-size:12px;color:#6b7280;line-height:1.65;display:-webkit-box;' +
+      "-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}" +
+      'body[data-tpl="compact"] .item-answer p{margin:0}' +
+      'body[data-tpl="compact"] .item-tag{background:transparent;border:1px dashed #d6dae3;color:#8b93a3}' +
+      'body[data-tpl="compact"] .item-main{background:transparent;border-left:2px solid #eef0f4;border-radius:0;' +
+      "color:#8b93a3;font-size:12px;line-height:1.65}",
+  },
+];
+let styleTemplate = "glass";
+
+function styleTemplateCss(id) {
+  const t = STYLE_TEMPLATES.find((x) => x.id === id);
+  return t ? t.css : "";
+}
+
+// 导出页整页只有一个记录区，模板的页面底色/字体直接落在 body 上（历史页则只落在 #list，不影响插件自身界面）
+function templateExportPageCss(id) {
+  if (id === "paper") return "body{background:#f6f0e2;font-family:Georgia,'Songti SC','SimSun',serif}";
+  if (id === "sticky") return "body{background:#eef1f5}";
+  if (id === "dark") return "body{background:#0f1115;color:#e5e7eb}";
+  return "";
+}
+
+// 把模板样式注入历史页（一次即可，切换靠 body 上的 data-tpl）
+function ensureTemplateStyle() {
+  if (document.getElementById("tplStyle")) return;
+  const style = document.createElement("style");
+  style.id = "tplStyle";
+  style.textContent = STYLE_TEMPLATES.map((t) => t.css).join("\n");
+  document.head.appendChild(style);
+}
+
+function applyStyleTemplate(id, persist = true) {
+  styleTemplate = STYLE_TEMPLATES.some((t) => t.id === id) ? id : "glass";
+  ensureTemplateStyle();
+  document.body.dataset.tpl = styleTemplate;
+  [...document.querySelectorAll(".tpl-btn")].forEach((b) => {
+    b.classList.toggle("active", b.dataset.tpl === styleTemplate);
+  });
+  if (persist) chrome.storage.local.set({ [STYLE_TPL_KEY]: styleTemplate });
+}
+
+function renderTplBar() {
+  const bar = $("tplBar");
+  if (!bar) return;
+  bar.innerHTML = "";
+  STYLE_TEMPLATES.forEach((t) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "tpl-btn" + (t.id === styleTemplate ? " active" : "");
+    b.dataset.tpl = t.id;
+    b.textContent = t.name;
+    b.title = t.desc;
+    b.addEventListener("click", () => applyStyleTemplate(t.id));
+    bar.appendChild(b);
+  });
 }
 
 // ---------- markdown → HTML（与浮层渲染一致） ----------
@@ -516,6 +700,9 @@ function load() {
       [AGG_KEY]: false,
       [SETTINGS_HIDDEN_KEY]: false,
       [AGG_ORDER_KEY]: {},
+      [STYLE_TPL_KEY]: "glass",
+      [STYLE_PANEL_KEY]: false,
+      timeMode: "date",
       config: {},
     },
     (res) => {
@@ -526,6 +713,7 @@ function load() {
       $("optPageTitle").checked = exportOpts.pageTitle;
       $("optPageUrl").checked = exportOpts.pageUrl;
       $("optCount").checked = exportOpts.count;
+      $("optTags").checked = exportOpts.tags !== false;
       $("optSep").checked = exportOpts.sep;
       $("optCompact").checked = exportOpts.compact;
       $("optNoSplit").checked = exportOpts.noSplit;
@@ -547,6 +735,18 @@ function load() {
       syncSettingsBtn();
       aggOrder = (res[AGG_ORDER_KEY] && typeof res[AGG_ORDER_KEY] === "object") ? res[AGG_ORDER_KEY] : {};
 
+      // 列表风格模板：渲染按钮并套用（不再写回存储）
+      styleTemplate = res[STYLE_TPL_KEY] || "glass";
+      renderTplBar();
+      applyStyleTemplate(styleTemplate, false);
+
+      // 时间筛选精度（默认按日期）
+      $("optTimeMode").value = res.timeMode === "second" ? "second" : "date";
+      applyTimeMode($("optTimeMode").value, false, true);
+
+      // 字体/颜色/圆角面板默认收起
+      syncStylePanel(res[STYLE_PANEL_KEY] === true);
+
       render();
     }
   );
@@ -560,6 +760,7 @@ function bindExportOpts() {
       pageTitle: $("optPageTitle").checked,
       pageUrl: $("optPageUrl").checked,
       count: $("optCount").checked,
+      tags: $("optTags").checked,
       sep: $("optSep").checked,
       compact: $("optCompact").checked,
       noSplit: $("optNoSplit").checked,
@@ -571,6 +772,7 @@ function bindExportOpts() {
   $("optPageTitle").addEventListener("change", persist);
   $("optPageUrl").addEventListener("change", persist);
   $("optCount").addEventListener("change", persist);
+  $("optTags").addEventListener("change", persist);
   $("optSep").addEventListener("change", persist);
   $("optCompact").addEventListener("change", persist);
   $("optNoSplit").addEventListener("change", persist);
@@ -655,6 +857,36 @@ function bindDisplay() {
 }
 
 // ---------- 渲染 ----------
+// 时间筛选精度：date（按天）/ second（精确到秒），存本地
+function timeMode() {
+  return $("optTimeMode") && $("optTimeMode").value === "second" ? "second" : "date";
+}
+
+// 解析时间筛选输入框：date 型按天取整天（起始 00:00:00，结束 23:59:59），datetime 型精确到秒
+function parseBound(s, isEnd) {
+  if (!s) return NaN;
+  s = String(s);
+  const dm = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dm) {
+    return new Date(+dm[1], +dm[2] - 1, +dm[3], isEnd ? 23 : 0, isEnd ? 59 : 0, isEnd ? 59 : 0, isEnd ? 999 : 0).getTime();
+  }
+  return parseLocal(s);
+}
+
+// 切换精度：输入框类型跟着变，清空已有值并从第 1 页重渲染
+function applyTimeMode(mode, persist, skipRender) {
+  const second = mode === "second";
+  $("timeStart").type = second ? "datetime-local" : "date";
+  $("timeEnd").type = second ? "datetime-local" : "date";
+  $("timeStart").step = second ? "1" : "";
+  $("timeEnd").step = second ? "1" : "";
+  $("timeStart").value = "";
+  $("timeEnd").value = "";
+  if (persist) chrome.storage.local.set({ timeMode: mode });
+  page = 1;
+  if (!skipRender) render();
+}
+
 // 把 datetime-local 的本地时间值（YYYY-MM-DDTHH:MM[:SS]）解析为本地时间戳
 function parseLocal(s) {
   if (!s) return NaN;
@@ -668,18 +900,20 @@ function hasTimeFilter() {
   return !!$("timeStart").value || !!$("timeEnd").value;
 }
 
-// 把本地时间戳写入起止输入框（datetime-local 本地值，精确到秒）
+// 把本地时间戳写入起止输入框：日期模式写 YYYY-MM-DD，秒模式写 YYYY-MM-DDTHH:MM:SS
 function setTimeRange(startTs, endTs) {
+  const p = (n) => String(n).padStart(2, "0");
+  const toDate = (ts) => {
+    const d = new Date(ts);
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+  };
   const toLocal = (ts) => {
     const d = new Date(ts);
-    const p = (n) => String(n).padStart(2, "0");
-    return (
-      d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) +
-      "T" + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds())
-    );
+    return toDate(ts) + "T" + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
   };
-  $("timeStart").value = toLocal(startTs);
-  $("timeEnd").value = toLocal(endTs);
+  const fmt = timeMode() === "second" ? toLocal : toDate;
+  $("timeStart").value = fmt(startTs);
+  $("timeEnd").value = fmt(endTs);
   page = 1;
   render();
 }
@@ -687,8 +921,8 @@ function setTimeRange(startTs, endTs) {
 // 按当前搜索框 + 时间范围返回筛选后的记录
 function filteredList() {
   const q = ($("search").value || "").trim().toLowerCase();
-  const startTs = parseLocal($("timeStart").value);
-  const endTs = parseLocal($("timeEnd").value);
+  const startTs = parseBound($("timeStart").value, false);
+  const endTs = parseBound($("timeEnd").value, true);
   const hasStart = Number.isFinite(startTs);
   const hasEnd = Number.isFinite(endTs);
   let list = all;
@@ -1547,7 +1781,12 @@ function toggleAgg() {
 }
 
 function syncSettingsBtn() {
-  $("toggleSettings").textContent = settingsHidden ? "显示设置" : "隐藏设置";
+  // 按钮文字固定为「设置」，用按下态表达设置区是否显示
+  const btn = $("toggleSettings");
+  btn.textContent = "设置";
+  btn.classList.toggle("is-on", !settingsHidden);
+  btn.setAttribute("aria-pressed", settingsHidden ? "false" : "true");
+  btn.title = settingsHidden ? "显示设置区" : "隐藏设置区";
   $("settingsArea").style.display = settingsHidden ? "none" : "";
 }
 
@@ -1555,6 +1794,24 @@ function toggleSettings() {
   settingsHidden = !settingsHidden;
   chrome.storage.local.set({ [SETTINGS_HIDDEN_KEY]: settingsHidden });
   syncSettingsBtn();
+}
+
+// 设置区里「字体设置」开始往后的面板：默认收起，点按钮展开/折叠
+function syncStylePanel(open) {
+  const panel = $("stylePanel");
+  const btn = $("styleToggle");
+  if (!panel || !btn) return;
+  panel.hidden = !open;
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+  const state = btn.querySelector(".panel-toggle-state");
+  if (state) state.textContent = open ? "折叠" : "打开";
+  btn.title = open ? "折叠字体、颜色、圆角与样式管理" : "展开字体、颜色、圆角与样式管理";
+}
+
+function toggleStylePanel() {
+  const open = $("stylePanel").hidden;
+  syncStylePanel(open);
+  chrome.storage.local.set({ [STYLE_PANEL_KEY]: open });
 }
 
 function clearAll() {
@@ -1696,8 +1953,10 @@ h1 .dot{flex:0 0 auto;width:12px;height:12px;border-radius:50%;background:#6366f
 .item-head-agg{justify-content:space-between}
 .item-count{font-size:12px;color:var(--muted);flex:0 0 auto;white-space:nowrap}
 .item-src-group{display:inline-flex;align-items:center;gap:10px;flex:0 1 auto;min-width:0}
-.item-time{font-size:12px;color:var(--muted);flex:1 0 auto;white-space:nowrap}
-.item-src{font-size:12px;color:var(--muted);flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item-time{font-size:12px;color:var(--muted);flex:0 0 auto;white-space:nowrap}
+.item-src{font-size:12px;color:var(--muted);flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item-tags{display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;margin-left:auto}
+.item-tag{font-size:11px;line-height:1.4;padding:1px 7px;border-radius:999px;color:#4338ca;background:rgba(99,102,241,0.14);border:1px solid rgba(99,102,241,0.3);white-space:nowrap}
 .item-src a{color:var(--muted);text-decoration:none}
 .item-src a:hover{color:var(--primary);text-decoration:underline}
 .item-text{font-size:13px;font-weight:600;color:#374151;background:var(--primary-soft);border-radius:8px;padding:6px 10px;margin-bottom:8px;word-break:break-word}
@@ -1763,9 +2022,9 @@ function cardHtml(e) {
   }
   const srcKey = e.pageUrl || e.pageTitle || "";
   const isExtract = isExtractRecord(e);
-  const tags = Array.isArray(e.tags) ? e.tags.filter((t) => String(t || "").trim()) : [];
+  const tags = opts.tags !== false && Array.isArray(e.tags) ? e.tags.filter((t) => String(t || "").trim()) : [];
   if (tags.length) {
-    head.push(tags.map((t) => '<span class="item-tag">' + esc(t) + "</span>").join(""));
+    head.push('<span class="item-tags">' + tags.map((t) => '<span class="item-tag">' + esc(t) + "</span>").join("") + "</span>");
   }
   const main =
     showMainText && sourceTexts[srcKey]
@@ -1794,6 +2053,11 @@ function buildCardsHtmlAggregated(list) {
       const first = recs[0];
       const head = [];
       if (opts.count) head.push('<span class="item-count">' + recs.length + " 条</span>");
+      // 卡片头显示这组明细里最后一条的时间（勾选「时间」才显示）；明细行不再重复时间与标签
+      if (opts.time) {
+        const lastTime = Math.max(...recs.map((e) => Number(e.time) || 0));
+        if (lastTime) head.push('<span class="item-time">' + esc(formatTime(lastTime)) + "</span>");
+      }
       // 来源：勾选「来源页面」才显示；「页面地址」决定是否带超链接
       if (opts.pageTitle && displayTitle(first)) {
         if (opts.pageUrl && first.pageUrl) {
@@ -1805,22 +2069,21 @@ function buildCardsHtmlAggregated(list) {
           head.push('<span class="item-src-group"><span class="item-src">来源：' + esc(displayTitle(first)) + "</span></span>");
         }
       }
+      // 聚合卡也在头部右侧显示这一组记录的全部标签（去重）
+      const grpTags = opts.tags === false ? [] : [...new Set(recs.flatMap((e) => (Array.isArray(e.tags) ? e.tags : [])).filter((t) => String(t || "").trim()))];
+      if (grpTags.length) {
+        head.push('<span class="item-tags">' + grpTags.map((t) => '<span class="item-tag">' + esc(t) + "</span>").join("") + "</span>");
+      }
       const main =
         showMainText && sourceTexts[srcKey]
           ? '<div class="item-main">' + esc(sourceTexts[srcKey]) + "</div>"
           : "";
       const items = recs
         .map((e) => {
-          const itemHead = opts.time
-            ? '<div class="agg-item-head"><span class="agg-item-time">' + esc(formatTime(e.time)) + "</span>" +
-              (Array.isArray(e.tags) ? e.tags.filter((t) => String(t || "").trim()).map((t) => '<span class="item-tag">' + esc(t) + "</span>").join("") : "") +
-              "</div>"
-            : "";
           const isExtract = isExtractRecord(e);
           const meta = metaAttrs(e, isExtract, false);
           return (
             '<div class="agg-item"' + meta + ">" +
-            itemHead +
             '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>" +
             (isExtract ? "" : '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>") +
             "</div>"
@@ -1860,14 +2123,17 @@ function buildExportHtml(list, withPrintScript) {
     : "";
   // 将显示设置（页面背景/原文背景/字体颜色/字号/字体）写入导出样式
   const displayCss = buildDisplayCss(displayOpts);
+  // 风格模板：导出页与历史页共用同一份样式，靠 body 上的 data-tpl 生效；
+  // 导出页再追加整页底色（历史页的页面底色只作用于 #list）
+  const tplCss = styleTemplateCss(styleTemplate) + templateExportPageCss(styleTemplate);
   const html =
     "<!DOCTYPE html>\n" +
     '<html lang="zh-CN">\n<head>\n' +
     '<meta charset="UTF-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n' +
     "<title>划词AI释义 · 历史记录</title>\n" +
-    "<style>\n" + CARD_CSS + noSplitCss + displayCss + HEAD_BTN_CSS + "\n</style>\n" +
-    "</head>\n<body>\n" +
+    "<style>\n" + CARD_CSS + noSplitCss + displayCss + HEAD_BTN_CSS + tplCss + "\n</style>\n" +
+    "</head>\n" + '<body data-tpl="' + esc(styleTemplate) + '">\n' +
     '<div class="wrap">\n' +
     '<h1><span class="dot"></span>划词AI释义 · 历史记录' +
     '<button type="button" class="h1-btn" id="aie-h1-print">打印</button></h1>\n' +
@@ -1922,6 +2188,37 @@ function exportHtml() {
 }
 
 // 打印：打开与导出 HTML 完全相同的页面（不下载文件），并自动唤起浏览器打印窗口
+// 预览：与打印同一份页面，但不自动弹出打印窗口
+function previewHistory() {
+  const statusEl = $("exportStatus");
+  const list = filteredList();
+  if (!list.length) {
+    statusEl.textContent = "暂无记录可预览。";
+    statusEl.className = "export-status err";
+    return;
+  }
+  const html = buildExportHtml(list, false);
+  const win = window.open("about:blank", "_blank");
+  if (!win) {
+    statusEl.textContent = "浏览器拦截了新窗口，请允许扩展打开新标签页后重试。";
+    statusEl.className = "export-status err";
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  setTimeout(() => {
+    try {
+      const btn = win.document.getElementById("aie-h1-print");
+      if (btn) btn.addEventListener("click", () => win.print());
+    } catch (e) {
+      /* 拿不到就不绑定，页面仍可阅读 */
+    }
+  }, 500);
+  statusEl.textContent = "已打开预览页（" + list.length + " 条记录），需要打印时点右上角「打印」。";
+  statusEl.className = "export-status ok";
+}
+
 function printHistory() {
   const statusEl = $("exportStatus");
   const list = filteredList();
@@ -2259,6 +2556,7 @@ $("tagClear").addEventListener("click", () => {
 });
 $("timeStart").addEventListener("change", () => { page = 1; render(); });
 $("timeEnd").addEventListener("change", () => { page = 1; render(); });
+$("optTimeMode").addEventListener("change", () => applyTimeMode(timeMode(), true));
 $("timeClear").addEventListener("click", () => {
   $("timeStart").value = "";
   $("timeEnd").value = "";
@@ -2314,6 +2612,8 @@ $("deletePreset").addEventListener("click", deletePreset);
 $("toggleMain").addEventListener("click", toggleMain);
 $("toggleAgg").addEventListener("click", toggleAgg);
 $("toggleSettings").addEventListener("click", toggleSettings);
+$("styleToggle").addEventListener("click", toggleStylePanel);
+$("previewPage").addEventListener("click", previewHistory);
 bindMainModal();
 
 // ---------- 悬浮按钮组：跳到页首/页脚 ----------
