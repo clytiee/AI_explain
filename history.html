@@ -241,7 +241,6 @@
       font-size: 12px; font-variant-numeric: tabular-nums;
       height: 26px; padding: 2px 6px 2px 8px; line-height: 1.2;
     }
-    .opts input[type="datetime-local"] { width: 190px; }
     .opts input[type="date"]::-webkit-calendar-picker-indicator,
     .opts input[type="datetime-local"]::-webkit-calendar-picker-indicator {
       opacity: 0.45; cursor: pointer; margin-left: 2px;
@@ -698,6 +697,7 @@
       <div class="opts">
         <span class="opts-toggle-row">
           <button type="button" id="toggleMain" class="reset-btn">隐藏主文</button>
+          <button type="button" id="toggleQuote" class="reset-btn">隐藏原文</button>
           <button type="button" id="toggleAgg" class="reset-btn">按来源聚合</button>
           <button type="button" id="toggleSettings" class="reset-btn" title="显示/隐藏设置区" aria-pressed="true">设置</button>
           <button type="button" id="toggleReadonly" class="reset-btn" title="切换只读模式：只读下列表卡片不显示任何操作图标" aria-pressed="false">只读</button>
@@ -718,6 +718,7 @@
           <option value="second">精确到秒</option>
         </select>
       </label>
+      <span class="opts-hint" id="timeModeHint" hidden>起始日 00:00:00 到结束日 23:59:59</span>
       <label class="opt-lbl">时间显示
         <select id="optTimeDisplay" title="卡片与导出里的时间格式：到秒、到日，或精简的年/月/日">
           <option value="second">到秒</option>
@@ -726,7 +727,6 @@
           <option value="ganzhi">干支纪年</option>
         </select>
       </label>
-      <span class="opts-hint">按天筛选时，起始日从 00:00:00 算起，结束日到 23:59:59</span>
     </div>
     <div class="opts">
       <span class="opts-title">导出时包含：</span>

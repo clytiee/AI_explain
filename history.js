@@ -8,6 +8,7 @@ const TPL_OVERRIDES_KEY = "tplStyleOverrides"; // 各模板下用户改过的样
 const DISPLAY_PRESETS_KEY = "displayPresets"; // 已保存的显示样式组列表
 const SOURCE_TEXTS_KEY = "sourceTexts"; // 来源主文：{ srcKey: 文本 }
 const SHOW_MAIN_KEY = "showMainText"; // 是否显示来源主文
+const SHOW_QUOTE_KEY = "showQuoteText"; // 是否显示原文（划词的那段文本）
 const AGG_KEY = "aggregate"; // 是否按来源聚合
 const SETTINGS_HIDDEN_KEY = "settingsHidden"; // 是否隐藏所有设置
 const READONLY_KEY = "readOnly"; // 只读模式（默认 false＝编辑模式）
@@ -15,6 +16,7 @@ const AGG_ORDER_KEY = "aggOrder"; // 聚合模式下每来源记录的手工排�
 const STYLE_TPL_KEY = "styleTemplate"; // 列表风格模板（见 STYLE_TEMPLATES）
 const STYLE_PANEL_KEY = "stylePanelOpen"; // 设置区里字体/颜色/圆角面板是否展开（默认收起）
 const LOCAL_FONTS_KEY = "localFontList"; // 读到的本机中文字体（Local Font Access API）
+const TIME_DISPLAY_KEY = "timeDisplay"; // 时间显示格式（与模板无关，单独存一份，切模板/刷新都不丢）
 
 const $ = (id) => document.getElementById(id);
 
@@ -24,6 +26,7 @@ let displayPresets = []; // [{ name, opts }] 已保存的样式组
 let sourceTexts = {}; // { srcKey: 主文 } 按来源保存的主文
 let mainModalKey = ""; // 当前正在编辑主文的 srcKey
 let showMainText = true; // 列表是否显示来源主文
+let showQuoteText = true; // 是否显示原文（列表与导出/预览/打印同样生效）
 let aggregate = false; // 是否按来源聚合
 let settingsHidden = false; // 是否隐藏所有设置
 let readOnly = false; // 只读模式：卡片里不显示任何操作图标
@@ -1906,6 +1909,7 @@ function load() {
       [DISPLAY_PRESETS_KEY]: [],
       [SOURCE_TEXTS_KEY]: {},
       [SHOW_MAIN_KEY]: true,
+      [SHOW_QUOTE_KEY]: true,
       [AGG_KEY]: false,
       [SETTINGS_HIDDEN_KEY]: false,
       [READONLY_KEY]: false,
@@ -1913,6 +1917,7 @@ function load() {
       [STYLE_TPL_KEY]: "glass",
       [STYLE_PANEL_KEY]: false,
       [LOCAL_FONTS_KEY]: [],
+      [TIME_DISPLAY_KEY]: "second",
       timeMode: "date",
       config: {},
     },
@@ -1932,7 +1937,10 @@ function load() {
       $("optBackup").checked = exportOpts.backup;
 
       displayOpts = { ...DEFAULT_DISPLAY, ...(res[DISPLAY_OPTS_KEY] || {}) };
+      // 时间显示格式单独存一份：换模板、刷新都不丢（不跟着模板样式回填走）
+      if (res[TIME_DISPLAY_KEY]) displayOpts.timeDisplay = res[TIME_DISPLAY_KEY];
       glassDisplay = { ...displayOpts };
+      glassDisplay.timeDisplay = displayOpts.timeDisplay;
       syncDisplayControls();
       applyDisplay(displayOpts);
 
@@ -1953,7 +1961,9 @@ function load() {
 
       sourceTexts = (res[SOURCE_TEXTS_KEY] && typeof res[SOURCE_TEXTS_KEY] === "object") ? res[SOURCE_TEXTS_KEY] : {};
       showMainText = res[SHOW_MAIN_KEY] !== false;
+      showQuoteText = res[SHOW_QUOTE_KEY] !== false;
       syncMainBtn();
+      syncQuoteBtn();
       aggregate = res[AGG_KEY] === true;
       syncAggBtn();
       settingsHidden = res[SETTINGS_HIDDEN_KEY] === true;
@@ -2061,6 +2071,7 @@ function bindDisplay() {
     next.mainBg = $("optMainBg").value;
     next.extractBg = $("optExtractBg").value;
     next.timeDisplay = $("optTimeDisplay").value;
+    chrome.storage.local.set({ [TIME_DISPLAY_KEY]: next.timeDisplay });
     next.cardRadius = Number($("optCardRadius").value);
     next.quoteRadius = Number($("optQuoteRadius").value);
     next.extractRadius = Number($("optExtractRadius").value);
@@ -2139,6 +2150,9 @@ function applyTimeMode(mode, persist, skipRender) {
   $("timeEnd").step = second ? "1" : "";
   $("timeStart").value = "";
   $("timeEnd").value = "";
+  // 提示语只在「日期」精度下出现
+  const hint = $("timeModeHint");
+  if (hint) hint.hidden = second;
   if (persist) chrome.storage.local.set({ timeMode: mode });
   page = 1;
   if (!skipRender) render();
@@ -2737,9 +2751,13 @@ function buildItemCard(e) {
     item.appendChild(main);
   }
 
-  // 有明细主文（多行原文）时不再显示原文行
-  if (!multi) item.appendChild(textEl);
-  if (selMain) item.appendChild(selMain);
+  // 原文行受「隐藏原文」控制（摘录记录的原文就是内容，照旧显示）；
+  // 多行选中的明细主文属于主文，受「隐藏主文」控制
+  if (multi) {
+    if (showMainText) item.appendChild(selMain);
+  } else if (showQuoteText || isExtract) {
+    item.appendChild(textEl);
+  }
   item.appendChild(ans);
   return item;
 }
@@ -2801,6 +2819,18 @@ function toggleMain() {
   showMainText = !showMainText;
   chrome.storage.local.set({ [SHOW_MAIN_KEY]: showMainText });
   syncMainBtn();
+  render();
+}
+
+function syncQuoteBtn() {
+  $("toggleQuote").textContent = showQuoteText ? "隐藏原文" : "显示原文";
+}
+
+// 隐藏原文：列表卡片与导出 / 预览 / 打印都不再输出划词那段原文
+function toggleQuote() {
+  showQuoteText = !showQuoteText;
+  chrome.storage.local.set({ [SHOW_QUOTE_KEY]: showQuoteText });
+  syncQuoteBtn();
   render();
 }
 
@@ -3112,13 +3142,16 @@ function renderAggregated(list) {
       const textEl = document.createElement("div");
       textEl.className = "item-text" + (isExtract ? " item-text-extract" : "");
       textEl.textContent = "「" + (e.text || "") + "」";
-      // 有明细主文（多行原文）时不再显示原文行
-      if (!multi) gi.appendChild(textEl);
+      // 原文行受「隐藏原文」控制（摘录记录照旧显示）；多行选中的明细主文受「隐藏主文」控制
       if (multi) {
-        const selMain = document.createElement("div");
-        selMain.className = "item-main item-main-dim";
-        selMain.textContent = e.text || "";
-        gi.appendChild(selMain);
+        if (showMainText) {
+          const selMain = document.createElement("div");
+          selMain.className = "item-main item-main-dim";
+          selMain.textContent = e.text || "";
+          gi.appendChild(selMain);
+        }
+      } else if (showQuoteText || isExtract) {
+        gi.appendChild(textEl);
       }
 
       const ans = document.createElement("div");
@@ -3435,10 +3468,12 @@ function cardHtml(e) {
       : "";
   const meta = metaAttrs(e, isExtract);
   const multi = isMultilineSelection(e.text);
-  const quoteHtml = multi
-    ? ""
-    : '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>";
-  const selMain = multi ? '<div class="item-main item-main-dim">' + esc(e.text || "") + "</div>" : "";
+  // 原文行受「隐藏原文」控制（摘录记录的原文就是内容，照旧显示）；明细主文受「隐藏主文」控制
+  const quoteHtml =
+    !multi && (showQuoteText || isExtract)
+      ? '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>"
+      : "";
+  const selMain = multi && showMainText ? '<div class="item-main item-main-dim">' + esc(e.text || "") + "</div>" : "";
   return (
     '<div class="card"' + meta + ">" +
     '<div class="item-head">' + head.join("") + "</div>" +
@@ -3494,10 +3529,12 @@ function buildCardsHtmlAggregated(list) {
           const multi = isMultilineSelection(e.text);
           return (
             '<div class="agg-item"' + meta + ">" +
-            (multi
-              ? ""
-              : '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>") +
-            (multi ? '<div class="item-main item-main-dim">' + esc(e.text || "") + "</div>" : "") +
+            (showQuoteText || isExtract
+              ? multi
+                ? ""
+                : '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>"
+              : "") +
+            (multi && showMainText ? '<div class="item-main item-main-dim">' + esc(e.text || "") + "</div>" : "") +
             (isExtract ? "" : '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>") +
             "</div>"
           );
@@ -4053,6 +4090,7 @@ $("saveDisplay").addEventListener("click", saveDisplay);
 $("presetSelect").addEventListener("change", applyPreset);
 $("deletePreset").addEventListener("click", deletePreset);
 $("toggleMain").addEventListener("click", toggleMain);
+$("toggleQuote").addEventListener("click", toggleQuote);
 $("toggleAgg").addEventListener("click", toggleAgg);
 $("toggleSettings").addEventListener("click", toggleSettings);
 $("toggleReadonly").addEventListener("click", toggleReadonly);
