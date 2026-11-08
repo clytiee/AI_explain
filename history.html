@@ -381,7 +381,13 @@
     /* 标签筛选条 */
     .tagbar[hidden] { display: none !important; }
     /* 风格模板：一排小胶囊 */
-    .tpl-bar { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; }
+    .tpl-bar { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; align-content: flex-start; }
+    /* 风格模板：与上面几行同构——字段名固定左栏，选项值在右栏内部换行。
+       用 grid 而不是 flex，避免按钮一多整块被挤到下一行变成「独立一行」 */
+    .opts.tpl-row {
+      display: grid; grid-template-columns: auto minmax(0, 1fr);
+      align-items: start; column-gap: 14px; row-gap: 0;
+    }
     .tpl-btn {
       font-family: inherit; font-size: 12px; line-height: 1; padding: 5px 10px; cursor: pointer;
       border-radius: 999px; border: 1px solid rgba(99, 102, 241, 0.3);
@@ -611,7 +617,7 @@
       </div>
 
       <!-- 风格模板常驻显示：不属于设置区，点「设置」隐藏设置时它仍在 -->
-      <div class="opts">
+      <div class="opts tpl-row">
         <span class="opts-title">风格模板：<span class="info-dot" title="切换后立即生效，导出 HTML / 打印也按当前模板">ⓘ</span></span>
         <div class="tpl-bar" id="tplBar"></div>
       </div>

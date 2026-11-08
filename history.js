@@ -407,6 +407,174 @@ const STYLE_TEMPLATES = [
       'body[data-tpl="dark"] .item-main{background:#20242d;color:#cbd5e1;border-left:3px solid #3b4252;' +
       "border-radius:8px;font-size:13px;line-height:1.75}",
   },
+  {
+    id: "news",
+    name: "报纸",
+    desc: "双线分隔、衬线标题、正文双栏",
+    css:
+      'body[data-tpl="news"] #list{background:#fbfaf7}' +
+      'body[data-tpl="news"] .card{background:transparent;border:0;border-top:3px double #cfcbc2;' +
+      "border-radius:0;box-shadow:none;padding:10px 0 2px;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="news"] .item-meta{font-family:Georgia,\'Songti SC\',\'SimSun\',serif;font-size:11px;color:#6b6257;' +
+      "padding-bottom:6px;border-bottom:1px solid #d9d4ca;margin-bottom:10px}" +
+      'body[data-tpl="news"] .item-time{color:#6b6257}' +
+      'body[data-tpl="news"] .item-src{color:#6b6257}' +
+      'body[data-tpl="news"] .item-src a{color:#6b6257}' +
+      'body[data-tpl="news"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:10px 0;' +
+      "font-family:Georgia,'Songti SC','SimSun',serif;font-size:16px;line-height:1.85;color:#211d18;font-weight:600}" +
+      'body[data-tpl="news"] .item-text-extract{background:transparent!important;border:0;padding-left:0}' +
+      'body[data-tpl="news"] .item-answer{font-family:Georgia,\'Songti SC\',\'SimSun\',serif;color:#332e28;' +
+      "font-size:13px;line-height:1.8;column-count:2;column-gap:22px}" +
+      'body[data-tpl="news"] .item-answer p{margin:0 0 6px}' +
+      'body[data-tpl="news"] .item-tag{background:transparent;border:1px solid #cfcbc2;color:#6b6257;border-radius:2px}' +
+      'body[data-tpl="news"] .item-main{background:transparent;border-left:3px solid #cfcbc2;border-radius:0;' +
+      "font-family:Georgia,'Songti SC','SimSun',serif;color:#4a443c;font-size:13px;line-height:1.8}",
+  },
+  {
+    id: "grid",
+    name: "格线",
+    desc: "浅蓝格线 + 楷体，笔记观感",
+    css:
+      'body[data-tpl="grid"] #list{background:#fdfcf8;' +
+      // 用 repeating-linear-gradient 画格，避免 background-size 百分比在不同场景下只出一方向的线
+      "background-image:repeating-linear-gradient(to bottom,rgba(120,170,220,.28) 0 1px,transparent 1px 25px)," +
+      "repeating-linear-gradient(to right,rgba(120,170,220,.2) 0 1px,transparent 1px 25px);" +
+      "padding:18px;border-radius:10px}" +
+      'body[data-tpl="grid"] .card{background:rgba(255,255,255,.72);border:0;border-radius:6px;' +
+      "box-shadow:0 1px 0 rgba(120,150,190,.16);-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="grid"] .item-time{color:#7b8da3}' +
+      'body[data-tpl="grid"] .item-src{color:#5b6f88}' +
+      'body[data-tpl="grid"] .item-src a{color:#5b6f88}' +
+      'body[data-tpl="grid"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:6px 0;' +
+      "font-family:'Kaiti SC','KaiTi','STKaiti',Georgia,serif;font-size:16px;line-height:25px;color:#1f3550;font-weight:400}" +
+      'body[data-tpl="grid"] .item-text-extract{background:transparent!important;border-left:2px solid #a8c6e2;' +
+      "padding-left:10px}" +
+      'body[data-tpl="grid"] .item-answer{color:#33465c;line-height:25px;font-size:13px}' +
+      'body[data-tpl="grid"] .item-answer p{margin:0 0 4px}' +
+      'body[data-tpl="grid"] .item-tag{background:rgba(120,170,220,.16);border-color:rgba(120,170,220,.4);color:#40607f}' +
+      'body[data-tpl="grid"] .item-main{background:rgba(120,170,220,.1);border-left:2px solid #a8c6e2;border-radius:4px;' +
+      "color:#33465c;font-size:13px;line-height:1.75}",
+  },
+  {
+    id: "ruled",
+    name: "横线",
+    desc: "白底横线本，文字正好落在横线上方",
+    css:
+      // 页面不铺格子，只靠每个文字块自带的 25px 横线
+      'body[data-tpl="ruled"] #list{background:#f7f8fa}' +
+      'body[data-tpl="ruled"] .card{background:#fff;border:1px solid #e9edf3;border-radius:4px;' +
+      "box-shadow:0 1px 0 rgba(120,150,190,.1);-webkit-backdrop-filter:none;backdrop-filter:none;" +
+      "padding:12px 16px 10px}" +
+      'body[data-tpl="ruled"] .item-time{color:#7b8da3}' +
+      'body[data-tpl="ruled"] .item-src{color:#5b6f88}' +
+      'body[data-tpl="ruled"] .item-src a{color:#5b6f88}' +
+      // 行高 25px，横线画在每行底部 2px（transparent 0 23px → 线 23~25px），字正好压在线上面一点
+      'body[data-tpl="ruled"] .item-text{background-image:' +
+      "repeating-linear-gradient(to bottom,transparent 0 23px,rgba(120,170,220,.38) 23px 25px);" +
+      "background-origin:content-box;border:0;border-radius:0;padding:0;margin:0 0 4px;" +
+      "font-family:'Kaiti SC','KaiTi','STKaiti',Georgia,serif;font-size:16px;line-height:25px;color:#1f3550;font-weight:400}" +
+      'body[data-tpl="ruled"] .item-text-extract{background-image:' +
+      "repeating-linear-gradient(to bottom,transparent 0 23px,rgba(120,170,220,.38) 23px 25px)!important;" +
+      "background-origin:content-box;border-left:2px solid #a8c6e2;padding-left:10px}" +
+      'body[data-tpl="ruled"] .item-answer{background-image:' +
+      "repeating-linear-gradient(to bottom,transparent 0 23px,rgba(120,170,220,.38) 23px 25px);" +
+      "background-origin:content-box;color:#33465c;line-height:25px;font-size:13px}" +
+      // 段落间不留 margin，横线才能连续不错位
+      'body[data-tpl="ruled"] .item-answer p{margin:0}' +
+      'body[data-tpl="ruled"] .item-tag{background:rgba(120,170,220,.16);border-color:rgba(120,170,220,.4);color:#40607f}' +
+      'body[data-tpl="ruled"] .item-main{background:rgba(120,170,220,.1);border-left:2px solid #a8c6e2;border-radius:4px;' +
+      "color:#33465c;font-size:13px;line-height:25px}",
+  },
+  {
+    id: "mono",
+    name: "等宽",
+    desc: "等宽字体、细描边，适合科技",
+    css:
+      'body[data-tpl="mono"] #list{background:#f4f5f7}' +
+      'body[data-tpl="mono"] .card{background:#fff;border:0;border-radius:2px;' +
+      "box-shadow:0 0 0 1px #e3e6ea;-webkit-backdrop-filter:none;backdrop-filter:none;" +
+      'font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Noto Sans Mono CJK SC",monospace}' +
+      'body[data-tpl="mono"] .item-time{color:#7b8494}' +
+      'body[data-tpl="mono"] .item-src{color:#5f6b7d}' +
+      'body[data-tpl="mono"] .item-src a{color:#5f6b7d}' +
+      'body[data-tpl="mono"] .item-text{background:transparent;border:0;border-left:2px solid #d5dae2;border-radius:0;' +
+      "padding:0 0 0 10px;margin:8px 0;font-size:13.5px;line-height:1.75;color:#111827;font-weight:400}" +
+      'body[data-tpl="mono"] .item-text-extract{background:transparent!important;border-left:2px solid #b8c2cf;' +
+      "padding-left:10px}" +
+      'body[data-tpl="mono"] .item-answer{font-size:12.5px;line-height:1.8;color:#3f4756}' +
+      'body[data-tpl="mono"] .item-answer p{margin:0 0 5px}' +
+      'body[data-tpl="mono"] .item-tag{background:#f0f2f5;border:1px solid #e3e6ea;color:#6b7485;border-radius:2px}' +
+      'body[data-tpl="mono"] .item-main{background:#fafbfc;border-left:2px solid #d5dae2;border-radius:2px;' +
+      "color:#3f4756;font-size:12.5px;line-height:1.8}",
+  },
+  {
+    id: "kraft",
+    name: "牛皮",
+    desc: "牛皮色 + 纤维纹理，手账摘抄",
+    css:
+      'body[data-tpl="kraft"] #list{background:#d9c3a1;padding:18px;border-radius:10px}' +
+      'body[data-tpl="kraft"] .card{background:#e8d6b8;border:0;border-radius:3px;' +
+      "box-shadow:0 3px 0 rgba(120,92,54,.22),0 10px 22px rgba(90,68,38,.16);" +
+      "background-image:repeating-linear-gradient(115deg,rgba(255,255,255,.06) 0 2px,rgba(120,92,54,.05) 2px 4px);" +
+      "-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="kraft"] .item-time{color:#8a6f45}' +
+      'body[data-tpl="kraft"] .item-src{color:#6a5230}' +
+      'body[data-tpl="kraft"] .item-src a{color:#6a5230}' +
+      'body[data-tpl="kraft"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:8px 0 10px;' +
+      "font-family:Georgia,'Songti SC','SimSun',serif;font-size:15px;line-height:1.85;color:#3d2f1a;font-weight:600}" +
+      'body[data-tpl="kraft"] .item-text-extract{background:transparent!important;border-left:2px solid #c2a274;' +
+      "padding-left:12px}" +
+      'body[data-tpl="kraft"] .item-answer{color:#4a3a23;line-height:1.8}' +
+      'body[data-tpl="kraft"] .item-answer p{margin:0 0 6px}' +
+      'body[data-tpl="kraft"] .item-tag{background:rgba(106,82,48,.14);border:1px solid rgba(106,82,48,.35);color:#59421f;border-radius:3px}' +
+      'body[data-tpl="kraft"] .item-main{background:rgba(106,82,48,.12);border-left:3px solid #c2a274;border-radius:3px;' +
+      "color:#4a3a23;font-size:13px;line-height:1.8}",
+  },
+  {
+    id: "ink",
+    name: "水墨",
+    desc: "米白纸底 + 楷体疏字距，诗词古文",
+    css:
+      'body[data-tpl="ink"] #list{background:#f8f4ea;' +
+      "background-image:radial-gradient(circle at 18% 12%,#fdfbf5 0%,#f8f4ea 55%,#f2ece0 100%);" +
+      "padding:18px;border-radius:10px}" +
+      'body[data-tpl="ink"] .card{background:rgba(255,255,255,.55);border:0;border-radius:4px;' +
+      "box-shadow:0 1px 14px rgba(120,110,90,.08);-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="ink"] .item-time{color:#9c9284}' +
+      'body[data-tpl="ink"] .item-src{color:#6d6455}' +
+      'body[data-tpl="ink"] .item-src a{color:#6d6455}' +
+      'body[data-tpl="ink"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:8px 0 10px;' +
+      "font-family:'STKaiti','Kaiti SC','KaiTi',Georgia,serif;font-size:17px;line-height:1.95;color:#23211d;" +
+      'letter-spacing:.5px;font-weight:400}' +
+      'body[data-tpl="ink"] .item-text-extract{background:transparent!important;border:0;padding-left:0}' +
+      'body[data-tpl="ink"] .item-answer{font-family:\'STKaiti\',\'Kaiti SC\',\'KaiTi\',Georgia,serif;' +
+      "color:#3c3831;line-height:1.95;letter-spacing:.3px}" +
+      'body[data-tpl="ink"] .item-answer p{margin:0 0 7px}' +
+      'body[data-tpl="ink"] .item-tag{background:transparent;border:1px solid rgba(120,110,90,.4);color:#6d6455;border-radius:2px}' +
+      'body[data-tpl="ink"] .item-main{background:rgba(120,110,90,.08);border-left:3px solid #cfc6b4;border-radius:3px;' +
+      "color:#3c3831;font-size:13px;line-height:1.95}",
+  },
+  {
+    id: "warmdark",
+    name: "暖夜",
+    desc: "深棕底暖字，不用纯黑不刺眼",
+    css:
+      'body[data-tpl="warmdark"] #list{background:#1c1a17;color:#e8dcc4;padding:18px;border-radius:14px}' +
+      'body[data-tpl="warmdark"] .card{background:#26231e;border:1px solid #332f28;border-radius:12px;' +
+      "box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="warmdark"] .item-time{color:#8a8175}' +
+      'body[data-tpl="warmdark"] .item-src{color:#c9bda6}' +
+      'body[data-tpl="warmdark"] .item-src a{color:#c9bda6}' +
+      'body[data-tpl="warmdark"] .item-text{background:#2f2b24;border:0;border-radius:8px;padding:8px 10px;' +
+      "font-size:14.5px;line-height:1.75;color:#e8dcc4;font-weight:400}" +
+      'body[data-tpl="warmdark"] .item-text-extract{background:#332e26!important;border-left:3px solid #6b6152;' +
+      "border-radius:0;padding-left:12px}" +
+      'body[data-tpl="warmdark"] .item-answer{color:#d6c9b0;line-height:1.8}' +
+      'body[data-tpl="warmdark"] .item-answer p{margin:0 0 6px}' +
+      'body[data-tpl="warmdark"] .item-tag{background:rgba(201,189,166,.14);border:1px solid rgba(201,189,166,.22);color:#cbbda0}' +
+      'body[data-tpl="warmdark"] .item-main{background:#302b23;color:#d6c9b0;border-left:3px solid #6b6152;' +
+      "border-radius:8px;font-size:13px;line-height:1.8}",
+  },
 ];
 let styleTemplate = "glass";
 
@@ -423,6 +591,19 @@ function templateExportPageCss(id) {
   if (id === "paper") return "body{background:#f6f0e2;font-family:Georgia,'Songti SC','SimSun',serif}";
   if (id === "sticky") return "body{background:#eef1f5}";
   if (id === "dark") return "body{background:#0f1115;color:#e5e7eb}";
+  if (id === "news") return "body{background:#fbfaf7}";
+  if (id === "grid")
+    return (
+      "body{background:#fdfcf8;" +
+      // 用 repeating-linear-gradient 画格：不依赖 background-size 的百分比解析，屏幕与打印都稳定出方格
+      "background-image:repeating-linear-gradient(to bottom,rgba(120,170,220,.28) 0 1px,transparent 1px 25px)," +
+      "repeating-linear-gradient(to right,rgba(120,170,220,.2) 0 1px,transparent 1px 25px)}"
+    );
+  if (id === "ruled") return "body{background:#f7f8fa}";
+  if (id === "mono") return "body{background:#f4f5f7}";
+  if (id === "kraft") return "body{background:#d9c3a1}";
+  if (id === "ink") return "body{background:#f8f4ea}";
+  if (id === "warmdark") return "body{background:#1c1a17;color:#e8dcc4}";
   return "";
 }
 
@@ -2016,9 +2197,12 @@ const CARD_CSS = `:root{--primary:#4f46e5;--primary-soft:rgba(99,102,241,0.12);-
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,sans-serif;color:var(--text);background:linear-gradient(160deg,#f6f7ff,#eef2ff 60%,#f5f3ff);min-height:100vh;padding:32px 16px 60px}
 .wrap{max-width:720px;margin:0 auto}
-h1{font-size:20px;margin:0 0 4px;display:flex;align-items:center;gap:10px}
+h1{font-size:20px;margin:0 0 12px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 h1 .dot{flex:0 0 auto;width:12px;height:12px;border-radius:50%;background:#6366f1;background-image:linear-gradient(135deg,#6366f1,#a855f7);-webkit-print-color-adjust:exact;print-color-adjust:exact}
 @media print{h1 .dot{background-image:none;background:#6366f1}}
+h1 .h1-title{flex:0 0 auto}
+/* 记录数与导出时间挪到标题右侧，省掉一整行 */
+h1 .h1-sub{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:400;color:var(--muted)}
 .sub{color:var(--muted);font-size:13px;margin:0 0 20px}
 .card{background:rgba(255,255,255,0.88);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,0.6);border-radius:16px;padding:16px 18px;margin-bottom:12px;box-shadow:0 8px 30px rgba(0,0,0,0.05)}
 .item-head{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;margin-bottom:8px}
@@ -2214,9 +2398,9 @@ function buildExportHtml(list, withPrintScript, titleWithTime) {
     "<style>\n" + CARD_CSS + noSplitCss + displayCss + HEAD_BTN_CSS + tplCss + "\n</style>\n" +
     "</head>\n" + '<body data-tpl="' + esc(styleTemplate) + '">\n' +
     '<div class="wrap">\n' +
-    '<h1><span class="dot"></span>划词AI释义 · 历史记录' +
+    '<h1><span class="dot"></span><span class="h1-title">划词AI释义 · 历史记录</span>' +
+    '<span class="h1-sub">共 ' + list.length + " 条 · 导出时间：" + formatTime(Date.now()) + "</span>" +
     '<button type="button" class="h1-btn" id="aie-h1-print">打印</button></h1>\n' +
-    '<p class="sub">共 ' + list.length + " 条 · 导出时间：" + formatTime(Date.now()) + "</p>\n" +
     (aggregate ? buildCardsHtmlAggregated(list) : buildCardsHtml(list)) +
     // 内嵌完整备份数据（JSON 数据区，仅勾选「备份数据」时输出）：
     // 页面可视卡片仅按导出选项渲染，数据区始终包含全部字段，
@@ -2294,8 +2478,6 @@ function previewHistory() {
       /* 拿不到就不绑定，页面仍可阅读 */
     }
   }, 500);
-  statusEl.textContent = "已打开预览页（" + list.length + " 条记录），需要打印时点右上角「打印」。";
-  statusEl.className = "export-status ok";
 }
 
 function printHistory() {
@@ -2330,8 +2512,6 @@ function printHistory() {
       statusEl.className = "export-status err";
       return;
     }
-    statusEl.textContent = "已在打印预览页打开 " + list.length + " 条记录。";
-    statusEl.className = "export-status ok";
   }, 500);
 }
 
