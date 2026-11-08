@@ -621,6 +621,14 @@
         <span class="opts-title">风格模板：<span class="info-dot" title="切换后立即生效，导出 HTML / 打印也按当前模板">ⓘ</span></span>
         <div class="tpl-bar" id="tplBar"></div>
       </div>
+
+      <!-- 列表显示模式：常驻显示，不受「设置」与「样式设置」折叠影响 -->
+      <div class="opts">
+        <span class="opts-toggle-row">
+          <button type="button" id="toggleMain" class="reset-btn">隐藏主文</button>
+          <button type="button" id="toggleAgg" class="reset-btn">按来源聚合</button>
+        </span>
+      </div>
       </div>
     </div>
     <div id="exportStatus" class="export-status"></div>
@@ -660,13 +668,7 @@
       <button type="button" class="btn-mini" id="exportBackup" title="仅导出备份数据（JSON 文件），用于在另一台电脑导入还原">导出 JSON</button>
       <button type="button" class="btn-mini" id="import">导入</button>
     </div>
-    <!-- 列表显示模式：常驻显示，不受「样式设置」折叠影响 -->
-    <div class="opts">
-      <span class="opts-toggle-row">
-        <button type="button" id="toggleMain" class="reset-btn">隐藏主文</button>
-        <button type="button" id="toggleAgg" class="reset-btn">按来源聚合</button>
-      </span>
-    </div>
+    <!-- 列表显示模式已随风格模板移到工具栏卡片，不在设置区内 -->
     <div class="opts panel-row">
       <button type="button" class="panel-toggle" id="styleToggle" aria-expanded="false" aria-controls="stylePanel" title="展开或折叠字体、颜色、圆角与样式管理">
         <span class="panel-toggle-title">样式设置</span>
@@ -684,6 +686,11 @@
       <label class="opt-lbl">行高 <input type="range" id="optLineHeight" min="1.0" max="2.4" step="0.1" value="1.2" /> <span id="optLineHeightVal">1.2</span></label>
       <label class="opt-lbl opt-rowstart">主文字号 <input type="range" id="optMainFontSize" min="11" max="20" step="1" value="13" /> <span id="optMainFontSizeVal">13</span>px</label>
       <label class="opt-lbl">主文行高 <input type="range" id="optMainLineHeight" min="1.0" max="2.4" step="0.1" value="1.7" /> <span id="optMainLineHeightVal">1.7</span></label>
+      <label class="opt-lbl opt-rowstart">时间显示 <select id="optTimeDisplay" title="卡片与导出里的时间格式：到秒、到日，或精简的年/月/日">
+        <option value="second">到秒</option>
+        <option value="date">到日</option>
+        <option value="short">精简 YY/M/D</option>
+      </select></label>
       <span class="opts-br"></span>
       <span class="opts-title">页面背景色：</span>
       <label><input type="color" id="optPageBg" value="#eef2ff" /></label>

@@ -44,6 +44,8 @@ const DEFAULT_DISPLAY = {
   lineHeight: 1.2,
   mainFontSize: 13,
   mainLineHeight: 1.7,
+  // 卡片与导出里的时间格式：second 到秒 / date 到日 / short 精简 YY/M/D
+  timeDisplay: "second",
   cardRadius: 16,
   quoteRadius: 8,
   extractRadius: 0,
@@ -690,6 +692,143 @@ const STYLE_TEMPLATES = [
       'body[data-tpl="dots"] .item-main{background:rgba(90,90,80,.08);border-left:2px solid #cfc7b6;border-radius:2px;' +
       "color:#35332b;font-size:13px;line-height:20px}",
   },
+  {
+    id: "typer",
+    name: "打字机稿纸",
+    desc: "米灰纸、等宽字体、红色标签栏与页码",
+    css:
+      'body[data-tpl="typer"] #list{background:#f4f1e8}' +
+      'body[data-tpl="typer"] .card{background:#fbf9f2;border:1px solid #ddd7c6;border-radius:0;' +
+      "box-shadow:0 1px 0 #fff inset,0 1px 2px rgba(0,0,0,.04);padding:12px 16px 14px;" +
+      "-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      // 卡片顶部红色小标签栏，仿打字稿抬头
+      'body[data-tpl="typer"] .card::before{content:"TYPESCRIPT\\00B7 划词释义";display:block;' +
+      "font-family:'Courier New',ui-monospace,monospace;font-size:10px;letter-spacing:.18em;" +
+      "color:#9a3b2f;border-bottom:1px solid #e8c9c1;padding-bottom:5px;margin:0 0 9px}" +
+      'body[data-tpl="typer"] .item-time{color:#6f6a5b;font-family:"Courier New",ui-monospace,monospace;' +
+      "letter-spacing:.02em}" +
+      'body[data-tpl="typer"] .item-src{color:#6f6a5b;font-family:"Courier New",ui-monospace,monospace}' +
+      'body[data-tpl="typer"] .item-src a{color:#6f6a5b;text-decoration:underline dotted}' +
+      'body[data-tpl="typer"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:0 0 4px;' +
+      "font-family:'Courier New',ui-monospace,Consolas,monospace;font-size:14px;line-height:24px;color:#3c3a33;" +
+      "letter-spacing:.01em;font-weight:400}" +
+      'body[data-tpl="typer"] .item-text-extract{background-color:transparent!important;border-left:2px solid #cfc6ad;' +
+      "padding-left:10px}" +
+      'body[data-tpl="typer"] .item-answer{color:#4a473e;font-size:12.5px;line-height:24px;margin-top:6px;' +
+      "font-family:'Courier New',ui-monospace,Consolas,monospace}" +
+      'body[data-tpl="typer"] .item-answer p{margin:0}' +
+      // 不用边框，标签用 [ ] 括起来，更像打字稿上的标注
+      'body[data-tpl="typer"] .item-tag{background:transparent;border:0;border-radius:0;padding:0;color:#6f6a5b;' +
+      "font-family:'Courier New',ui-monospace,monospace;display:inline-block;line-height:1.5}" +
+      'body[data-tpl="typer"] .item-tag::before{content:"["}' +
+      'body[data-tpl="typer"] .item-tag::after{content:"]"}' +
+      'body[data-tpl="typer"] .item-main{background:#f2eee2;border-left:2px solid #cfc6ad;border-radius:0;' +
+      "color:#4a473e;font-size:12.5px;line-height:24px;font-family:'Courier New',ui-monospace,monospace}",
+  },
+  {
+    id: "book",
+    name: "书页",
+    desc: "窄栏居中、衬线正文、首字下沉、页眉细线",
+    css:
+      'body[data-tpl="book"] #list{background:#efeae0}' +
+      'body[data-tpl="book"] .card{background:#fffdf8;border:1px solid #e6e0d3;border-radius:0;' +
+      "box-shadow:0 1px 3px rgba(0,0,0,.05);padding:20px 30px 24px;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      // 时间来源行居中，做成页眉，下面一条细线
+      'body[data-tpl="book"] .item-meta{justify-content:center;font-size:11px;color:#8a8578;letter-spacing:.1em;' +
+      "border-bottom:1px solid #e6e0d3;padding-bottom:7px;margin-bottom:12px}" +
+      'body[data-tpl="book"] .item-time{color:#8a8578;letter-spacing:.1em}' +
+      'body[data-tpl="book"] .item-src{color:#8a8578;letter-spacing:.1em;flex:0 1 auto;text-align:center}' +
+      'body[data-tpl="book"] .item-src a{color:#8a8578}' +
+      'body[data-tpl="book"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:0;' +
+      "font-family:Georgia,'Songti SC','SimSun',serif;font-size:16px;line-height:1.9;color:#2b2a26;" +
+      "font-weight:400;text-align:justify}" +
+      'body[data-tpl="book"] .item-text-extract{background-color:transparent!important;border:0;padding-left:0}' +
+      'body[data-tpl="book"] .item-answer{color:#3b3a34;font-size:13.5px;line-height:1.95;margin-top:12px;' +
+      "font-family:Georgia,'Songti SC','SimSun',serif;text-align:justify}" +
+      'body[data-tpl="book"] .item-answer p{margin:0 0 8px}' +
+      // 首段首字下沉
+      'body[data-tpl="book"] .item-answer p:first-of-type::first-letter{float:left;font-size:30px;line-height:26px;' +
+      "padding-right:4px;font-weight:600;color:#6b4a2f}" +
+      'body[data-tpl="book"] .item-tag{background:transparent;border:0;border-bottom:1px solid #d8d2c3;' +
+      "border-radius:0;padding:0 2px;color:#8a8578}" +
+      'body[data-tpl="book"] .item-main{background:#faf7f0;border:0;border-left:2px solid #ddd6c6;border-radius:0;' +
+      "color:#3b3a34;font-size:13px;line-height:1.95;font-family:Georgia,'Songti SC','SimSun',serif}",
+  },
+  {
+    id: "magazine",
+    name: "杂志双栏",
+    desc: "粗黑标题条、正文两栏、栏间细线",
+    css:
+      'body[data-tpl="magazine"] #list{background:#f2f2f0}' +
+      'body[data-tpl="magazine"] .card{background:#fff;border:0;border-top:2px solid #d8dbdf;' +
+      "border-radius:0;box-shadow:none;padding:16px 18px 18px;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="magazine"] .item-time{color:#8b8f96;font-size:11px;letter-spacing:.04em}' +
+      'body[data-tpl="magazine"] .item-src{color:#8b8f96;font-size:11px;letter-spacing:.04em}' +
+      'body[data-tpl="magazine"] .item-src a{color:#8b8f96}' +
+      'body[data-tpl="magazine"] .item-text{background:transparent;border:0;border-radius:0;padding:0;' +
+      "margin:0 0 8px;font-family:'Songti SC','SimSun',Georgia,serif;font-size:17px;line-height:1.45;" +
+      "color:#16181d;font-weight:600}" +
+      'body[data-tpl="magazine"] .item-text-extract{background-color:transparent!important;border-left:0;padding-left:0}' +
+      // 正文排两栏，栏间一条细分割线
+      'body[data-tpl="magazine"] .item-answer{font-size:12.5px;line-height:1.75;color:#45484f;margin-top:8px;' +
+      "column-count:2;column-gap:22px;column-rule:1px solid #eceef0;text-align:justify}" +
+      'body[data-tpl="magazine"] .item-answer p{margin:0 0 6px}' +
+      'body[data-tpl="magazine"] .item-tag{background:#f1f2f4;border:0;border-radius:2px;color:#4b5058}' +
+      'body[data-tpl="magazine"] .item-main{background:#f7f7f5;border-left:2px solid #c9ccd2;border-radius:0;' +
+      "color:#45484f;font-size:12.5px;line-height:1.75}",
+  },
+  {
+    id: "terminal",
+    name: "终端暗色",
+    desc: "深灰底、等宽、青绿字与 $ › 前缀",
+    css:
+      'body[data-tpl="terminal"] #list{background:#12161a;color:#c8d1d9;padding:18px;border-radius:14px}' +
+      'body[data-tpl="terminal"] .card{background:#171c21;border:1px solid #232a30;border-radius:6px;' +
+      "box-shadow:none;padding:12px 14px;-webkit-backdrop-filter:none;backdrop-filter:none;" +
+      "font-family:ui-monospace,'Cascadia Mono',Consolas,monospace}" +
+      'body[data-tpl="terminal"] .item-time{color:#4f7f6a;font-size:11.5px}' +
+      'body[data-tpl="terminal"] .item-src{color:#6f7b86;font-size:11.5px}' +
+      'body[data-tpl="terminal"] .item-src a{color:#6f7b86}' +
+      'body[data-tpl="terminal"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:0 0 8px;' +
+      "color:#c8d1d9;font-size:13.5px;line-height:1.8;font-weight:400}" +
+      'body[data-tpl="terminal"] .item-text::before{content:"$ ";color:#4f9f7f}' +
+      'body[data-tpl="terminal"] .item-text-extract{background-color:transparent!important;border-left:2px solid #2b343b;' +
+      "padding-left:10px}" +
+      'body[data-tpl="terminal"] .item-answer{color:#9fb3a8;font-size:12.5px;line-height:1.85}' +
+      'body[data-tpl="terminal"] .item-answer p{margin:0}' +
+      'body[data-tpl="terminal"] .item-answer p::before{content:"\u203A ";color:#3f6f5f}' +
+      'body[data-tpl="terminal"] .item-answer b{color:#7fd0a8;font-weight:500}' +
+      'body[data-tpl="terminal"] .item-tag{background:#1e262c;border:1px solid #2b343b;border-radius:3px;color:#7f9199}' +
+      'body[data-tpl="terminal"] .item-main{background:#1b2127;border-left:2px solid #2b343b;border-radius:3px;' +
+      "color:#9fb3a8;font-size:12.5px;line-height:1.85}",
+  },
+  {
+    id: "cards",
+    name: "卡片墙",
+    desc: "浅色悬浮卡、只有投影、轻微错落",
+    css:
+      // 列表改两栏栅格，记录像卡片墙一样并排；卡片 min-width:0 防止长内容把栏撑出容器
+      'body[data-tpl="cards"] #list{background:#eceef2;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);' +
+      "gap:12px;align-items:start}" +
+      'body[data-tpl="cards"] .card{background:#fff;border:1px solid rgba(15,23,42,.04);border-radius:10px;' +
+      "box-shadow:0 2px 8px rgba(15,23,42,.08);padding:12px 14px;min-width:0;" +
+      "-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      // 轻微错落，模拟便签贴墙
+      'body[data-tpl="cards"] .card:nth-child(odd){transform:rotate(-.35deg)}' +
+      'body[data-tpl="cards"] .card:nth-child(even){transform:rotate(.4deg)}' +
+      'body[data-tpl="cards"] .item-time{color:#8a93a0;font-size:11px}' +
+      'body[data-tpl="cards"] .item-src{color:#8a93a0;font-size:11px}' +
+      'body[data-tpl="cards"] .item-src a{color:#8a93a0}' +
+      'body[data-tpl="cards"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:0;' +
+      "font-size:14px;line-height:1.65;color:#1f2937;font-weight:400}" +
+      'body[data-tpl="cards"] .item-text-extract{background-color:transparent!important;border-left:2px solid #dfe3e9;' +
+      "padding-left:10px}" +
+      'body[data-tpl="cards"] .item-answer{color:#4b5563;font-size:12px;line-height:1.7;margin-top:6px}' +
+      'body[data-tpl="cards"] .item-answer p{margin:0 0 4px}' +
+      'body[data-tpl="cards"] .item-tag{background:rgba(99,102,241,.1);border:0;color:#4f46e5}' +
+      'body[data-tpl="cards"] .item-main{background:#f5f6f9;border:0;border-radius:6px;color:#4b5563;' +
+      "font-size:12px;line-height:1.7}",
+  },
 ];
 let styleTemplate = "glass";
 
@@ -723,6 +862,19 @@ function templateExportPageCss(id) {
   if (id === "seyes") return "body{background:#fff}";
   if (id === "carre") return "body{background:#fbf7ee}";
   if (id === "dots") return "body{background:#f3efe6}";
+  if (id === "typer") return "body{background:#f4f1e8}";
+  if (id === "book") return "body{background:#efeae0}";
+  if (id === "magazine") return "body{background:#f2f2f0}";
+  if (id === "terminal") return "body{background:#12161a;color:#c8d1d9}";
+  // 卡片墙：导出、预览、打印也排两栏，标题横跨整行
+  if (id === "cards")
+    return (
+      "body{background:#eceef2}" +
+      "body[data-tpl=\"cards\"] .wrap{max-width:820px;display:grid;" +
+      "grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}" +
+      "body[data-tpl=\"cards\"] .wrap>h1,body[data-tpl=\"cards\"] .wrap>.sub{grid-column:1/-1}" +
+      "body[data-tpl=\"cards\"] .card{margin-bottom:0}"
+    );
   return "";
 }
 
@@ -880,6 +1032,24 @@ function formatTime(t) {
   );
 }
 
+// 记录时间的展示格式：按「设置 → 时间显示」决定（默认到秒）
+function recordTimeMode() {
+  const m = displayOpts && displayOpts.timeDisplay;
+  return m === "date" || m === "short" ? m : "second";
+}
+
+function formatRecordTime(t) {
+  const d = new Date(t);
+  const mode = recordTimeMode();
+  if (mode === "date") {
+    return d.getFullYear() + "/" + pad(d.getMonth() + 1) + "/" + pad(d.getDate());
+  }
+  if (mode === "short") {
+    return String(d.getFullYear()).slice(2) + "/" + (d.getMonth() + 1) + "/" + d.getDate();
+  }
+  return formatTime(t);
+}
+
 function safeHost(u) {
   try {
     const url = new URL(u);
@@ -932,6 +1102,7 @@ function syncDisplayControls() {
   $("optLineHeight").value = displayOpts.lineHeight;
   $("optMainFontSize").value = displayOpts.mainFontSize || DEFAULT_DISPLAY.mainFontSize;
   $("optMainLineHeight").value = displayOpts.mainLineHeight || DEFAULT_DISPLAY.mainLineHeight;
+  $("optTimeDisplay").value = recordTimeMode();
   $("optCardRadius").value = displayOpts.cardRadius ?? DEFAULT_DISPLAY.cardRadius;
   $("optQuoteRadius").value = displayOpts.quoteRadius ?? DEFAULT_DISPLAY.quoteRadius;
   $("optExtractRadius").value = displayOpts.extractRadius ?? DEFAULT_DISPLAY.extractRadius;
@@ -1112,6 +1283,7 @@ function bindDisplay() {
       lineHeight: Number($("optLineHeight").value),
       mainFontSize: Number($("optMainFontSize").value),
       mainLineHeight: Number($("optMainLineHeight").value),
+      timeDisplay: $("optTimeDisplay").value,
       cardRadius: Number($("optCardRadius").value),
       quoteRadius: Number($("optQuoteRadius").value),
       extractRadius: Number($("optExtractRadius").value),
@@ -1135,6 +1307,11 @@ function bindDisplay() {
   $("optLineHeight").addEventListener("input", persist);
   $("optMainFontSize").addEventListener("input", persist);
   $("optMainLineHeight").addEventListener("input", persist);
+  // 时间显示格式改了要重渲染列表（时间文字是渲染时生成的）
+  $("optTimeDisplay").addEventListener("change", () => {
+    persist();
+    refreshHistory();
+  });
   $("optCardRadius").addEventListener("input", persist);
   $("optQuoteRadius").addEventListener("input", persist);
   $("optExtractRadius").addEventListener("input", persist);
@@ -1166,6 +1343,7 @@ function bindDisplay() {
     $("optLineHeight").value = displayOpts.lineHeight;
     $("optMainFontSize").value = displayOpts.mainFontSize;
     $("optMainLineHeight").value = displayOpts.mainLineHeight;
+    $("optTimeDisplay").value = displayOpts.timeDisplay;
     $("optCardRadius").value = displayOpts.cardRadius;
     $("optQuoteRadius").value = displayOpts.quoteRadius;
     $("optExtractRadius").value = displayOpts.extractRadius;
@@ -1654,7 +1832,7 @@ function buildItemCard(e) {
 
   const timeEl = document.createElement("span");
   timeEl.className = "item-time";
-  timeEl.textContent = formatTime(e.time);
+  timeEl.textContent = formatRecordTime(e.time);
 
   // 第一行：只在右侧放操作图标组；第二行左侧是时间、来源，右侧是标签
   const actions = document.createElement("div");
@@ -2053,7 +2231,7 @@ function renderAggregated(list) {
       giHead.className = "agg-item-head";
       const t = document.createElement("span");
       t.className = "agg-item-time";
-      t.textContent = formatTime(e.time);
+      t.textContent = formatRecordTime(e.time);
       giHead.appendChild(t);
       const top = document.createElement("button");
       top.className = "item-move";
@@ -2219,7 +2397,7 @@ function buildMarkdown(list) {
     if (opts.compact) {
       // 表格：左列原文，右列时间（右对齐）
       const text = String(e.text || "").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
-      lines.push("| " + (i + 1) + ". 「" + text + "」 | " + formatTime(e.time) + " |");
+      lines.push("| " + (i + 1) + ". 「" + text + "」 | " + formatRecordTime(e.time) + " |");
       lines.push("| :--- | ---: |");
       lines.push("");
       lines.push(e.answer || "");
@@ -2233,7 +2411,7 @@ function buildMarkdown(list) {
       lines.push("");
       lines.push("## " + (i + 1) + ". 「" + (e.text || "") + "」");
       lines.push("");
-      if (opts.time) lines.push("- **时间**：" + formatTime(e.time));
+      if (opts.time) lines.push("- **时间**：" + formatRecordTime(e.time));
       if (opts.pageTitle && displayTitle(e)) lines.push("- **来源页面**：" + displayTitle(e));
       if (opts.pageUrl && e.pageUrl) lines.push("- **页面地址**：" + e.pageUrl);
       lines.push("");
@@ -2274,7 +2452,7 @@ function buildMarkdownAggregated(list) {
     recs.forEach((e, j) => {
       if (opts.sep && j > 0) lines.push("---");
       lines.push("### " + (j + 1) + ". 「" + (e.text || "") + "」");
-      if (opts.time) lines.push("- **时间**：" + formatTime(e.time));
+      if (opts.time) lines.push("- **时间**：" + formatRecordTime(e.time));
       lines.push("");
       lines.push(e.answer || "");
       lines.push("");
@@ -2386,7 +2564,7 @@ function metaAttrs(e, isExtract, withSource) {
 function cardHtml(e) {
   const opts = exportOpts;
   const head = [];
-  if (opts.time) head.push('<span class="item-time">' + esc(formatTime(e.time)) + "</span>");
+  if (opts.time) head.push('<span class="item-time">' + esc(formatRecordTime(e.time)) + "</span>");
   // 来源：勾选「来源页面」才显示；「页面地址」决定是否带超链接
   if (opts.pageTitle && displayTitle(e)) {
     if (opts.pageUrl && e.pageUrl) {
@@ -2434,7 +2612,7 @@ function buildCardsHtmlAggregated(list) {
       // 卡片头显示这组明细里最后一条的时间（勾选「时间」才显示）；明细行不再重复时间与标签
       if (opts.time) {
         const lastTime = Math.max(...recs.map((e) => Number(e.time) || 0));
-        if (lastTime) head.push('<span class="item-time">' + esc(formatTime(lastTime)) + "</span>");
+        if (lastTime) head.push('<span class="item-time">' + esc(formatRecordTime(lastTime)) + "</span>");
       }
       // 来源：勾选「来源页面」才显示；「页面地址」决定是否带超链接
       if (opts.pageTitle && displayTitle(first)) {
