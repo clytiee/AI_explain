@@ -714,7 +714,7 @@ function buildSideNav() {
     const h2 = card.querySelector("h2");
     return { id: card.id, label: h2 ? h2.textContent.trim() : "第 " + (i + 1) + " 块" };
   });
-  if ($("saveBar")) items.push({ id: "saveBar", label: "保存设置" });
+  if ($("saveBar")) items.push({ id: "saveBar", label: "保存设置", save: true });
 
   // 让菜单顶部与第一张卡片的上边缘对齐（卡片位置随窗口宽度变化，resize 时重算）
   const alignNav = () => {
@@ -741,6 +741,14 @@ function buildSideNav() {
     if (it.id === "saveBar") a.classList.add("is-save");
     a.addEventListener("click", (ev) => {
       ev.preventDefault();
+      // 「保存设置」不是跳转项，直接执行保存
+      if (it.save) {
+        a.classList.add("active");
+        setTimeout(() => a.classList.remove("active"), 300);
+        const btn = $("save");
+        if (btn) btn.click();
+        return;
+      }
       const el = document.getElementById(it.id);
       if (!el) return;
       const top = el.getBoundingClientRect().top + window.scrollY - 16;
@@ -750,20 +758,22 @@ function buildSideNav() {
     nav.appendChild(a);
   });
 
+  const spyItems = items.filter((it) => !it.save);
   const setActive = () => {
     const line = window.scrollY + window.innerHeight * 0.3;
-    let cur = items[0] ? items[0].id : "";
-    items.forEach((it) => {
+    let cur = spyItems[0] ? spyItems[0].id : "";
+    spyItems.forEach((it) => {
       const el = document.getElementById(it.id);
       if (!el) return;
       const top = el.getBoundingClientRect().top + window.scrollY;
       if (top <= line) cur = it.id;
     });
-    // 已经滚到底的极端情况，高亮最后一项
+    // 已经滚到底的极端情况，高亮最后一张卡片
     if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 24) {
-      cur = items.length ? items[items.length - 1].id : cur;
+      cur = spyItems.length ? spyItems[spyItems.length - 1].id : cur;
     }
     nav.querySelectorAll("a").forEach((a) => {
+      if (a.classList.contains("is-save")) return;
       a.classList.toggle("active", a.dataset.target === cur);
     });
   };
