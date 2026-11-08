@@ -281,6 +281,18 @@
     .bg-swatches { display: inline-flex; gap: 4px; align-items: center; }
     /* 字体颜色和它的快捷色块锁在一组里，色块多的时候也不掉到下一行 */
     .font-color-group { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; white-space: nowrap; }
+    /* 自定义字体输入框 + 模糊匹配的候选列表 */
+    .font-input-wrap { position: relative; display: inline-flex; }
+    .font-suggest {
+      position: absolute; left: 0; top: calc(100% + 4px); z-index: 20;
+      min-width: 220px; max-height: 220px; overflow-y: auto;
+      background: #fff; border: 1px solid var(--border); border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12); padding: 4px;
+    }
+    .font-suggest[hidden] { display: none !important; }
+    .font-suggest-item { padding: 5px 8px; font-size: 12px; border-radius: 6px; cursor: pointer; white-space: nowrap; color: var(--text); }
+    .font-suggest-item.active, .font-suggest-item:hover { background: var(--primary-soft); color: var(--primary); }
+    .font-suggest-empty { padding: 6px 8px; font-size: 12px; color: var(--muted); }
     .bg-swatch {
       width: 16px; height: 16px; padding: 0; border-radius: 4px; cursor: pointer;
       border: 1px solid rgba(0, 0, 0, 0.12); flex: 0 0 auto;
@@ -720,14 +732,17 @@
     </div>
     <div class="opts opt-panel" id="stylePanel" hidden>
       <span class="seg" id="fontScopeBar" title="切换要调整字体的区域">
-        <button type="button" class="seg-btn active" data-scope="quote">原文</button>
+        <button type="button" class="seg-btn active" data-scope="main">主文</button>
+        <button type="button" class="seg-btn" data-scope="quote">原文</button>
         <button type="button" class="seg-btn" data-scope="answer">释义</button>
-        <button type="button" class="seg-btn" data-scope="main">主文</button>
       </span>
       <span class="opts-br"></span>
       <label class="opt-lbl">字体 <select id="optFontPreset"></select></label>
-      <button type="button" id="fontScan" class="reset-btn" title="读取本机已安装的中文字体，加入字体下拉（首次需要授权）">读取本机字体</button>
-      <label><input type="text" id="optFontFamily" placeholder="或输入自定义字体" spellcheck="false" /></label>
+      <button type="button" id="fontScan" class="reset-btn" title="读取本机已安装的字体，加入字体下拉（首次需要授权）">读取本机字体</button>
+      <span class="font-input-wrap">
+        <label><input type="text" id="optFontFamily" placeholder="或输入自定义字体" spellcheck="false" autocomplete="off" /></label>
+        <div class="font-suggest" id="fontSuggest" hidden></div>
+      </span>
       <span class="font-color-group">
         <label class="opt-lbl opt-rowstart">字体颜色 <input type="color" id="optFontColor" value="#1f2937" /></label>
         <span class="bg-swatches" id="fontSwatches"></span>

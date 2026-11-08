@@ -70,7 +70,7 @@ const FONT_SCOPES = {
   answer: { family: "ansFontFamily", color: "ansFontColor", size: "ansFontSize", line: "ansLineHeight", label: "释义" },
   main: { family: "mainFontFamily", color: "mainFontColor", size: "mainFontSize", line: "mainLineHeight", label: "主文" },
 };
-let fontScope = "quote";
+let fontScope = "main";
 let displayOpts = { ...DEFAULT_DISPLAY };
 
 // 字体预设选项（value 为空表示自定义）
@@ -1610,6 +1610,116 @@ function buildFontGroup(id, label, names) {
   return grp;
 }
 
+// 字体名模糊匹配打分：连续命中分最高（越靠前越高），允许隔字顺序命中
+function fontMatchScore(name, q) {
+  if (!q) return 0;
+  const n = String(name).toLowerCase();
+  const s = String(q).toLowerCase();
+  const idx = n.indexOf(s);
+  if (idx >= 0) return 100 - idx;
+  let i = 0;
+  let gaps = 0;
+  let started = false;
+  for (let k = 0; k < n.length && i < s.length; k++) {
+    if (n[k] === s[i]) {
+      i++;
+      started = true;
+    } else if (started) gaps++;
+  }
+  return i === s.length ? Math.max(1, 50 - gaps) : -1;
+}
+
+// 候选来源：内置预设（显示中文名）+ 本机读到的字体
+function fontCandidates() {
+  const out = [];
+  FONT_OPTIONS.forEach((o) => {
+    if (o.value) out.push({ name: o.label, value: o.value });
+  });
+  localFontList.forEach((name) => out.push({ name, value: name }));
+  return out;
+}
+
+// 自定义字体输入框：边输入边给模糊匹配的候选，点/回车即填入
+function bindFontSuggest() {
+  const input = $("optFontFamily");
+  const box = $("fontSuggest");
+  if (!input || !box) return;
+  let active = -1;
+
+  const hide = () => {
+    box.hidden = true;
+    box.innerHTML = "";
+    active = -1;
+  };
+
+  const paint = () => {
+    Array.from(box.children).forEach((el, i) => el.classList.toggle("active", i === active));
+  };
+
+  const pick = (i) => {
+    const el = box.children[i];
+    if (!el) return;
+    input.value = el.dataset.value;
+    hide();
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  const render = () => {
+    const q = input.value.trim();
+    if (!q) {
+      hide();
+      return;
+    }
+    const items = fontCandidates()
+      .map((c) => ({ c, score: fontMatchScore(c.name, q) }))
+      .filter((x) => x.score >= 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+      .map((x) => x.c);
+    if (!items.length) {
+      hide();
+      return;
+    }
+    box.innerHTML = "";
+    items.forEach((c, i) => {
+      const el = document.createElement("div");
+      el.className = "font-suggest-item";
+      el.textContent = c.name;
+      el.dataset.value = c.value;
+      el.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        pick(i);
+      });
+      box.appendChild(el);
+    });
+    box.hidden = false;
+    active = -1;
+  };
+
+  input.addEventListener("input", render);
+  input.addEventListener("focus", render);
+  input.addEventListener("blur", () => setTimeout(hide, 120));
+  input.addEventListener("keydown", (e) => {
+    if (box.hidden) return;
+    const n = box.children.length;
+    if (!n) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      active = (active + 1) % n;
+      paint();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      active = (active - 1 + n) % n;
+      paint();
+    } else if (e.key === "Enter" && active >= 0) {
+      e.preventDefault();
+      pick(active);
+    } else if (e.key === "Escape") {
+      hide();
+    }
+  });
+}
+
 // 中文（以及常见 CJK 字体）的族名特征，用来从本机字体里挑出要显示的
 const CJK_FONT_RE =
   /(宋|黑|楷|仿|雅黑|等线|明朝|隶|圆体|標楷|新細明|微软|方正|思源|华文|汉仪|汉|文鼎|苹方|冬青|兰亭|Sim|Kai|Fang|YaHei|DengXian|MingLiU|PMingLiU|Source Han|Noto (Sans|Serif) (SC|TC|CJK)|Hiragino Sans GB|PingFang|STSong|STKaiti|STHeiti|STFangsong|Yu Gothic|Meiryo|Malgun|PMing|Batang)/i;
@@ -1800,6 +1910,7 @@ function load() {
       [AGG_ORDER_KEY]: {},
       [STYLE_TPL_KEY]: "glass",
       [STYLE_PANEL_KEY]: false,
+      [LOCAL_FONTS_KEY]: [],
       timeMode: "date",
       config: {},
     },
@@ -1992,6 +2103,7 @@ function bindDisplay() {
     $("optFontPreset").value = matchFontPreset(raw || DEFAULT_DISPLAY.fontFamily);
     persist();
   });
+  bindFontSuggest();
   // 恢复当前模板的默认样式（带确认）
   $("resetDisplay").addEventListener("click", () => {
     if (!window.confirm("恢复到当前模板的默认样式吗？你在样式设置里的修改会被清除。")) return;
