@@ -1286,10 +1286,11 @@ function render() {
   renderTagBar();
   const list = filteredList();
 
+  // 统计信息尽量短：有筛选时显示「命中/总数」，没筛选显示「共 总数」，避免把右侧按钮挤到下一行
+  const isFiltered = Boolean(q || hasTimeFilter() || tagFilter.length);
   $("count").textContent =
-    "共 " + list.length + " 条" +
-    (aggregate ? " / " + new Set(list.map((e) => e.pageUrl || e.pageTitle || e.id)).size + " 组" : "") +
-    ((q || hasTimeFilter() || tagFilter.length) ? "（已筛选）" : "");
+    (isFiltered ? list.length + "/" + all.length : "共 " + all.length) + " 条" +
+    (aggregate ? " / " + new Set(list.map((e) => e.pageUrl || e.pageTitle || e.id)).size + " 组" : "");
 
   const box = $("list");
   if (!list.length) {

@@ -68,6 +68,7 @@
     }
     .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
 
+    /* 工具栏允许换行，但按钮行永远不折：空间不够时只压搜索框 */
     .toolbar {
       display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
       background: rgba(255, 255, 255, 0.88);
@@ -77,7 +78,9 @@
       margin-bottom: 16px;
       box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
     }
-    .search-wrap { position: relative; flex: 1 1 200px; min-width: 160px; }
+    .toolbar > button, .toolbar .count { flex: 0 0 auto; }
+    /* 基准宽度设为 0：搜索框只吃剩余空间，绝不把按钮挤到下一行 */
+    .search-wrap { position: relative; flex: 1 1 0; min-width: 120px; }
     /* 工具栏按钮收紧左右内边距，给统计信息腾位置，减少换行；统一高度避免短文案（MD）显得矮一截 */
     .toolbar button.primary, .toolbar button.ghost {
       padding-left: 12px; padding-right: 12px;
@@ -104,10 +107,10 @@
       color: var(--muted); font-size: 13px; line-height: 1; border-radius: 50%;
     }
     .search-clear:hover { color: var(--text); background: rgba(0, 0, 0, 0.06); }
-    /* 统计信息可让位：空间不够时先压缩自己（省略号），别把右侧按钮挤到下一行 */
+    /* 统计信息文案已缩短（12/30），固定不收缩，换行压力交给搜索框 */
     .count {
       font-size: 12px; color: var(--muted); white-space: nowrap;
-      flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: right;
+      flex: 0 0 auto; text-align: right;
     }
 
     .opts {
@@ -570,7 +573,7 @@
 
     <div class="toolbar">
       <div class="search-wrap">
-        <input type="text" id="search" class="search" placeholder="搜索原文、释义或来源页面…" />
+        <input type="text" id="search" class="search" placeholder="搜索原文、释义或来源" />
         <button type="button" class="search-clear" id="searchClear" title="清空搜索" aria-label="清空搜索">✕</button>
       </div>
       <span class="count" id="count"></span>
