@@ -262,11 +262,11 @@
     /* 下拉框与其选项的字号比输入框小一号（放在控件规则之后，避免被 13px 覆盖） */
     .opts select, .opts select option { font-size: 12px; }
     .opts-hint { color: var(--muted); font-size: 12px; }
-    .opts .reset-btn {
+    .opts .reset-btn, .toolbar .reset-btn {
       border: 1px solid var(--border); background: #fff; color: var(--muted);
       font-size: 12px; padding: 4px 10px; border-radius: 7px; cursor: pointer;
     }
-    .opts .reset-btn:hover { color: var(--primary); border-color: var(--primary); }
+    .opts .reset-btn:hover, .toolbar .reset-btn:hover { color: var(--primary); border-color: var(--primary); }
     .opts .reset-btn.active { color: var(--primary); border-color: var(--primary); background: rgba(99, 102, 241, 0.08); }
     .opts .btn-mini {
       border: 1px solid var(--border); background: #fff; color: var(--muted);
@@ -343,6 +343,7 @@
     #list:empty { display: none; }
 
     .card {
+      position: relative;
       background: rgba(255, 255, 255, 0.88);
       -webkit-backdrop-filter: blur(14px);
       backdrop-filter: blur(14px);
@@ -356,8 +357,29 @@
       display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
       /* 操作图标行整体上移一点，下面用一道淡实线跟时间/来源行分开 */
       margin: -12px 0 10px; padding-bottom: 2px;
+      /* 右上角让给选中角标，图标不压到它 */
+      padding-right: 24px;
       border-bottom: 1px solid rgba(15, 23, 42, 0.07);
     }
+    /* 卡片右上角：点一下选中这张卡片（可多选，选中后只导出选中的记录） */
+    .card-pick {
+      position: absolute; top: 0; right: 0; width: 28px; height: 28px;
+      padding: 0; border: 0; background: transparent; cursor: pointer;
+      border-top-right-radius: var(--card-radius, 16px); z-index: 3;
+    }
+    .card-pick::before {
+      content: ""; position: absolute; top: 0; right: 0; width: 26px; height: 26px;
+      background: transparent; clip-path: polygon(100% 0, 100% 100%, 0 0);
+      border-top-right-radius: inherit;
+    }
+    .card-pick:hover::before { background: rgba(99, 102, 241, 0.12); }
+    .card.selected .card-pick::before { background: #e9e5ff; }
+    .card.selected .card-pick::after {
+      content: ""; position: absolute; top: 4px; right: 3px; width: 11px; height: 8px;
+      background: center / 11px 8px no-repeat
+        url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 16'%3E%3Cpath d='M2 8.6 L8 14.4 L20 1.8' fill='none' stroke='%235b46e0' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    }
+    .card.selected { box-shadow: 0 8px 30px rgba(99, 102, 241, 0.18); }
     /* 时间不占富余空间：来源紧跟其后靠左，按钮组才靠右 */
     .item-time { font-size: 12px; color: var(--muted); flex: 0 0 auto; white-space: nowrap; }
     .item-tag {
@@ -628,6 +650,7 @@
         <button type="button" class="search-clear" id="searchClear" title="清空搜索" aria-label="清空搜索">✕</button>
       </div>
       <span class="count" id="count"></span>
+      <button type="button" class="reset-btn" id="pickClear" title="取消全部选中，回到正常筛选" hidden>清除</button>
       <button class="primary" id="exportHtml">导出 HTML</button>
       <button class="ghost" id="previewPage" title="打开与导出 HTML 相同的页面，只预览、不弹打印窗口">预览</button>
       <button class="ghost" id="printPage" title="打开与导出 HTML 相同的页面并直接调起打印">打印</button>

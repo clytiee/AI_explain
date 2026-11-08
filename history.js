@@ -72,6 +72,8 @@ const FONT_SCOPES = {
 };
 let fontScope = "main";
 let displayOpts = { ...DEFAULT_DISPLAY };
+// 历史页里手动选中的卡片 id 集合：有选中时只显示/导出这些记录
+let pickedIds = new Set();
 
 // 字体预设选项（value 为空表示自定义）
 const FONT_OPTIONS = [
@@ -2215,6 +2217,13 @@ function filteredList() {
   return list;
 }
 
+// 导出 / 预览 / 打印用的列表：有手动选中的卡片时，只出选中的记录；
+// 页面上的列表始终按筛选条件显示，方便一边浏览一边勾选。
+function outputList() {
+  if (!pickedIds.size) return filteredList();
+  return all.filter((e) => pickedIds.has(e.id));
+}
+
 // 全部标签（从记录里聚合，按出现次数排序）
 function allTags() {
   const count = new Map();
@@ -2516,13 +2525,33 @@ function render() {
   // 有内容时显示搜索框右侧的清空按钮
   $("searchClear").style.display = q ? "flex" : "none";
   renderTagBar();
+  // 选中的记录被删掉后，把失效的 id 剔掉
+  if (pickedIds.size) {
+    const ids = new Set(all.map((e) => e.id));
+    Array.from(pickedIds).forEach((id) => {
+      if (!ids.has(id)) pickedIds.delete(id);
+    });
+  }
   const list = filteredList();
+  const pickBtn = $("pickClear");
+  if (pickBtn) pickBtn.hidden = !pickedIds.size;
 
   // 统计信息尽量短：有筛选时显示「命中/总数」，没筛选显示「共 总数」，避免把右侧按钮挤到下一行
   const isFiltered = Boolean(q || hasTimeFilter() || tagFilter.length);
-  $("count").textContent =
-    (isFiltered ? list.length + "/" + all.length : "共 " + all.length) + " 条" +
-    (aggregate ? " / " + new Set(list.map((e) => e.pageUrl || e.pageTitle || e.id)).size + " 组" : "");
+  const groupCount = new Set(list.map((e) => e.pageUrl || e.pageTitle || e.id)).size;
+  let countText;
+  if (aggregate) {
+    // 聚合模式按「组」统计；有选中时显示选中的组数
+    countText = "共 " + groupCount + " 组";
+    if (pickedIds.size) {
+      const pickedGroups = groupRecords(all.filter((e) => pickedIds.has(e.id))).length;
+      countText += " · 已选 " + pickedGroups + " 组";
+    }
+  } else {
+    countText = (isFiltered ? list.length + "/" + all.length : "共 " + all.length) + " 条";
+    if (pickedIds.size) countText += " · 已选 " + pickedIds.size + " 条";
+  }
+  $("count").textContent = countText;
 
   const box = $("list");
   if (!list.length) {
@@ -2578,10 +2607,36 @@ const MAIN_BTN_ICON =
 const EDIT_SRC_ICON =
   '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 
+// 选中 / 取消选中某张卡片；清空全部选中
+function togglePick(id) {
+  if (pickedIds.has(id)) pickedIds.delete(id);
+  else pickedIds.add(id);
+  render();
+}
+
+function clearPicked() {
+  if (!pickedIds.size) return;
+  pickedIds = new Set();
+  render();
+}
+
 // 普通卡片（非聚合）：第一行 时间 + 来源按钮 + 来源 + 删除
 function buildItemCard(e) {
   const item = document.createElement("div");
   item.className = "card";
+
+  // 右上角角标：点一下选中/取消这张卡片，选中后这条记录就算进「自由筛选」
+  const pick = document.createElement("button");
+  pick.type = "button";
+  pick.className = "card-pick";
+  const picked = pickedIds.has(e.id);
+  if (picked) item.classList.add("selected");
+  pick.title = picked ? "取消选中" : "选中这条：选中后只显示、导出选中的记录";
+  pick.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    togglePick(e.id);
+  });
+  item.appendChild(pick);
 
   const srcKey = e.pageUrl || e.pageTitle || "";
 
@@ -2915,6 +2970,21 @@ function renderAggregated(list) {
     const item = document.createElement("div");
     item.className = "card card-agg";
 
+    // 右上角角标：聚合卡片按「整组」选中（选中后把这组全部记录算进自由筛选）
+    const pick = document.createElement("button");
+    pick.type = "button";
+    pick.className = "card-pick";
+    const allPicked = recs.every((r) => pickedIds.has(r.id));
+    if (allPicked) item.classList.add("selected");
+    pick.title = allPicked ? "取消选中这一组" : "选中这一组：选中后只显示、导出选中的记录";
+    pick.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (allPicked) recs.forEach((r) => pickedIds.delete(r.id));
+      else recs.forEach((r) => pickedIds.add(r.id));
+      render();
+    });
+    item.appendChild(pick);
+
     // 第一行：只在右侧放操作图标组；第二行左侧是记录数、来源，右侧是标签
     const head = document.createElement("div");
     head.className = "item-head item-head-agg";
@@ -3244,11 +3314,11 @@ function exportMd() {
     statusEl.textContent = text;
     statusEl.className = "export-status" + (ok ? " ok" : " err"); // 保留基础类，绿色/红色由 ok/err 决定
   };
-  if (!filteredList().length) {
+  if (!outputList().length) {
     exportStatus("暂无记录可导出。", false);
     return;
   }
-  const list = filteredList();
+  const list = outputList();
   const md = aggregate ? buildMarkdownAggregated(list) : buildMarkdown(list);
   const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -3533,7 +3603,7 @@ function exportHtml() {
     statusEl.textContent = text;
     statusEl.className = "export-status" + (ok ? " ok" : " err");
   };
-  const list = filteredList();
+  const list = outputList();
   if (!list.length) {
     exportStatus("暂无记录可导出。", false);
     return;
@@ -3561,7 +3631,7 @@ function exportHtml() {
 // 预览：与打印同一份页面，但不自动弹出打印窗口
 function previewHistory() {
   const statusEl = $("exportStatus");
-  const list = filteredList();
+  const list = outputList();
   if (!list.length) {
     statusEl.textContent = "暂无记录可预览。";
     statusEl.className = "export-status err";
@@ -3589,7 +3659,7 @@ function previewHistory() {
 
 function printHistory() {
   const statusEl = $("exportStatus");
-  const list = filteredList();
+  const list = outputList();
   if (!list.length) {
     statusEl.textContent = "暂无记录可打印。";
     statusEl.className = "export-status err";
@@ -3900,6 +3970,7 @@ function setStatus(text, ok) {
 
 // 事件
 $("search").addEventListener("input", () => { page = 1; render(); });
+$("pickClear").addEventListener("click", clearPicked);
 $("tagClear").addEventListener("click", () => {
   tagFilter = [];
   page = 1;
