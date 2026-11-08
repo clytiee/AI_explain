@@ -1173,6 +1173,65 @@ function templateExportPageCss(id) {
   return "";
 }
 
+// 导出/打印页标题前的圆点：跟着各模板自己的主色走（默认模板保留原来的紫蓝渐变）
+const DOT_COLORS = {
+  doc: "#6366f1",
+  quote: "#64748b",
+  compact: "#94a3b8",
+  paper: "#b08a5a",
+  sticky: "#e0b23c",
+  dark: "#8b9cf9",
+  news: "#44403c",
+  grid: "#7ea6cf",
+  ruled: "#7ea6cf",
+  mono: "#6b7280",
+  kraft: "#a97c4c",
+  ink: "#8a7f6a",
+  warmdark: "#c8a878",
+  legal: "#4a6fa5",
+  seyes: "#5b8fc9",
+  carre: "#7f97ad",
+  dots: "#8a8574",
+  typer: "#a8724a",
+  book: "#8a5a33",
+  magazine: "#9aa0a8",
+  terminal: "#4f9f7f",
+  cards: "#6366f1",
+};
+
+function templateDotCss(id) {
+  const c = DOT_COLORS[id];
+  if (!c) return "";
+  return "h1 .dot{background:" + c + ";background-image:none}" +
+    "@media print{h1 .dot{background:" + c + ";background-image:none}}";
+}
+
+// 深色模板打印时改成白底黑字（否则黑字压在深底上看不见）
+const DARK_TEMPLATES = ["dark", "warmdark", "terminal"];
+// 打印用的浅底色：给三个深色模板一点各自的色偏，纸上还看得出是哪个模板
+const DARK_PRINT_BG = { dark: "#f8f9fb", warmdark: "#fbf8f2", terminal: "#f6f9f8" };
+
+function darkPrintCss(id) {
+  if (DARK_TEMPLATES.indexOf(id) < 0) return "";
+  const s = 'body[data-tpl="' + id + '"]';
+  const pageBg = DARK_PRINT_BG[id] || "#fff";
+  return (
+    s + "{background:" + pageBg + "!important;color:#111!important}" +
+    s + " .card{background:" + pageBg + "!important;border-color:#e5e7eb!important;box-shadow:none!important" +
+    ";-webkit-backdrop-filter:none!important;backdrop-filter:none!important}" +
+    // 原文 / 摘录 / 主文块在白底上收回到浅底细线
+    s + " .item-text," + s + " .item-text-extract," + s + " .item-main," + s + " .item-main-dim{" +
+    "background:" + pageBg + "!important;border-color:#dde1e7!important}" +
+    // 所有文字（含时间、来源、标签、标题）一律纯黑，标签改成浅底
+    s + " .item-text," + s + " .item-text-extract," + s + " .item-answer," + s + " .item-answer p," +
+    s + " .item-answer li," + s + " .item-answer blockquote," + s + " .item-main," + s + " .item-main-dim," +
+    s + " h1," + s + " .h1-sub," + s + " .item-time," + s + " .item-src," + s + " .item-src a," +
+    s + " .item-count," + s + " .item-tag{color:#000!important}" +
+    s + " .item-tag{background:#f2f3f5!important;border-color:#dfe2e6!important}" +
+    s + " .item-answer code," + s + " .item-answer pre{background:#f5f6f8!important;color:#000!important}"
+  );
+}
+
 // 明细主文（多行选中原文）：各模板的 .item-main 底色差别很大，通用底色会难看，
 // 所以这里给每个模板单独一份「淡版」：底色和左边线变淡，文字颜色沿用模板原色。
 // 只在渲染层的独立类上生效，不改动各模板已有的 .item-main 规则。
@@ -3109,17 +3168,22 @@ function buildExportHtml(list, withPrintScript, titleWithTime, previewBlack) {
       ? tplOverrideCss(styleTemplate, tplOverrides[styleTemplate], true)
       : "";
   const tplCss =
-    styleTemplateCss(styleTemplate) + mainDimCss(styleTemplate) + templateExportPageCss(styleTemplate) + tplOverridesCss;
+    styleTemplateCss(styleTemplate) + mainDimCss(styleTemplate) + templateExportPageCss(styleTemplate) + tplOverridesCss +
+    // 标题前的圆点跟着模板主色走，默认模板仍保留原来的紫蓝渐变
+    templateDotCss(styleTemplate);
   // 打印用黑色字：纸上用颜料墨更清楚、也防水；只影响打印，屏幕与导出的 HTML 仍按模板配色
   const blackRules =
     ".item-text,.item-text-extract,.item-answer,.item-answer p,.item-answer li,.item-main,.item-main-dim{" +
     "color:#000!important}" +
     "h1,.h1-sub,.card .item-text,.card .item-answer,.card .item-main{text-shadow:none!important}";
+  // 深色模板（夜间/暖夜/终端暗色）底是深的，纯黑字在纸上等于看不见：
+  // 打印时把这几个模板整页改成白底，文字用纯黑
+  const darkPrintRules = darkPrintCss(styleTemplate);
   const printBlackCss = exportOpts.printBlack === false
     ? ""
-    : "\n@media print{" + blackRules + "}" +
+    : "\n@media print{" + blackRules + darkPrintRules + "}" +
       // 预览 / 打印窗口另开一份“所见即打印”的规则，屏幕上就能看出打印出来的纯黑效果
-      (previewBlack ? "\n" + blackRules : "");
+      (previewBlack ? "\n" + blackRules + darkPrintRules : "");
   const html =
     "<!DOCTYPE html>\n" +
     '<html lang="zh-CN">\n<head>\n' +
