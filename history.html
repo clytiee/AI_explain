@@ -128,7 +128,6 @@
       border: 1px solid rgba(255, 255, 255, 0.5);
       border-radius: 12px;
       padding: 10px 16px;
-      margin-bottom: 16px;
       font-size: 13px;
     }
     .opts.timebar { overflow: visible; }
@@ -174,6 +173,30 @@
       padding: 0 6px; letter-spacing: 0.05em;
     }
     .panel-toggle:hover .panel-toggle-state { color: var(--primary); }
+    /* 折叠条右端：钉住按钮 */
+    .opts.panel-row { position: relative; }
+    /* 样式设置独立成块 */
+    .style-card { padding: 12px 16px; }
+    .style-card[hidden] { display: none !important; }
+    /* 「更多」展开的区块：与外层同一套 flex 排布 */
+    .opt-more {
+      display: flex; align-items: center; flex-wrap: wrap;
+      gap: 14px; row-gap: 6px; flex-basis: 100%;
+    }
+    .opt-more[hidden] { display: none !important; }
+    .pin-btn {
+      margin-left: auto;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px; padding: 0;
+      border: none; background: transparent; border-radius: 6px;
+      color: var(--muted); cursor: pointer;
+    }
+    .pin-btn:hover { color: var(--primary); background: rgba(99, 102, 241, 0.1); }
+    .pin-btn[aria-pressed="true"] { color: var(--primary); background: rgba(99, 102, 241, 0.12); }
+    /* 钉住：块本身 sticky，下面还有列表可滚，所以有足够的粘住区间 */
+    body.pin-style #styleArea {
+      position: sticky; top: 0; z-index: 60;
+    }
     /* 时间行没有可伸缩的占位元素，靠 margin-left:auto 把「清除」推到行尾，与标签行的观感一致 */
     .opts.timebar #timeClear { margin-left: auto; }
     .opts.timebar .opts-hint { flex: 0 0 auto; color: var(--primary); font-size: 12px; }
@@ -289,6 +312,17 @@
       box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12); padding: 4px;
     }
     .font-suggest[hidden] { display: none !important; }
+    /* 字体输入框里的清空图标，跟搜索框那个一致 */
+    .font-clear {
+      position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+      display: flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; padding: 0;
+      border: none; background: none; cursor: pointer;
+      color: var(--muted); font-size: 12px; line-height: 1; border-radius: 50%;
+    }
+    .font-clear:hover { color: var(--text); background: rgba(0, 0, 0, 0.06); }
+    .font-clear[hidden] { display: none !important; }
+    #optFontFamily { padding-right: 22px; }
     .font-suggest-item { padding: 5px 8px; font-size: 12px; border-radius: 6px; cursor: pointer; white-space: nowrap; color: var(--text); }
     .font-suggest-item.active, .font-suggest-item:hover { background: var(--primary-soft); color: var(--primary); }
     .font-suggest-empty { padding: 6px 8px; font-size: 12px; color: var(--muted); }
@@ -312,7 +346,7 @@
     button.ghost { background: var(--primary-soft); color: var(--primary); }
     button.ghost:hover { background: rgba(99, 102, 241, 0.2); }
     /* 设置按钮的“打开/关闭”用按下态表示：显示时实心紫，隐藏时淡紫 */
-    #toggleSettings.is-on {
+    #toggleSettings.is-on, #toggleStyle.is-on {
       background: var(--primary); color: #fff; border-color: var(--primary);
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
     }
@@ -335,6 +369,7 @@
     button.danger:hover { background: rgba(220, 38, 38, 0.18); }
     /* 样式设置行里的字段名（字体/字体颜色/字体大小/行高）与「页面背景色」这类小标题同字号同色 */
     .opts label.opt-lbl { font-size: 12px; color: var(--muted); gap: 6px; }
+    .opts label.opt-lbl[hidden] { display: none !important; }
     /* 展开面板不再缩进，换行后的字段与第一行左对齐即可 */
     .opts label.opt-rowstart { margin-left: 0; }
     /* 记录区：样式设置里的「页面背景色」与风格模板的底色都只落在这里，不影响工具栏/设置区 */
@@ -345,6 +380,8 @@
       font-family: var(--font-family);
       color: var(--font-color);
     }
+    /* 设置区与记录列表之间留一点间隔 */
+    #settingsArea { margin-bottom: 14px; }
     #list:empty { display: none; }
 
     .card {
@@ -447,6 +484,11 @@
       display: grid; grid-template-columns: auto minmax(0, 1fr);
       align-items: start; column-gap: 14px; row-gap: 0;
     }
+    .tpl-modified {
+      font-size: 12px; color: #b45309; white-space: nowrap;
+      align-self: center; padding-left: 4px;
+    }
+    .tpl-modified[hidden] { display: none !important; }
     .tpl-btn {
       font-family: inherit; font-size: 12px; line-height: 1; padding: 5px 10px; cursor: pointer;
       border-radius: 999px; border: 1px solid rgba(99, 102, 241, 0.3);
@@ -584,7 +626,7 @@
       border-left-color: var(--main-border) !important;
       border-left-color: color-mix(in srgb, var(--main-border) 35%, transparent) !important;
     }
-    .item-answer p { margin: 4px 0; }
+    .item-answer p { margin: 0 0 var(--ans-spacing, 6px); }
     .item-answer h1, .item-answer h2, .item-answer h3, .item-answer h4 { margin: 8px 0 4px; font-size: 14px; }
     .item-answer ul, .item-answer ol { margin: 4px 0; padding-left: 20px; }
     .item-answer li { margin: 2px 0; }
@@ -691,6 +733,7 @@
       <div class="opts tpl-row">
         <span class="opts-title">风格模板：<span class="info-dot" title="切换后立即生效，导出 HTML / 打印也按当前模板">ⓘ</span></span>
         <div class="tpl-bar" id="tplBar"></div>
+        <span class="tpl-modified" id="tplModified" hidden>样式有修改</span>
       </div>
 
       <!-- 列表显示模式：常驻显示，不受「设置」与「样式设置」折叠影响 -->
@@ -700,6 +743,7 @@
           <button type="button" id="toggleQuote" class="reset-btn">隐藏原文</button>
           <button type="button" id="toggleAgg" class="reset-btn">按来源聚合</button>
           <button type="button" id="toggleSettings" class="reset-btn" title="显示/隐藏设置区" aria-pressed="true">设置</button>
+          <button type="button" id="toggleStyle" class="reset-btn" title="显示/隐藏样式设置区（与设置互斥）" aria-pressed="false">样式</button>
           <button type="button" id="toggleReadonly" class="reset-btn" title="切换只读模式：只读下列表卡片不显示任何操作图标" aria-pressed="false">只读</button>
         </span>
       </div>
@@ -752,24 +796,28 @@
       <button type="button" class="btn-mini" id="import">导入</button>
     </div>
     <!-- 列表显示模式已随风格模板移到工具栏卡片，不在设置区内 -->
-    <div class="opts panel-row">
-      <button type="button" class="panel-toggle" id="styleToggle" aria-expanded="false" aria-controls="stylePanel" title="展开或折叠字体、颜色、圆角与样式管理">
-        <span class="panel-toggle-title">样式设置<span id="styleModified" hidden>（有修改）</span></span>
-        <span class="panel-toggle-state">打开</span>
-        <span class="panel-toggle-tail" aria-hidden="true"></span>
-      </button>
     </div>
-    <div class="opts opt-panel" id="stylePanel" hidden>
+    </div>
+
+    <!-- 样式设置单独成块：点工具栏「样式」按钮显示/隐藏，与「设置」互斥 -->
+    <div id="styleArea" class="card style-card" hidden>
+      <div class="opts opt-panel" id="stylePanel">
       <span class="seg" id="fontScopeBar" title="切换要调整字体的区域">
         <button type="button" class="seg-btn active" data-scope="main">主文</button>
         <button type="button" class="seg-btn" data-scope="quote">原文</button>
         <button type="button" class="seg-btn" data-scope="answer">释义</button>
       </span>
+      <button type="button" id="pinStyle" class="pin-btn" title="钉住：向下滚动页面时，样式设置固定在页面上方" aria-pressed="false">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 17v5" /><path d="M9 3h6l-1 6 3 4H7l3-4-1-6Z" />
+        </svg>
+      </button>
       <span class="opts-br"></span>
       <label class="opt-lbl">字体 <select id="optFontPreset"></select></label>
       <button type="button" id="fontScan" class="reset-btn" title="读取本机已安装的字体，加入字体下拉（首次需要授权）">读取本机字体</button>
       <span class="font-input-wrap">
         <label><input type="text" id="optFontFamily" placeholder="或输入自定义字体" spellcheck="false" autocomplete="off" /></label>
+        <button type="button" class="font-clear" id="fontClear" title="清空自定义字体" aria-label="清空自定义字体" hidden>✕</button>
         <div class="font-suggest" id="fontSuggest" hidden></div>
       </span>
       <span class="font-color-group">
@@ -778,6 +826,9 @@
       </span>
       <label class="opt-lbl">字体大小 <input type="range" id="optFontSize" min="12" max="20" step="1" value="13" /> <span id="optFontSizeVal">13</span>px</label>
       <label class="opt-lbl">行高 <input type="range" id="optLineHeight" min="1.0" max="2.4" step="0.1" value="1.2" /> <span id="optLineHeightVal">1.2</span></label>
+      <button type="button" class="reset-btn" id="styleMoreBtn" aria-expanded="false" title="展开或折叠下面的背景色、圆角与样式管理">更多</button>
+      <div class="opt-more" id="styleMore" hidden>
+      <label class="opt-lbl" id="optSpacingRow">段后间距 <input type="range" id="optParaSpacing" min="0" max="24" step="1" value="6" /> <span id="optParaSpacingVal">6</span></label>
       <span class="opts-br"></span>
       <span class="opts-title">页面背景色：</span>
       <label><input type="color" id="optPageBg" value="#eef2ff" /></label>
@@ -805,7 +856,7 @@
       <label>样式组 <select id="presetSelect"></select></label>
       <button type="button" id="deletePreset" class="reset-btn">删除</button>
       <button type="button" id="resetDisplay" class="reset-btn">恢复模板默认</button>
-    </div>
+      </div>
     </div>
     </div>
 

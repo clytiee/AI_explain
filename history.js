@@ -14,7 +14,8 @@ const SETTINGS_HIDDEN_KEY = "settingsHidden"; // 是否隐藏所有设置
 const READONLY_KEY = "readOnly"; // 只读模式（默认 false＝编辑模式）
 const AGG_ORDER_KEY = "aggOrder"; // 聚合模式下每来源记录的手工排序（{ srcKey: [记录id] }）
 const STYLE_TPL_KEY = "styleTemplate"; // 列表风格模板（见 STYLE_TEMPLATES）
-const STYLE_PANEL_KEY = "stylePanelOpen"; // 设置区里字体/颜色/圆角面板是否展开（默认收起）
+const STYLE_PANEL_KEY = "stylePanelOpen"; // 独立的样式设置块是否显示（默认收起，与设置区互斥）
+const STYLE_PIN_KEY = "stylePinned"; // 样式设置区是否钉住（滚动时贴页面顶部）
 const LOCAL_FONTS_KEY = "localFontList"; // 读到的本机中文字体（Local Font Access API）
 const TIME_DISPLAY_KEY = "timeDisplay"; // 时间显示格式（与模板无关，单独存一份，切模板/刷新都不丢）
 
@@ -51,6 +52,7 @@ const DEFAULT_DISPLAY = {
   ansFontColor: "#1f2937",
   ansFontSize: 13,
   ansLineHeight: 1.2,
+  ansSpacing: 6, // 释义段后间距（px）
   mainFontColor: "#1f2937",
   mainFontSize: 13,
   mainLineHeight: 1.7,
@@ -70,7 +72,7 @@ const DEFAULT_DISPLAY = {
 // 字体作用域：tab → 字段名映射
 const FONT_SCOPES = {
   quote: { family: "fontFamily", color: "fontColor", size: "fontSize", line: "lineHeight", label: "原文" },
-  answer: { family: "ansFontFamily", color: "ansFontColor", size: "ansFontSize", line: "ansLineHeight", label: "释义" },
+  answer: { family: "ansFontFamily", color: "ansFontColor", size: "ansFontSize", line: "ansLineHeight", spacing: "ansSpacing", label: "释义" },
   main: { family: "mainFontFamily", color: "mainFontColor", size: "mainFontSize", line: "mainLineHeight", label: "主文" },
 };
 let fontScope = "main";
@@ -291,6 +293,7 @@ function applyDisplay(d) {
   s.setProperty("--ans-font-size", (d.ansFontSize || DEFAULT_DISPLAY.ansFontSize) + "px");
   s.setProperty("--ans-font-family", toFontFamilyCss(d.ansFontFamily || d.fontFamily));
   s.setProperty("--ans-line-height", d.ansLineHeight || DEFAULT_DISPLAY.ansLineHeight);
+  s.setProperty("--ans-spacing", (d.ansSpacing === 0 ? 0 : d.ansSpacing || DEFAULT_DISPLAY.ansSpacing) + "px");
   s.setProperty("--main-font-color", d.mainFontColor || DEFAULT_DISPLAY.mainFontColor);
   s.setProperty("--main-font-size", (d.mainFontSize || DEFAULT_DISPLAY.mainFontSize) + "px");
   s.setProperty("--main-font-family", toFontFamilyCss(d.mainFontFamily || d.fontFamily));
@@ -311,6 +314,14 @@ function syncFontScopeValues(d) {
   const line = d[sc.line] || DEFAULT_DISPLAY[sc.line];
   if ($("optFontSizeVal")) $("optFontSizeVal").textContent = size;
   if ($("optLineHeightVal")) $("optLineHeightVal").textContent = line;
+  // 段后间距：只有释义有段落，其它页签隐藏这一行
+  const spacingRow = $("optSpacingRow");
+  if (spacingRow) spacingRow.hidden = !sc.spacing;
+  if (sc.spacing && $("optParaSpacing")) {
+    const sp = d[sc.spacing] === 0 ? 0 : d[sc.spacing] || DEFAULT_DISPLAY[sc.spacing];
+    $("optParaSpacing").value = sp;
+    if ($("optParaSpacingVal")) $("optParaSpacingVal").textContent = sp;
+  }
 }
 
 // ---------- 模板样式 ↔ 样式设置 ----------
@@ -330,7 +341,7 @@ const SNAP_KEYS = [
   // 原文
   "fontFamily", "fontColor", "fontSize", "lineHeight",
   // 释义
-  "ansFontFamily", "ansFontColor", "ansFontSize", "ansLineHeight",
+  "ansFontFamily", "ansFontColor", "ansFontSize", "ansLineHeight", "ansSpacing",
   // 主文
   "mainFontFamily", "mainFontColor", "mainFontSize", "mainLineHeight",
   // 圆角
@@ -434,6 +445,7 @@ function captureTemplateStyle() {
     ansFontColor: answerColor,
     ansFontSize: Math.round(afs),
     ansLineHeight: alh === "normal" ? 1.5 : round2(parseFloat(alh) / afs),
+    ansSpacing: cssPx(cs(an.querySelector("p")).marginBottom),
     ansFontFamily: cs(an).fontFamily,
     // 主文
     mainFontColor: mainColor,
@@ -464,6 +476,8 @@ function tplOverrideCss(id, ov, forExport) {
   if (ov.ansFontColor) parts.push(sel + ".card .item-answer{color:" + ov.ansFontColor + "}");
   if (ov.ansFontSize) parts.push(sel + ".card .item-answer{font-size:" + ov.ansFontSize + "px}");
   if (ov.ansLineHeight) parts.push(sel + ".card .item-answer{line-height:" + ov.ansLineHeight + "}");
+  if (ov.ansSpacing !== undefined)
+    parts.push(sel + ".card .item-answer p{margin:0 0 " + (Number(ov.ansSpacing) || 0) + "px}");
   if (ov.ansFontFamily)
     parts.push(sel + ".card .item-answer{font-family:" + toFontFamilyCss(ov.ansFontFamily) + "}");
   // 主文
@@ -497,7 +511,10 @@ function styleValueDiffers(key, a, b) {
     const x = Number(a);
     const y = Number(b);
     if (!isFinite(x) || !isFinite(y)) return true;
-    const tol = key === "lineHeight" || key === "mainLineHeight" ? 0.06 : 0.6;
+    // 行高是相对值，差 0.1 肉眼就能看出来，容差必须很小；
+    // 像素/圆角类字段才用 0.6 容忍滑块与计算的小数误差
+    const tol =
+      key === "lineHeight" || key === "ansLineHeight" || key === "mainLineHeight" ? 0.02 : 0.6;
     return Math.abs(x - y) > tol;
   }
   return String(a || "").trim().toLowerCase() !== String(b || "").trim().toLowerCase();
@@ -514,7 +531,8 @@ function currentStyleDiff() {
 }
 
 function updateStyleModifiedHint() {
-  const hint = $("styleModified");
+  // 提示放在风格模板行的最后：当前模板的样式被改过时显示
+  const hint = $("tplModified");
   if (!hint) return;
   const modified = Object.keys(currentStyleDiff()).length > 0;
   hint.hidden = !modified;
@@ -565,6 +583,8 @@ function buildDisplayCss(d) {
       ";font-size:" + (d.ansFontSize || d.fontSize) + "px" +
       ";line-height:" + (d.ansLineHeight || d.lineHeight) +
       ";font-family:" + aff + "}" +
+    // 释义段后间距
+    ".item-answer p{margin:0 0 " + (d.ansSpacing === 0 ? 0 : d.ansSpacing || DEFAULT_DISPLAY.ansSpacing) + "px}" +
     // 主文：独立作用域的字体/颜色/大小/行高
     ".item-main{background:" + d.mainBg + ";color:" + (d.mainFontColor || d.fontColor) +
       ";border-left:3px solid " + darken(d.mainBg, 0.12) +
@@ -1137,6 +1157,7 @@ const STYLE_TEMPLATES = [
   },
 ];
 let styleTemplate = "glass";
+let stylePinned = false; // 样式设置区是否钉住（滚动时贴住页面顶部）
 
 function styleTemplateCss(id) {
   const t = STYLE_TEMPLATES.find((x) => x.id === id);
@@ -1314,6 +1335,9 @@ function renderTplBar() {
     b.addEventListener("click", () => applyStyleTemplate(t.id));
     bar.appendChild(b);
   });
+  // 「样式有修改」跟着模板胶囊一起排，固定落在最后一个模板后面
+  const hint = $("tplModified");
+  if (hint) bar.appendChild(hint);
 }
 
 // ---------- markdown → HTML（与浮层渲染一致） ----------
@@ -1648,8 +1672,26 @@ function fontCandidates() {
 function bindFontSuggest() {
   const input = $("optFontFamily");
   const box = $("fontSuggest");
+  const clearBtn = $("fontClear");
   if (!input || !box) return;
   let active = -1;
+
+  // 输入框里有内容时显示右侧清空图标（与搜索框一致）
+  const syncClear = () => {
+    if (clearBtn) clearBtn.hidden = !input.value.trim();
+  };
+  input.addEventListener("input", syncClear);
+  input.addEventListener("focus", syncClear);
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      input.value = "";
+      syncClear();
+      hide();
+      input.focus();
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+  syncClear();
 
   const hide = () => {
     box.hidden = true;
@@ -1830,6 +1872,7 @@ function readFontScopeInto(opts) {
   opts[sc.color] = $("optFontColor").value;
   opts[sc.size] = Number($("optFontSize").value);
   opts[sc.line] = Number($("optLineHeight").value);
+  if (sc.spacing) opts[sc.spacing] = Number($("optParaSpacing").value);
 }
 
 // 切换字体作用域
@@ -1907,6 +1950,7 @@ function load() {
       [EXPORT_OPTS_KEY]: {},
       [DISPLAY_OPTS_KEY]: {},
       [DISPLAY_PRESETS_KEY]: [],
+      [TPL_OVERRIDES_KEY]: {},
       [SOURCE_TEXTS_KEY]: {},
       [SHOW_MAIN_KEY]: true,
       [SHOW_QUOTE_KEY]: true,
@@ -1916,6 +1960,7 @@ function load() {
       [AGG_ORDER_KEY]: {},
       [STYLE_TPL_KEY]: "glass",
       [STYLE_PANEL_KEY]: false,
+      [STYLE_PIN_KEY]: false,
       [LOCAL_FONTS_KEY]: [],
       [TIME_DISPLAY_KEY]: "second",
       timeMode: "date",
@@ -1981,8 +2026,10 @@ function load() {
       $("optTimeMode").value = res.timeMode === "second" ? "second" : "date";
       applyTimeMode($("optTimeMode").value, false, true);
 
-      // 字体/颜色/圆角面板默认收起
+      // 样式设置独立成块，默认不显示
       syncStylePanel(res[STYLE_PANEL_KEY] === true);
+      stylePinned = res[STYLE_PIN_KEY] === true;
+      syncStylePin();
 
       render();
     }
@@ -2093,6 +2140,7 @@ function bindDisplay() {
   $("optFontColor").addEventListener("input", persist);
   $("optFontSize").addEventListener("input", persist);
   $("optLineHeight").addEventListener("input", persist);
+  $("optParaSpacing").addEventListener("input", persist);
   // 时间显示格式改了要重渲染列表（时间文字是渲染时生成的）
   $("optTimeDisplay").addEventListener("change", () => {
     persist();
@@ -3198,6 +3246,15 @@ function toggleSettings() {
   settingsHidden = !settingsHidden;
   chrome.storage.local.set({ [SETTINGS_HIDDEN_KEY]: settingsHidden });
   syncSettingsBtn();
+  // 与「样式」互斥：打开设置就收起样式区
+  if (!settingsHidden) {
+    const area = $("styleArea");
+    if (area && !area.hidden) {
+      area.hidden = true;
+      chrome.storage.local.set({ [STYLE_PANEL_KEY]: false });
+      syncStylePanel(false);
+    }
+  }
 }
 
 // 只读模式：卡片里不显示操作图标，标签也不能点掉；默认编辑模式
@@ -3218,22 +3275,48 @@ function toggleReadonly() {
   render();
 }
 
-// 设置区里「字体设置」开始往后的面板：默认收起，点按钮展开/折叠
+// 样式设置区：独立成块，由工具栏「样式」按钮显示/隐藏，与「设置」互斥
 function syncStylePanel(open) {
-  const panel = $("stylePanel");
-  const btn = $("styleToggle");
-  if (!panel || !btn) return;
-  panel.hidden = !open;
-  btn.setAttribute("aria-expanded", open ? "true" : "false");
-  const state = btn.querySelector(".panel-toggle-state");
-  if (state) state.textContent = open ? "折叠" : "打开";
-  btn.title = open ? "折叠字体、颜色、圆角与样式管理" : "展开字体、颜色、圆角与样式管理";
+  const area = $("styleArea");
+  const btn = $("toggleStyle");
+  if (!area) return;
+  area.hidden = !open;
+  if (btn) {
+    btn.classList.toggle("is-on", open);
+    btn.setAttribute("aria-pressed", open ? "true" : "false");
+  }
+  if (open) {
+    // 与设置区互斥：显示样式就把设置收起来
+    if (!settingsHidden) {
+      settingsHidden = true;
+      chrome.storage.local.set({ [SETTINGS_HIDDEN_KEY]: true });
+      syncSettingsBtn();
+    }
+  }
+  syncStylePin();
 }
 
 function toggleStylePanel() {
-  const open = $("stylePanel").hidden;
+  const open = $("styleArea").hidden;
   syncStylePanel(open);
   chrome.storage.local.set({ [STYLE_PANEL_KEY]: open });
+}
+
+// 钉住：样式区本身 sticky（下面还有列表，有足够粘住区间），只切一个 class
+function syncStylePin() {
+  const btn = $("pinStyle");
+  if (btn) {
+    btn.setAttribute("aria-pressed", stylePinned ? "true" : "false");
+    btn.title = stylePinned ? "取消钉住：随页面滚动" : "钉住：向下滚动页面时，样式设置固定在页面上方";
+  }
+  const area = $("styleArea");
+  document.body.classList.toggle("pin-style", stylePinned && area && !area.hidden);
+}
+
+function toggleStylePin() {
+  stylePinned = !stylePinned;
+  chrome.storage.local.set({ [STYLE_PIN_KEY]: stylePinned });
+  syncStylePin();
 }
 
 // 刷新列表：只重新读取记录与来源标题规则后重渲染，搜索词、时间范围、标签筛选都保持原样
@@ -3375,6 +3458,8 @@ function exportMd() {
 const CARD_CSS = `:root{--primary:#4f46e5;--primary-soft:rgba(99,102,241,0.12);--border:#e5e7eb;--text:#1f2937;--muted:#6b7280}
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,sans-serif;color:var(--text);background:linear-gradient(160deg,#f6f7ff,#eef2ff 60%,#f5f3ff);min-height:100vh;padding:32px 16px 60px}
+/* 打印时底部内边距清零，避免末尾那 60px 溢出多打一页空白 */
+@media print{body{padding-bottom:0}}
 .wrap{max-width:720px;margin:0 auto}
 h1{font-size:20px;margin:0 0 12px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 h1 .dot{flex:0 0 auto;width:12px;height:12px;border-radius:50%;background:#6366f1;background-image:linear-gradient(135deg,#6366f1,#a855f7);-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -4094,7 +4179,18 @@ $("toggleQuote").addEventListener("click", toggleQuote);
 $("toggleAgg").addEventListener("click", toggleAgg);
 $("toggleSettings").addEventListener("click", toggleSettings);
 $("toggleReadonly").addEventListener("click", toggleReadonly);
-$("styleToggle").addEventListener("click", toggleStylePanel);
+$("toggleStyle").addEventListener("click", toggleStylePanel);
+$("pinStyle").addEventListener("click", toggleStylePin);
+
+// 行高那一行末尾的「更多 / 折叠」：展开下面的背景色、圆角与样式管理，默认折叠
+$("styleMoreBtn").addEventListener("click", () => {
+  const box = $("styleMore");
+  const btn = $("styleMoreBtn");
+  const open = box.hidden;
+  box.hidden = !open;
+  btn.textContent = open ? "折叠" : "更多";
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+});
 $("previewPage").addEventListener("click", previewHistory);
 bindMainModal();
 
