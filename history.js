@@ -575,6 +575,121 @@ const STYLE_TEMPLATES = [
       'body[data-tpl="warmdark"] .item-main{background:#302b23;color:#d6c9b0;border-left:3px solid #6b6152;' +
       "border-radius:8px;font-size:13px;line-height:1.8}",
   },
+  {
+    id: "legal",
+    name: "美式拍纸簿",
+    desc: "淡黄纸 + 蓝横线 + 左侧淡红边线",
+    css:
+      'body[data-tpl="legal"] #list{background:#fdf6c8}' +
+      // 卡片无底色，左侧红色边线用伪元素画，不占排版空间
+      'body[data-tpl="legal"] .card{background:transparent;border:0;border-radius:0;box-shadow:none;' +
+      "padding:8px 16px 8px 44px;position:relative;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="legal"] .card::before{content:"";position:absolute;left:30px;top:0;bottom:0;width:1px;' +
+      "background:rgba(200,80,70,.32)}" +
+      'body[data-tpl="legal"] .item-time{color:#7a6a3a}' +
+      'body[data-tpl="legal"] .item-src{color:#7a6a3a}' +
+      'body[data-tpl="legal"] .item-src a{color:#7a6a3a}' +
+      // 横线只画在文字块上，行高与格距同为 25px，字落在横线上方
+      'body[data-tpl="legal"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:0 0 4px;' +
+      "font-size:14.5px;line-height:25px;color:#26386b;font-weight:400;" +
+      "background-image:repeating-linear-gradient(to bottom,transparent 0 24px,rgba(90,140,190,.5) 24px 25px);" +
+      "background-origin:content-box;background-clip:content-box;background-position:0 -1px}" +
+      'body[data-tpl="legal"] .item-text-extract{background-color:transparent!important;border-left:2px solid rgba(200,80,70,.35);' +
+      "padding-left:10px}" +
+      'body[data-tpl="legal"] .item-answer{color:#2f3b56;font-size:13px;line-height:25px;' +
+      "background-image:repeating-linear-gradient(to bottom,transparent 0 24px,rgba(90,140,190,.5) 24px 25px);" +
+      "background-origin:content-box;background-clip:content-box;background-position:0 -1px}" +
+      'body[data-tpl="legal"] .item-answer p{margin:0}' +
+      'body[data-tpl="legal"] .item-tag{background:rgba(90,140,190,.14);border-color:rgba(90,140,190,.4);color:#46618c}' +
+      'body[data-tpl="legal"] .item-main{background:rgba(90,140,190,.1);border-left:2px solid #a8c6e2;border-radius:0;' +
+      "color:#2f3b56;font-size:13px;line-height:25px}",
+  },
+  {
+    id: "seyes",
+    name: "法式 Seyès",
+    desc: "白纸 + 横竖网格，主横线加重",
+    css:
+      'body[data-tpl="seyes"] #list{background:#fff}' +
+      'body[data-tpl="seyes"] .card{background:#fff;border:1px solid #eceff4;border-radius:4px;' +
+      "box-shadow:none;padding:12px 14px;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="seyes"] .item-time{color:#6b7280}' +
+      'body[data-tpl="seyes"] .item-src{color:#5b6472}' +
+      'body[data-tpl="seyes"] .item-src a{color:#5b6472}' +
+      'body[data-tpl="seyes"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:0 0 4px;' +
+      "font-family:'Kaiti SC','KaiTi','STKaiti',Georgia,serif;font-size:15px;line-height:25px;color:#14181f;" +
+      "font-weight:400;background-image:" +
+      "repeating-linear-gradient(to bottom,transparent 0 24px,rgba(120,120,120,.5) 24px 25px)," +
+      "repeating-linear-gradient(to right,transparent 0 24px,rgba(140,170,210,.16) 24px 25px);" +
+      "background-origin:content-box;background-clip:content-box;background-position:0 -1px,0 0}" +
+      'body[data-tpl="seyes"] .item-text-extract{background-color:transparent!important;border-left:2px solid #a8c6e2;' +
+      "padding-left:10px}" +
+      'body[data-tpl="seyes"] .item-answer{color:#2b3442;font-size:13px;line-height:25px;' +
+      "font-family:'Kaiti SC','KaiTi','STKaiti',Georgia,serif;background-image:" +
+      "repeating-linear-gradient(to bottom,transparent 0 24px,rgba(120,120,120,.5) 24px 25px)," +
+      "repeating-linear-gradient(to right,transparent 0 24px,rgba(140,170,210,.16) 24px 25px);" +
+      "background-origin:content-box;background-clip:content-box;background-position:0 -1px,0 0}" +
+      'body[data-tpl="seyes"] .item-answer p{margin:0}' +
+      'body[data-tpl="seyes"] .item-tag{background:rgba(140,170,210,.16);border:1px solid rgba(140,170,210,.5);color:#4a6a8f}' +
+      'body[data-tpl="seyes"] .item-main{background:rgba(140,170,210,.12);border-left:2px solid #a8c6e2;border-radius:2px;' +
+      "color:#2b3442;font-size:13px;line-height:25px}",
+  },
+  {
+    id: "carre",
+    name: "欧式方格本",
+    desc: "米白纸 + 浅灰方格，密排笔记",
+    css:
+      'body[data-tpl="carre"] #list{background:#fbf7ee}' +
+      'body[data-tpl="carre"] .card{background:#fffdf8;border:1px solid #ece5d8;border-radius:4px;' +
+      "box-shadow:none;padding:12px 14px;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="carre"] .item-time{color:#7a7566}' +
+      'body[data-tpl="carre"] .item-src{color:#6b6455}' +
+      'body[data-tpl="carre"] .item-src a{color:#6b6455}' +
+      // 方格 10px，行高 20px（两格），字压在每个第二格横线上
+      'body[data-tpl="carre"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:0 0 4px;' +
+      "font-size:14.5px;line-height:20px;color:#2c2a24;font-weight:400;background-image:" +
+      "repeating-linear-gradient(to bottom,transparent 0 9px,rgba(120,140,160,.22) 9px 10px)," +
+      "repeating-linear-gradient(to right,transparent 0 9px,rgba(120,140,160,.22) 9px 10px);" +
+      "background-origin:content-box;background-clip:content-box}" +
+      'body[data-tpl="carre"] .item-text-extract{background-color:transparent!important;border-left:2px solid #b9c6d4;' +
+      "padding-left:10px}" +
+      'body[data-tpl="carre"] .item-answer{color:#3a3730;font-size:13px;line-height:20px;' +
+      "background-image:" +
+      "repeating-linear-gradient(to bottom,transparent 0 9px,rgba(120,140,160,.22) 9px 10px)," +
+      "repeating-linear-gradient(to right,transparent 0 9px,rgba(120,140,160,.22) 9px 10px);" +
+      "background-origin:content-box;background-clip:content-box}" +
+      'body[data-tpl="carre"] .item-answer p{margin:0}' +
+      'body[data-tpl="carre"] .item-tag{background:rgba(120,140,160,.14);border:1px solid rgba(120,140,160,.35);color:#5a6472}' +
+      'body[data-tpl="carre"] .item-main{background:rgba(120,140,160,.1);border-left:2px solid #b9c6d4;border-radius:2px;' +
+      "color:#3a3730;font-size:13px;line-height:20px}",
+  },
+  {
+    id: "dots",
+    name: "欧式点阵本",
+    desc: "米灰纸 + 20px 点阵，格线最轻",
+    css:
+      'body[data-tpl="dots"] #list{background:#f3efe6}' +
+      'body[data-tpl="dots"] .card{background:#fbf9f4;border:1px solid #e8e2d6;border-radius:4px;' +
+      "box-shadow:none;padding:12px 14px;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      'body[data-tpl="dots"] .item-time{color:#6f6a5c}' +
+      'body[data-tpl="dots"] .item-src{color:#5f5a4c}' +
+      'body[data-tpl="dots"] .item-src a{color:#5f5a4c}' +
+      // 点距 20px、行高 20px；点整体下移 10px 落在字下方（实测调好的值）
+      // 原文与释义块都贴合排（margin:0），行高都是 20px，点阵才能从上一块无缝延续，
+      // 否则两块衔接处会挤出一对几乎重叠的点行
+      'body[data-tpl="dots"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:0;' +
+      "font-size:14.5px;line-height:20px;color:#23221d;font-weight:400;background-image:" +
+      "radial-gradient(circle,rgba(90,90,80,.38) 0 1px,transparent 1px);" +
+      "background-size:20px 20px;background-origin:content-box;background-clip:content-box;background-position:0 10px}" +
+      'body[data-tpl="dots"] .item-text-extract{background-color:transparent!important;border-left:2px solid #cfc7b6;' +
+      "padding-left:10px}" +
+      'body[data-tpl="dots"] .item-answer{margin:0;color:#35332b;font-size:13px;line-height:20px;background-image:' +
+      "radial-gradient(circle,rgba(90,90,80,.38) 0 1px,transparent 1px);" +
+      "background-size:20px 20px;background-origin:content-box;background-clip:content-box;background-position:0 10px}" +
+      'body[data-tpl="dots"] .item-answer p{margin:0}' +
+      'body[data-tpl="dots"] .item-tag{background:rgba(90,90,80,.1);border:1px solid rgba(90,90,80,.3);color:#5a564a}' +
+      'body[data-tpl="dots"] .item-main{background:rgba(90,90,80,.08);border-left:2px solid #cfc7b6;border-radius:2px;' +
+      "color:#35332b;font-size:13px;line-height:20px}",
+  },
 ];
 let styleTemplate = "glass";
 
@@ -604,6 +719,10 @@ function templateExportPageCss(id) {
   if (id === "kraft") return "body{background:#d9c3a1}";
   if (id === "ink") return "body{background:#f8f4ea}";
   if (id === "warmdark") return "body{background:#1c1a17;color:#e8dcc4}";
+  if (id === "legal") return "body{background:#fdf6c8}";
+  if (id === "seyes") return "body{background:#fff}";
+  if (id === "carre") return "body{background:#fbf7ee}";
+  if (id === "dots") return "body{background:#f3efe6}";
   return "";
 }
 
@@ -1341,7 +1460,10 @@ function buildTagsRow(targets) {
     const chip = document.createElement("span");
     chip.className = "item-tag";
     chip.textContent = t;
-    chip.title = list.length > 1 ? "点击从这 " + list.length + " 条移除这个标签" : "点击移除这个标签";
+    // 只读模式不能移除标签，就不给「点击移除」的悬停提示
+    if (!readOnly) {
+      chip.title = list.length > 1 ? "点击从这 " + list.length + " 条移除这个标签" : "点击移除这个标签";
+    }
     chip.addEventListener("click", () => {
       if (readOnly) return; // 只读模式下标签不可移除
       saveTagsBatch(
@@ -2269,11 +2391,11 @@ function cardHtml(e) {
   if (opts.pageTitle && displayTitle(e)) {
     if (opts.pageUrl && e.pageUrl) {
       head.push(
-        '<span class="item-src">来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+        '<span class="item-src"><a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
           esc(displayTitle(e)) + "</a></span>"
       );
     } else {
-      head.push('<span class="item-src">来源：' + esc(displayTitle(e)) + "</span>");
+      head.push('<span class="item-src">' + esc(displayTitle(e)) + "</span>");
     }
   }
   const srcKey = e.pageUrl || e.pageTitle || "";
@@ -2318,11 +2440,11 @@ function buildCardsHtmlAggregated(list) {
       if (opts.pageTitle && displayTitle(first)) {
         if (opts.pageUrl && first.pageUrl) {
           head.push(
-            '<span class="item-src-group"><span class="item-src">来源：<a href="' + esc(first.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+            '<span class="item-src-group"><span class="item-src"><a href="' + esc(first.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
               esc(displayTitle(first)) + "</a></span></span>"
           );
         } else {
-          head.push('<span class="item-src-group"><span class="item-src">来源：' + esc(displayTitle(first)) + "</span></span>");
+          head.push('<span class="item-src-group"><span class="item-src">' + esc(displayTitle(first)) + "</span></span>");
         }
       }
       // 聚合卡也在头部右侧显示这一组记录的全部标签（去重）
