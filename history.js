@@ -328,32 +328,18 @@ function syncColorSwatches(containerId, inputId) {
   });
 }
 
-// 将显示设置写入 CSS 变量
-// 页面底色是不是「接近白 / 透明」：白底页面顶部那圈留白会显得很空，需要收紧
+// 页面底色是不是纯白：只有白底页面顶部那圈留白才显得空，需要打印时收紧。
+// 判断就用「等于白色」，不按亮度猜——浅灰、浅蓝这类有底色的页面照样要留边距。
 function isLightPageBg(css) {
-  const s = String(css || "").trim().toLowerCase();
-  if (!s || s === "transparent" || s === "none") return true;
-  let r = 255;
-  let g = 255;
-  let b = 255;
-  const hex = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/);
-  if (hex) {
-    let h = hex[1];
-    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
-    r = parseInt(h.slice(0, 2), 16);
-    g = parseInt(h.slice(2, 4), 16);
-    b = parseInt(h.slice(4, 6), 16);
-  } else {
-    const m = s.match(/rgba?\(([^)]+)\)/);
-    if (!m) return false;
-    const p = m[1].split(",").map((x) => parseFloat(x));
-    if (p.length > 3 && p[3] === 0) return true;
-    r = p[0];
-    g = p[1];
-    b = p[2];
-  }
-  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  return lum >= 0.92;
+  const s = String(css || "").trim().toLowerCase().replace(/\s+/g, "");
+  if (!s) return false;
+  if (s === "#fff" || s === "#ffffff" || s === "#ffffffff" || s === "white") return true;
+  const m = s.match(/^rgba?\(([^)]+)\)$/);
+  if (!m) return false;
+  const p = m[1].split(",").map((x) => parseFloat(x));
+  if (p.length < 3) return false;
+  if (p.length > 3 && (p[3] === 0 || !isFinite(p[3]))) return false;
+  return p[0] === 255 && p[1] === 255 && p[2] === 255;
 }
 
 function applyDisplay(d) {
@@ -1548,6 +1534,59 @@ const STYLE_TEMPLATES = [
 let styleTemplate = "glass";
 let stylePinned = false; // 样式设置区是否钉住（滚动时贴住页面顶部）
 
+// ---------- 全局布局：单栏 / 两栏 ----------
+// 两栏本身与外观无关：页面排成两栏（屏幕走瀑布流，打印走 CSS 多列流）。
+// 报纸、杂志的自定义卡片内部已经是双栏，再套一层页面两栏会碎，所以这两个模板下不生效。
+const LAYOUT_KEY = "layoutMode";
+const LAYOUT_NO_TWOCOL = ["news", "magazine", "cards"];
+let layoutMode = "single";
+const LAYOUT_CSS =
+  'body[data-layout="twocol"] #list{column-count:2;column-gap:16px}' +
+  '@media (max-width:560px){body[data-layout="twocol"] #list{column-count:1}}' +
+  '@media screen{body[data-layout="twocol"] #list{column-count:auto;display:flex;gap:16px;align-items:flex-start}}' +
+  '@media screen{body[data-layout="twocol"] .rcpt-col{display:flex;flex-direction:column;gap:16px;' +
+  "flex:1 1 0;min-width:0}}" +
+  '@media screen{body[data-layout="twocol"] .rcpt-col>.card{margin:0}}' +
+  '@media screen{body[data-layout="twocol"] #list>.card{flex:1 1 100%;width:100%}}' +
+  'body[data-layout="twocol"] .card-gap{display:none!important}' +
+  '@media print{body[data-layout="twocol"] .card{break-inside:auto;page-break-inside:auto}}';
+
+// 当前是否真的按两栏排：选了「两栏」且模板不是报纸/杂志；小票模板自带两栏，也走这里
+function layoutActive() {
+  return layoutMode === "twocol" && !LAYOUT_NO_TWOCOL.includes(styleTemplate);
+}
+
+// 导出/预览页没有 #list，卡片直接挂在 .wrap 上，两栏要落在 .wrap；
+// 历史页也有 .wrap（工具栏+设置区+列表都在里面），所以这条只在导出页拼进去，不能进 LAYOUT_CSS
+const LAYOUT_EXPORT_CSS =
+  'body[data-layout="twocol"] .wrap{max-width:820px;column-count:2;column-gap:16px}' +
+  // 标题与导出时间（含副标题）横跨整行，不参与分栏
+  'body[data-layout="twocol"] .wrap>h1,body[data-layout="twocol"] .wrap>.sub{column-span:all}' +
+  '@media (max-width:560px){body[data-layout="twocol"] .wrap{column-count:1}}';
+
+// 把当前布局落到 body 上，并同步面板按钮
+function syncLayout() {
+  const on = layoutActive() || styleTemplate === "receipt";
+  document.body.dataset.layout = on ? "twocol" : "";
+  [...document.querySelectorAll("#layoutBar .seg-btn")].forEach((b) => {
+    b.classList.toggle("active", b.dataset.layout === layoutMode);
+  });
+  const bar = $("layoutBar");
+  if (bar) {
+    bar.title = LAYOUT_NO_TWOCOL.includes(styleTemplate)
+      ? "该模板的卡片内部已是双栏，页面两栏对它不生效"
+      : "两栏：屏幕上左右两栏瀑布流，打印时首尾相接、卡片可跨栏拆开";
+  }
+}
+
+function setLayout(mode, persist = true) {
+  layoutMode = mode === "twocol" ? "twocol" : "single";
+  if ($("layoutBar")) syncLayout();
+  if (persist) chrome.storage.local.set({ [LAYOUT_KEY]: layoutMode });
+  if (typeof applyMasonry === "function") applyMasonry();
+}
+
+
 function styleTemplateCss(id) {
   const t = STYLE_TEMPLATES.find((x) => x.id === id);
   return (t ? t.css : "") + (t ? "\n" + aggSepCss(id) : "");
@@ -1747,7 +1786,9 @@ function ensureTemplateStyle() {
     "\n" +
     STYLE_TEMPLATES.map((t) => mainDimCss(t.id)).join("\n") +
     "\n" +
-    STYLE_TEMPLATES.map((t) => aggSepCss(t.id)).join("\n");
+    STYLE_TEMPLATES.map((t) => aggSepCss(t.id)).join("\n") +
+    "\n" +
+    LAYOUT_CSS;
   document.head.appendChild(style);
 }
 
@@ -1759,6 +1800,8 @@ function applyStyleTemplate(id, persist = true) {
     b.classList.toggle("active", b.dataset.tpl === styleTemplate);
   });
   if (persist) chrome.storage.local.set({ [STYLE_TPL_KEY]: styleTemplate });
+  // 切模板可能让「两栏」生效或失效（报纸/杂志不吃页面两栏）
+  syncLayout();
   // 把该模板的样式回填到样式设置面板（面板只记录“改动”，模板默认值作为恢复基准）
   syncTemplateStyleState();
   // 切进/切出小票模板时，瀑布流的分栏容器要建起来或拆掉
@@ -2440,6 +2483,7 @@ function load() {
       [READONLY_KEY]: false,
       [AGG_ORDER_KEY]: {},
       [STYLE_TPL_KEY]: "glass",
+      [LAYOUT_KEY]: "single",
       [STYLE_PANEL_KEY]: false,
       [STYLE_PIN_KEY]: false,
       [LOCAL_FONTS_KEY]: [],
@@ -2447,6 +2491,7 @@ function load() {
       [QUOTE_MERGE_KEY]: false,
       [QUOTE_MERGE_MAX_KEY]: 5,
       timeMode: "date",
+      [QUICK_RANGE_KEY]: "",
       config: {},
     },
     (res) => {
@@ -2505,12 +2550,21 @@ function load() {
       // 列表风格模板：渲染按钮并套用（不再写回存储）
       tplOverrides = (res[TPL_OVERRIDES_KEY] && typeof res[TPL_OVERRIDES_KEY] === "object") ? res[TPL_OVERRIDES_KEY] : {};
       styleTemplate = res[STYLE_TPL_KEY] || "glass";
+      // 全局布局：单栏 / 两栏（老数据没有这个键时按单栏）
+      layoutMode = res[LAYOUT_KEY] === "twocol" ? "twocol" : "single";
       renderTplBar();
       applyStyleTemplate(styleTemplate, false);
 
       // 时间筛选精度（默认按日期）
       $("optTimeMode").value = res.timeMode === "second" ? "second" : "date";
       applyTimeMode($("optTimeMode").value, false, true);
+      // 上次用的快捷时间范围：按存的「哪一种」重新算区间（不落死时间戳）
+      const savedRange = res[QUICK_RANGE_KEY];
+      if (savedRange && quickRangeBounds(savedRange)) {
+        const [qs, qe] = quickRangeBounds(savedRange);
+        setQuickActive(savedRange, false);
+        setTimeRange(qs, qe, true);
+      }
 
       // 样式设置独立成块，默认不显示
       syncStylePanel(res[STYLE_PANEL_KEY] === true);
@@ -2701,18 +2755,28 @@ function bindDisplay() {
     refreshHistory();
   });
   // 原文与释义合段：纯排版开关，单独存一份（不跟模板样式走，恢复模板默认也不会关掉）
-  // 原文是否去掉书名号、是否当大字头都由渲染时决定，所以改了要重出卡片
-  $("optMergeQuote").addEventListener("change", () => {
-    quoteMerge = $("optMergeQuote").checked;
-    applyQuoteMerge();
-    chrome.storage.local.set({ [QUOTE_MERGE_KEY]: quoteMerge });
-    render();
-  });
-  $("optMergeMax").addEventListener("change", () => {
-    quoteMergeMax = Math.max(1, Math.min(20, Number($("optMergeMax").value) || 5));
-    $("optMergeMax").value = quoteMergeMax;
-    chrome.storage.local.set({ [QUOTE_MERGE_MAX_KEY]: quoteMergeMax });
-    if (quoteMerge) render();
+  // 原文是否去掉书名号、是否当大字头都由渲染时决定，所以改了要重出卡片。
+  // 报纸/杂志这类卡片内双栏的模板更特殊：大字头是渲染时塞进释义第一段里的（不是只换个 class），
+  // 必须整卡重建才会出现，所以这里统一走「重建 + 下一帧按实测行高重量」两步。
+  // 用事件委托绑定：面板元素被重建时回调也不会丢。
+  document.addEventListener("change", (ev) => {
+    const t = ev.target;
+    if (!t || !t.id) return;
+    if (t.id === "optMergeQuote") {
+      quoteMerge = t.checked;
+      applyQuoteMerge();
+      chrome.storage.local.set({ [QUOTE_MERGE_KEY]: quoteMerge });
+      render();
+      requestAnimationFrame(() => applyDropQuoteSize($("list")));
+    } else if (t.id === "optMergeMax") {
+      quoteMergeMax = Math.max(1, Math.min(20, Number(t.value) || 5));
+      t.value = quoteMergeMax;
+      chrome.storage.local.set({ [QUOTE_MERGE_MAX_KEY]: quoteMergeMax });
+      if (quoteMerge) {
+        render();
+        requestAnimationFrame(() => applyDropQuoteSize($("list")));
+      }
+    }
   });
   $("optCardRadius").addEventListener("input", persist);
   $("optQuoteRadius").addEventListener("input", persist);
@@ -2787,8 +2851,26 @@ function hasTimeFilter() {
   return !!$("timeStart").value || !!$("timeEnd").value;
 }
 
+// 快捷时间（当天/1天/1周/1月）对应的区间；导航到历史页时按存储的选择重新算一遍，
+// 存的只是「哪一种快捷范围」，不存死时间戳，所以「当天」第二天依然从当天零点算起
+const QUICK_RANGE_KEY = "quickRange";
+let quickRange = "";
+function quickRangeBounds(r, now = Date.now()) {
+  const DAY = 24 * 60 * 60 * 1000;
+  let start = now;
+  if (r === "today") {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    start = d.getTime();
+  } else if (r === "1d") start = now - DAY;
+  else if (r === "1w") start = now - 7 * DAY;
+  else if (r === "1m") start = now - 30 * DAY;
+  else return null;
+  return [start, now];
+}
+
 // 把本地时间戳写入起止输入框：日期模式写 YYYY-MM-DD，秒模式写 YYYY-MM-DDTHH:MM:SS
-function setTimeRange(startTs, endTs) {
+function setTimeRange(startTs, endTs, skipRender = false) {
   const p = (n) => String(n).padStart(2, "0");
   const toDate = (ts) => {
     const d = new Date(ts);
@@ -2802,7 +2884,7 @@ function setTimeRange(startTs, endTs) {
   $("timeStart").value = fmt(startTs);
   $("timeEnd").value = fmt(endTs);
   page = 1;
-  render();
+  if (!skipRender) render();
 }
 
 // 按当前搜索框 + 时间范围返回筛选后的记录
@@ -3232,7 +3314,7 @@ function flattenMasonry(box) {
 function applyMasonry() {
   const box = $("list");
   if (!box) return;
-  if (styleTemplate !== "receipt") {
+  if (styleTemplate !== "receipt" && !layoutActive()) {
     flattenMasonry(box);
     return;
   }
@@ -4406,8 +4488,11 @@ function buildExportHtml(list, withPrintScript, titleWithTime, previewBlack) {
     '<meta charset="UTF-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n' +
     "<title>" + docTitle + "</title>\n" +
-    "<style>\n" + CARD_CSS + MERGE_QUOTE_CSS + noSplitCss + displayCss + HEAD_BTN_CSS + tplCss + printBlackCss + "\n</style>\n" +
-    "</head>\n" + '<body data-tpl="' + esc(styleTemplate) + '"' + (quoteMerge ? ' class="merge-quote"' : "") + ">\n" +
+    "<style>\n" + CARD_CSS + MERGE_QUOTE_CSS + noSplitCss + displayCss + HEAD_BTN_CSS + tplCss +
+    (layoutActive() ? LAYOUT_CSS + LAYOUT_EXPORT_CSS : "") + printBlackCss + "\n</style>\n" +
+    "</head>\n" + '<body data-tpl="' + esc(styleTemplate) + '"' +
+    (layoutActive() ? ' data-layout="twocol"' : "") +
+    (quoteMerge ? ' class="merge-quote"' : "") + ">\n" +
     '<div class="wrap">\n' +
     '<h1><span class="dot"></span><span class="h1-title">划词AI释义 · 历史记录</span>' +
     '<span class="h1-sub">共 ' + list.length + " 条 · 导出时间：" + formatTime(Date.now()) + "</span>" +
@@ -4826,10 +4911,12 @@ $("tagClear").addEventListener("click", () => {
   });
 });
 // 快捷时间（当天/1天/1周/1月）的选中态：只有点过快捷项、且区间没被手动改过时才高亮
-function setQuickActive(range) {
+function setQuickActive(range, persist = true) {
+  quickRange = range || "";
   document.querySelectorAll(".quick-link[data-range]").forEach((b) => {
     b.classList.toggle("active", !!range && b.dataset.range === range);
   });
+  if (persist) chrome.storage.local.set({ [QUICK_RANGE_KEY]: quickRange });
 }
 
 $("timeStart").addEventListener("change", () => { setQuickActive(""); page = 1; render(); });
@@ -4844,19 +4931,10 @@ $("timeClear").addEventListener("click", () => {
 });
 document.querySelectorAll(".quick-link[data-range]").forEach((b) => {
   b.addEventListener("click", () => {
-    const now = Date.now();
-    const DAY = 24 * 60 * 60 * 1000;
-    let start = now;
-    const r = b.dataset.range;
-    if (r === "today") {
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      start = d.getTime();
-    } else if (r === "1d") start = now - DAY;
-    else if (r === "1w") start = now - 7 * DAY;
-    else if (r === "1m") start = now - 30 * DAY;
-    setQuickActive(r);
-    setTimeRange(start, now);
+    const bounds = quickRangeBounds(b.dataset.range);
+    if (!bounds) return;
+    setQuickActive(b.dataset.range);
+    setTimeRange(bounds[0], bounds[1]);
   });
 });
 $("searchClear").addEventListener("click", () => {
@@ -4891,6 +4969,10 @@ $("fontScan").addEventListener("click", scanLocalFonts);
 // 字体作用域切换：原文 | 释义 | 主文
 [...document.querySelectorAll("#fontScopeBar .seg-btn")].forEach((b) => {
   b.addEventListener("click", () => setFontScope(b.dataset.scope));
+});
+// 全局布局：单栏 / 两栏
+[...document.querySelectorAll("#layoutBar .seg-btn")].forEach((b) => {
+  b.addEventListener("click", () => setLayout(b.dataset.layout));
 });
 $("saveDisplay").addEventListener("click", saveDisplay);
 $("presetSelect").addEventListener("change", applyPreset);
