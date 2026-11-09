@@ -56,6 +56,30 @@ const DEFAULT_DISPLAY = {
   mainFontColor: "#1f2937",
   mainFontSize: 13,
   mainLineHeight: 1.7,
+  // 字重（三作用域）：400 常规 / 500 中等 / 600 半粗 / 700 粗
+  fontWeight: 600,
+  ansFontWeight: 400,
+  mainFontWeight: 400,
+  // 卡片本体
+  cardBg: "#fbfcff",
+  cardBorder: "#ffffff",
+  cardBorderW: 1,
+  cardBar: "#ffffff", // 卡片左侧色条颜色
+  cardBarW: 0,
+  cardShadow: "soft", // 跟随模板 / none / soft / medium / strong
+  cardGap: 12,
+  cardPad: 16,
+  // 卡片头部的信息
+  timeColor: "#6b7280",
+  srcColor: "#6b7280",
+  tagBg: "#e9e8ff",
+  tagColor: "#4338ca",
+  tagRadius: 20, // 20 表示胶囊（999px）
+  // 原文 / 主文的左侧竖线（颜色留空表示沿用模板或由底色推出）
+  quoteBorder: "#dbe1ee",
+  quoteBorderW: 0,
+  mainBorder: "",
+  mainBorderW: 3,
   // 卡片与导出里的时间格式：second 到秒 / date 到日 / short 精简 YY/M/D
   timeDisplay: "second",
   cardRadius: 16,
@@ -71,10 +95,31 @@ const DEFAULT_DISPLAY = {
 
 // 字体作用域：tab → 字段名映射
 const FONT_SCOPES = {
-  quote: { family: "fontFamily", color: "fontColor", size: "fontSize", line: "lineHeight", label: "原文" },
-  answer: { family: "ansFontFamily", color: "ansFontColor", size: "ansFontSize", line: "ansLineHeight", spacing: "ansSpacing", label: "释义" },
-  main: { family: "mainFontFamily", color: "mainFontColor", size: "mainFontSize", line: "mainLineHeight", label: "主文" },
+  quote: { family: "fontFamily", color: "fontColor", size: "fontSize", line: "lineHeight", weight: "fontWeight", label: "原文" },
+  answer: { family: "ansFontFamily", color: "ansFontColor", size: "ansFontSize", line: "ansLineHeight", spacing: "ansSpacing", weight: "ansFontWeight", label: "释义" },
+  main: { family: "mainFontFamily", color: "mainFontColor", size: "mainFontSize", line: "mainLineHeight", weight: "mainFontWeight", label: "主文" },
 };
+
+// 卡片阴影档位
+const SHADOW_PRESETS = {
+  none: "none",
+  soft: "0 8px 30px rgba(0, 0, 0, 0.05)",
+  medium: "0 10px 30px rgba(0, 0, 0, 0.12)",
+  strong: "0 18px 44px rgba(0, 0, 0, 0.2)",
+};
+function shadowCss(key) {
+  return SHADOW_PRESETS[key] || SHADOW_PRESETS.soft;
+}
+// 阴影反推档位：按模糊半径分档，模板里读回来的值也能落到下拉里
+function shadowLevelOf(css) {
+  const s = String(css || "").trim();
+  if (s === "none" || !s) return "none";
+  const nums = s.match(/-?[\d.]+px/g);
+  const blur = nums && nums[2] ? parseFloat(nums[2]) : 0;
+  if (blur < 18) return "soft";
+  if (blur < 38) return "medium";
+  return "strong";
+}
 let fontScope = "main";
 let displayOpts = { ...DEFAULT_DISPLAY };
 // 历史页里手动选中的卡片 id 集合：有选中时只显示/导出这些记录
@@ -284,7 +329,27 @@ function applyDisplay(d) {
   s.setProperty("--extract-bg", d.extractBg);
   s.setProperty("--extract-border", deepBorder(d.extractBg));
   s.setProperty("--main-bg", d.mainBg);
-  s.setProperty("--main-border", darken(d.mainBg, 0.12));
+  s.setProperty("--main-border", d.mainBorder || darken(d.mainBg, 0.12));
+  s.setProperty("--card-bg", d.cardBg || DEFAULT_DISPLAY.cardBg);
+  s.setProperty("--card-border", d.cardBorder || DEFAULT_DISPLAY.cardBorder);
+  s.setProperty("--card-border-w", (d.cardBorderW === undefined ? DEFAULT_DISPLAY.cardBorderW : Number(d.cardBorderW) || 0) + "px");
+  s.setProperty("--card-bar", d.cardBar || d.cardBorder || DEFAULT_DISPLAY.cardBorder);
+  s.setProperty("--card-bar-w", (d.cardBarW === undefined ? DEFAULT_DISPLAY.cardBarW : Number(d.cardBarW) || 0) + "px");
+  s.setProperty("--card-shadow", shadowCss(d.cardShadow || DEFAULT_DISPLAY.cardShadow));
+  s.setProperty("--card-gap", (d.cardGap === undefined ? DEFAULT_DISPLAY.cardGap : Number(d.cardGap) || 0) + "px");
+  s.setProperty("--card-pad", (d.cardPad === undefined ? DEFAULT_DISPLAY.cardPad : Number(d.cardPad) || 0) + "px");
+  s.setProperty("--time-color", d.timeColor || DEFAULT_DISPLAY.timeColor);
+  s.setProperty("--src-color", d.srcColor || DEFAULT_DISPLAY.srcColor);
+  s.setProperty("--tag-bg", d.tagBg || DEFAULT_DISPLAY.tagBg);
+  s.setProperty("--tag-color", d.tagColor || DEFAULT_DISPLAY.tagColor);
+  const tagR = Number(d.tagRadius === undefined ? DEFAULT_DISPLAY.tagRadius : d.tagRadius) || 0;
+  s.setProperty("--tag-radius", tagR >= 20 ? "999px" : tagR + "px");
+  s.setProperty("--quote-border", d.quoteBorder || DEFAULT_DISPLAY.quoteBorder);
+  s.setProperty("--quote-border-w", (d.quoteBorderW === undefined ? DEFAULT_DISPLAY.quoteBorderW : Number(d.quoteBorderW) || 0) + "px");
+  s.setProperty("--main-border-w", (d.mainBorderW === undefined ? DEFAULT_DISPLAY.mainBorderW : Number(d.mainBorderW) || 0) + "px");
+  s.setProperty("--font-weight", d.fontWeight || DEFAULT_DISPLAY.fontWeight);
+  s.setProperty("--ans-font-weight", d.ansFontWeight || DEFAULT_DISPLAY.ansFontWeight);
+  s.setProperty("--main-font-weight", d.mainFontWeight || DEFAULT_DISPLAY.mainFontWeight);
   s.setProperty("--font-color", d.fontColor);
   s.setProperty("--font-size", d.fontSize + "px");
   s.setProperty("--font-family", toFontFamilyCss(d.fontFamily));
@@ -339,13 +404,19 @@ const LOCAL_FONT_FALLBACK = "sans-serif";
 const SNAP_KEYS = [
   "pageBg", "quoteBg", "extractBg", "mainBg",
   // 原文
-  "fontFamily", "fontColor", "fontSize", "lineHeight",
+  "fontFamily", "fontColor", "fontSize", "lineHeight", "fontWeight",
   // 释义
-  "ansFontFamily", "ansFontColor", "ansFontSize", "ansLineHeight", "ansSpacing",
+  "ansFontFamily", "ansFontColor", "ansFontSize", "ansLineHeight", "ansSpacing", "ansFontWeight",
   // 主文
-  "mainFontFamily", "mainFontColor", "mainFontSize", "mainLineHeight",
+  "mainFontFamily", "mainFontColor", "mainFontSize", "mainLineHeight", "mainFontWeight",
   // 圆角
   "cardRadius", "quoteRadius", "extractRadius",
+  // 卡片本体
+  "cardBg", "cardBorder", "cardBorderW", "cardBar", "cardBarW", "cardShadow", "cardGap", "cardPad",
+  // 卡片头部信息与标签
+  "timeColor", "srcColor", "tagBg", "tagColor", "tagRadius",
+  // 原文 / 主文左侧竖线
+  "quoteBorder", "quoteBorderW", "mainBorder", "mainBorderW",
 ];
 
 function parseCssColor(c) {
@@ -388,6 +459,9 @@ function templateProbe() {
   p.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;width:600px";
   p.innerHTML =
     '<div class="card">' +
+    '<div class="item-time">探针</div>' +
+    '<div class="item-src">探针</div>' +
+    '<div class="item-tag">探针</div>' +
     '<div class="item-text">探针文字</div>' +
     '<div class="item-text item-text-extract">探针文字</div>' +
     '<div class="item-main">探针文字</div>' +
@@ -426,6 +500,12 @@ function captureTemplateStyle() {
   const an = probe.querySelector(".item-answer");
   const afs = parseFloat(cs(an).fontSize) || 13;
   const alh = cs(an).lineHeight;
+  const cardRule = cs(card);
+  const qRule = cs(q);
+  const tagEl = probe.querySelector(".item-tag");
+  const timeEl = probe.querySelector(".item-time");
+  const srcEl = probe.querySelector(".item-src");
+  const tagR = cssPx(cs(tagEl).borderTopLeftRadius);
   return {
     palette: [
       { c: textColor, name: "模板原文色" },
@@ -433,25 +513,46 @@ function captureTemplateStyle() {
       { c: mainColor, name: "模板主文色" },
     ],
     pageBg: colorToHex(page),
+    // 卡片底色单独存一份，给「卡片底色」用；原文/摘录/主文仍按混合到卡片后的实际色
+    cardBg: colorToHex(cardBg),
     quoteBg: colorToHex(quoteBg),
     extractBg: colorToHex(extractBg),
     mainBg: colorToHex(mainBg),
+    cardBorder: colorToHex(parseCssColor(cardRule.borderTopColor) || white),
+    cardBorderW: cssPx(cardRule.borderTopWidth),
+    cardBar: colorToHex(parseCssColor(cardRule.borderLeftColor) || white),
+    cardBarW: cssPx(cardRule.borderLeftWidth),
+    cardShadow: shadowLevelOf(cardRule.boxShadow),
+    cardGap: cssPx(cardRule.marginBottom),
+    cardPad: cssPx(cardRule.paddingTop),
+    timeColor: colorToHex(parseCssColor(cs(timeEl).color) || { r: 107, g: 114, b: 128, a: 1 }),
+    srcColor: colorToHex(parseCssColor(cs(srcEl).color) || { r: 107, g: 114, b: 128, a: 1 }),
+    tagBg: colorToHex(blendColor(parseCssColor(cs(tagEl).backgroundColor), cardBg)),
+    tagColor: colorToHex(parseCssColor(cs(tagEl).color) || { r: 67, g: 56, b: 202, a: 1 }),
+    tagRadius: tagR >= 20 ? 20 : tagR,
+    quoteBorder: colorToHex(parseCssColor(qRule.borderLeftColor) || { r: 219, g: 225, b: 238, a: 1 }),
+    quoteBorderW: cssPx(qRule.borderLeftWidth),
+    mainBorder: colorToHex(parseCssColor(cs(mn).borderLeftColor) || { r: 99, g: 102, b: 241, a: 1 }),
+    mainBorderW: cssPx(cs(mn).borderLeftWidth),
     // 原文
     fontColor: textColor,
     fontSize: Math.round(fs),
     lineHeight,
     fontFamily: cs(q).fontFamily,
+    fontWeight: Number(cs(q).fontWeight) || 400,
     // 释义
     ansFontColor: answerColor,
     ansFontSize: Math.round(afs),
     ansLineHeight: alh === "normal" ? 1.5 : round2(parseFloat(alh) / afs),
     ansSpacing: cssPx(cs(an.querySelector("p")).marginBottom),
     ansFontFamily: cs(an).fontFamily,
+    ansFontWeight: Number(cs(an).fontWeight) || 400,
     // 主文
     mainFontColor: mainColor,
     mainFontSize: Math.round(mfs),
     mainLineHeight,
     mainFontFamily: cs(mn).fontFamily,
+    mainFontWeight: Number(cs(mn).fontWeight) || 400,
     cardRadius: cssPx(cs(card).borderTopLeftRadius),
     quoteRadius: cssPx(cs(q).borderTopLeftRadius),
     extractRadius: cssPx(cs(ex).borderTopLeftRadius),
@@ -490,6 +591,38 @@ function tplOverrideCss(id, ov, forExport) {
   if (ov.quoteRadius !== undefined) parts.push(sel + ".card .item-text{border-radius:" + (Number(ov.quoteRadius) || 0) + "px}");
   if (ov.extractRadius !== undefined)
     parts.push(sel + ".item-text-extract{border-radius:" + (Number(ov.extractRadius) || 0) + "px}");
+  // 卡片本体：底色、四边边框、左侧色条、阴影、间距、内边距
+  if (ov.cardBg) parts.push(sel + ".card{background:" + ov.cardBg + "}");
+  if (ov.cardBorder) parts.push(sel + ".card{border-color:" + ov.cardBorder + "}");
+  if (ov.cardBorderW !== undefined)
+    parts.push(sel + ".card{border-width:" + (Number(ov.cardBorderW) || 0) + "px;border-style:solid}");
+  if (ov.cardBar) parts.push(sel + ".card{border-left-color:" + ov.cardBar + "}");
+  if (ov.cardBarW !== undefined)
+    parts.push(sel + ".card{border-left-width:" + (Number(ov.cardBarW) || 0) + "px;border-left-style:solid}");
+  if (ov.cardShadow) parts.push(sel + ".card{box-shadow:" + shadowCss(ov.cardShadow) + "}");
+  if (ov.cardGap !== undefined) parts.push(sel + ".card{margin-bottom:" + (Number(ov.cardGap) || 0) + "px}");
+  if (ov.cardPad !== undefined)
+    parts.push(sel + ".card{padding:" + (Number(ov.cardPad) || 0) + "px 18px}");
+  // 时间 / 来源 / 标签
+  if (ov.timeColor) parts.push(sel + ".item-time{color:" + ov.timeColor + "}");
+  if (ov.srcColor) parts.push(sel + ".item-src," + sel + ".item-src a{color:" + ov.srcColor + "}");
+  if (ov.tagBg) parts.push(sel + ".item-tag{background:" + ov.tagBg + "}");
+  if (ov.tagColor)
+    parts.push(sel + ".item-tag{color:" + ov.tagColor +
+      ";border-color:color-mix(in srgb," + ov.tagColor + " 30%,transparent)}");
+  if (ov.tagRadius !== undefined)
+    parts.push(sel + ".item-tag{border-radius:" + (Number(ov.tagRadius) >= 20 ? "999px" : (Number(ov.tagRadius) || 0) + "px") + "}");
+  // 原文 / 主文的左侧竖线
+  if (ov.quoteBorder) parts.push(sel + ".card .item-text{border-left-color:" + ov.quoteBorder + "}");
+  if (ov.quoteBorderW !== undefined)
+    parts.push(sel + ".card .item-text{border-left-width:" + (Number(ov.quoteBorderW) || 0) + "px;border-left-style:solid}");
+  if (ov.mainBorder) parts.push(sel + ".card .item-main{border-left-color:" + ov.mainBorder + "}");
+  if (ov.mainBorderW !== undefined)
+    parts.push(sel + ".card .item-main{border-left-width:" + (Number(ov.mainBorderW) || 0) + "px;border-left-style:solid}");
+  // 字重
+  if (ov.fontWeight) parts.push(sel + ".card .item-text{font-weight:" + ov.fontWeight + "}");
+  if (ov.ansFontWeight) parts.push(sel + ".card .item-answer{font-weight:" + ov.ansFontWeight + "}");
+  if (ov.mainFontWeight) parts.push(sel + ".card .item-main{font-weight:" + ov.mainFontWeight + "}");
   return parts.join("\n");
 }
 
@@ -564,36 +697,74 @@ function syncTemplateStyleState() {
 }
 
 // 导出 HTML 时，把显示设置写成覆盖规则追加到样式末尾
-function buildDisplayCss(d) {
+// withTemplate=true（当前是风格模板）时，卡片底色/边框/阴影/标签/竖线/字重这些交给模板 CSS 与
+// tplOverrideCss 负责，这里不再重复输出，避免读回来的近似值把模板原样式盖偏。
+function buildDisplayCss(d, withTemplate) {
   const ff = toFontFamilyCss(d.fontFamily);
   const aff = toFontFamilyCss(d.ansFontFamily || d.fontFamily);
   const mff = toFontFamilyCss(d.mainFontFamily || d.fontFamily);
   const cardR = Number(d.cardRadius) || 0;
   const quoteR = Number(d.quoteRadius) || 0;
   const extractR = Number(d.extractRadius) || 0;
+  const cardBorderW = d.cardBorderW === undefined ? DEFAULT_DISPLAY.cardBorderW : Number(d.cardBorderW) || 0;
+  const cardBarW = d.cardBarW === undefined ? DEFAULT_DISPLAY.cardBarW : Number(d.cardBarW) || 0;
+  const cardGap = d.cardGap === undefined ? DEFAULT_DISPLAY.cardGap : Number(d.cardGap) || 0;
+  const cardPad = d.cardPad === undefined ? DEFAULT_DISPLAY.cardPad : Number(d.cardPad) || 0;
+  const tagR = Number(d.tagRadius === undefined ? DEFAULT_DISPLAY.tagRadius : d.tagRadius) || 0;
+  const quoteBW = d.quoteBorderW === undefined ? DEFAULT_DISPLAY.quoteBorderW : Number(d.quoteBorderW) || 0;
+  const mainBW = d.mainBorderW === undefined ? DEFAULT_DISPLAY.mainBorderW : Number(d.mainBorderW) || 0;
+  const mainBorderColor = d.mainBorder || darken(d.mainBg, 0.12);
+  // 带模板时这些交给模板 CSS / tplOverrideCss，避免近似值盖偏模板
+  const extras = !withTemplate;
+  const cardExtraCss = extras
+    ? ";background:" + (d.cardBg || DEFAULT_DISPLAY.cardBg) +
+      ";border:" + cardBorderW + "px solid " + (d.cardBorder || DEFAULT_DISPLAY.cardBorder) +
+      ";border-left:" + cardBarW + "px solid " + (d.cardBar || d.cardBorder || DEFAULT_DISPLAY.cardBorder) +
+      ";box-shadow:" + shadowCss(d.cardShadow || DEFAULT_DISPLAY.cardShadow) +
+      ";margin-bottom:" + cardGap + "px;padding:" + cardPad + "px 18px"
+    : "";
+  const metaExtraCss = extras
+    ? ".item-time{color:" + (d.timeColor || DEFAULT_DISPLAY.timeColor) + "}" +
+      ".item-src,.item-src a{color:" + (d.srcColor || DEFAULT_DISPLAY.srcColor) + "}" +
+      ".item-tag{background:" + (d.tagBg || DEFAULT_DISPLAY.tagBg) +
+        ";color:" + (d.tagColor || DEFAULT_DISPLAY.tagColor) +
+        ";border-color:color-mix(in srgb," + (d.tagColor || DEFAULT_DISPLAY.tagColor) + " 30%,transparent)" +
+        ";border-radius:" + (tagR >= 20 ? "999px" : tagR + "px") + "}"
+    : "";
+  const quoteExtraCss = extras
+    ? ";font-weight:" + (d.fontWeight || DEFAULT_DISPLAY.fontWeight) +
+      ";border-left:" + quoteBW + "px solid " + (d.quoteBorder || DEFAULT_DISPLAY.quoteBorder)
+    : "";
+  const ansExtraCss = extras ? ";font-weight:" + (d.ansFontWeight || DEFAULT_DISPLAY.ansFontWeight) : "";
+  const mainExtraCss = extras
+    ? ";border-left:" + mainBW + "px solid " + mainBorderColor +
+      ";font-weight:" + (d.mainFontWeight || DEFAULT_DISPLAY.mainFontWeight)
+    : "";
   return (
     "body{background:" + d.pageBg + ";color:" + d.fontColor +
       ";font-family:" + ff + ";font-size:" + d.fontSize + "px}" +
-    ".card{border-radius:" + cardR + "px}" +
+    ".card{border-radius:" + cardR + "px" + cardExtraCss + "}" +
+    metaExtraCss +
     ".item-text{background:" + d.quoteBg + ";color:" + d.fontColor +
       ";font-size:" + d.fontSize + "px;line-height:" + d.lineHeight +
-      ";font-family:" + ff + ";border-radius:" + quoteR + "px}" +
+      ";font-family:" + ff + ";border-radius:" + quoteR + "px" + quoteExtraCss + "}" +
     // 释义：独立作用域的字体/颜色/大小/行高
     ".item-answer{color:" + (d.ansFontColor || d.fontColor) +
       ";font-size:" + (d.ansFontSize || d.fontSize) + "px" +
       ";line-height:" + (d.ansLineHeight || d.lineHeight) +
+      ansExtraCss +
       ";font-family:" + aff + "}" +
     // 释义段后间距
     ".item-answer p{margin:0 0 " + (d.ansSpacing === 0 ? 0 : d.ansSpacing || DEFAULT_DISPLAY.ansSpacing) + "px}" +
     // 主文：独立作用域的字体/颜色/大小/行高
     ".item-main{background:" + d.mainBg + ";color:" + (d.mainFontColor || d.fontColor) +
-      ";border-left:3px solid " + darken(d.mainBg, 0.12) +
+      mainExtraCss +
       ";font-size:" + (d.mainFontSize || DEFAULT_DISPLAY.mainFontSize) + "px" +
       ";line-height:" + (d.mainLineHeight || DEFAULT_DISPLAY.mainLineHeight) +
       ";font-family:" + mff + "}" +
     // 明细主文：同一底色淡出（默认模板按用户设置的主文底色算）
     ".item-main-dim{background:color-mix(in srgb," + d.mainBg + " 40%,transparent)" +
-      ";border-left-color:color-mix(in srgb," + darken(d.mainBg, 0.12) + " 35%,transparent)}" +
+      ";border-left-color:color-mix(in srgb," + mainBorderColor + " 35%,transparent)}" +
     // 摘录记录：左侧深色竖线的引文样式，底色与主文不同，置于最后确保覆盖上面的原文底色
     ".item-text-extract{background:" + d.extractBg +
       ";border-left:3px solid " + deepBorder(d.extractBg) +
@@ -1092,7 +1263,7 @@ const STYLE_TEMPLATES = [
       'body[data-tpl="magazine"] .item-src{color:#8b8f96;font-size:11px;letter-spacing:.04em}' +
       'body[data-tpl="magazine"] .item-src a{color:#8b8f96}' +
       'body[data-tpl="magazine"] .item-text{background:transparent;border:0;border-radius:0;padding:0;' +
-      "margin:0 0 8px;font-family:'Songti SC','SimSun',Georgia,serif;font-size:17px;line-height:1.45;" +
+      "margin:0 0 8px;font-family:Georgia,'华文细黑','Songti SC','SimSun',serif;font-size:17px;line-height:1.45;" +
       "color:#16181d;font-weight:600}" +
       'body[data-tpl="magazine"] .item-text-extract{background-color:transparent!important;border-left:0;padding-left:0}' +
       // 正文排两栏，栏间一条细分割线
@@ -1839,10 +2010,39 @@ function syncDisplayControls() {
   $("optCardRadius").value = displayOpts.cardRadius ?? DEFAULT_DISPLAY.cardRadius;
   $("optQuoteRadius").value = displayOpts.quoteRadius ?? DEFAULT_DISPLAY.quoteRadius;
   $("optExtractRadius").value = displayOpts.extractRadius ?? DEFAULT_DISPLAY.extractRadius;
+  // 卡片本体
+  const d = displayOpts;
+  $("optCardBg").value = d.cardBg || DEFAULT_DISPLAY.cardBg;
+  $("optCardBorder").value = d.cardBorder || DEFAULT_DISPLAY.cardBorder;
+  $("optCardBorderW").value = d.cardBorderW === undefined ? DEFAULT_DISPLAY.cardBorderW : Number(d.cardBorderW) || 0;
+  $("optCardBar").value = d.cardBar || d.cardBorder || DEFAULT_DISPLAY.cardBar;
+  $("optCardBarW").value = d.cardBarW === undefined ? DEFAULT_DISPLAY.cardBarW : Number(d.cardBarW) || 0;
+  $("optCardShadow").value = d.cardShadow || DEFAULT_DISPLAY.cardShadow;
+  $("optCardGap").value = d.cardGap === undefined ? DEFAULT_DISPLAY.cardGap : Number(d.cardGap) || 0;
+  $("optCardPad").value = d.cardPad === undefined ? DEFAULT_DISPLAY.cardPad : Number(d.cardPad) || 0;
+  // 时间 / 来源 / 标签
+  $("optTimeColor").value = d.timeColor || DEFAULT_DISPLAY.timeColor;
+  $("optSrcColor").value = d.srcColor || DEFAULT_DISPLAY.srcColor;
+  $("optTagBg").value = d.tagBg || DEFAULT_DISPLAY.tagBg;
+  $("optTagColor").value = d.tagColor || DEFAULT_DISPLAY.tagColor;
+  $("optTagRadius").value = d.tagRadius === undefined ? DEFAULT_DISPLAY.tagRadius : Number(d.tagRadius) || 0;
+  // 竖线
+  $("optQuoteBorder").value = d.quoteBorder || DEFAULT_DISPLAY.quoteBorder;
+  $("optQuoteBorderW").value = d.quoteBorderW === undefined ? DEFAULT_DISPLAY.quoteBorderW : Number(d.quoteBorderW) || 0;
+  $("optMainBorder").value = d.mainBorder || darken(d.mainBg || DEFAULT_DISPLAY.mainBg, 0.12);
+  $("optMainBorderW").value = d.mainBorderW === undefined ? DEFAULT_DISPLAY.mainBorderW : Number(d.mainBorderW) || 0;
+  $("optCardBorderWVal").textContent = $("optCardBorderW").value;
+  $("optCardBarWVal").textContent = $("optCardBarW").value;
+  $("optCardGapVal").textContent = $("optCardGap").value;
+  $("optCardPadVal").textContent = $("optCardPad").value;
+  $("optTagRadiusVal").textContent = Number($("optTagRadius").value) >= 20 ? "胶囊" : $("optTagRadius").value + "px";
+  $("optQuoteBorderWVal").textContent = $("optQuoteBorderW").value;
+  $("optMainBorderWVal").textContent = $("optMainBorderW").value;
   syncColorSwatches("bgSwatches", "optPageBg");
   syncColorSwatches("quoteSwatches", "optQuoteBg");
   syncColorSwatches("mainSwatches", "optMainBg");
   syncColorSwatches("extractSwatches", "optExtractBg");
+  syncColorSwatches("cardSwatches", "optCardBg");
   syncColorSwatches("fontSwatches", "optFontColor");
 }
 
@@ -1852,6 +2052,7 @@ function syncFontScopeControls() {
   $("optFontColor").value = displayOpts[sc.color] || DEFAULT_DISPLAY[sc.color];
   $("optFontSize").value = displayOpts[sc.size] || DEFAULT_DISPLAY[sc.size];
   $("optLineHeight").value = displayOpts[sc.line] || DEFAULT_DISPLAY[sc.line];
+  if (sc.weight) $("optFontWeight").value = String(displayOpts[sc.weight] || DEFAULT_DISPLAY[sc.weight]);
   const storedFont = displayOpts[sc.family] || displayOpts.fontFamily || DEFAULT_DISPLAY.fontFamily;
   const preset = matchFontPreset(storedFont);
   if (preset) {
@@ -1872,6 +2073,7 @@ function readFontScopeInto(opts) {
   opts[sc.color] = $("optFontColor").value;
   opts[sc.size] = Number($("optFontSize").value);
   opts[sc.line] = Number($("optLineHeight").value);
+  if (sc.weight) opts[sc.weight] = Number($("optFontWeight").value) || 400;
   if (sc.spacing) opts[sc.spacing] = Number($("optParaSpacing").value);
 }
 
@@ -2122,6 +2324,29 @@ function bindDisplay() {
     next.cardRadius = Number($("optCardRadius").value);
     next.quoteRadius = Number($("optQuoteRadius").value);
     next.extractRadius = Number($("optExtractRadius").value);
+    // 卡片本体
+    next.cardBg = $("optCardBg").value;
+    next.cardBorder = $("optCardBorder").value;
+    next.cardBorderW = Number($("optCardBorderW").value);
+    next.cardBar = $("optCardBar").value.toLowerCase() === $("optCardBorder").value.toLowerCase()
+      ? "" : $("optCardBar").value;
+    next.cardBarW = Number($("optCardBarW").value);
+    next.cardShadow = $("optCardShadow").value;
+    next.cardGap = Number($("optCardGap").value);
+    next.cardPad = Number($("optCardPad").value);
+    // 时间 / 来源 / 标签
+    next.timeColor = $("optTimeColor").value;
+    next.srcColor = $("optSrcColor").value;
+    next.tagBg = $("optTagBg").value;
+    next.tagColor = $("optTagColor").value;
+    next.tagRadius = Number($("optTagRadius").value);
+    // 竖线
+    next.quoteBorder = $("optQuoteBorder").value;
+    next.quoteBorderW = Number($("optQuoteBorderW").value);
+    // 主文竖线颜色等于「由主文底色推出来的默认色」时，记为「跟随底色」，改底色时竖线跟着变
+    next.mainBorder = $("optMainBorder").value.toLowerCase() === darken(next.mainBg, 0.12).toLowerCase()
+      ? "" : $("optMainBorder").value;
+    next.mainBorderW = Number($("optMainBorderW").value);
     readFontScopeInto(next); // 只改当前 tab（原文/释义/主文）对应的字段
     displayOpts = next;
     applyDisplay(displayOpts);
@@ -2130,13 +2355,39 @@ function bindDisplay() {
     syncColorSwatches("quoteSwatches", "optQuoteBg");
     syncColorSwatches("mainSwatches", "optMainBg");
     syncColorSwatches("extractSwatches", "optExtractBg");
+    syncColorSwatches("cardSwatches", "optCardBg");
     syncColorSwatches("fontSwatches", "optFontColor");
+    $("optCardBorderWVal").textContent = $("optCardBorderW").value;
+    $("optCardBarWVal").textContent = $("optCardBarW").value;
+    $("optCardGapVal").textContent = $("optCardGap").value;
+    $("optCardPadVal").textContent = $("optCardPad").value;
+    $("optQuoteBorderWVal").textContent = $("optQuoteBorderW").value;
+    $("optMainBorderWVal").textContent = $("optMainBorderW").value;
+    $("optTagRadiusVal").textContent = Number($("optTagRadius").value) >= 20 ? "胶囊" : $("optTagRadius").value + "px";
     saveStyleState();
   };
   $("optPageBg").addEventListener("input", persist);
   $("optQuoteBg").addEventListener("input", persist);
   $("optMainBg").addEventListener("input", persist);
   $("optExtractBg").addEventListener("input", persist);
+  $("optCardBg").addEventListener("input", persist);
+  $("optCardBorder").addEventListener("input", persist);
+  $("optCardBorderW").addEventListener("input", persist);
+  $("optCardBar").addEventListener("input", persist);
+  $("optCardBarW").addEventListener("input", persist);
+  $("optCardShadow").addEventListener("change", persist);
+  $("optCardGap").addEventListener("input", persist);
+  $("optCardPad").addEventListener("input", persist);
+  $("optTimeColor").addEventListener("input", persist);
+  $("optSrcColor").addEventListener("input", persist);
+  $("optTagBg").addEventListener("input", persist);
+  $("optTagColor").addEventListener("input", persist);
+  $("optTagRadius").addEventListener("input", persist);
+  $("optQuoteBorder").addEventListener("input", persist);
+  $("optQuoteBorderW").addEventListener("input", persist);
+  $("optMainBorder").addEventListener("input", persist);
+  $("optMainBorderW").addEventListener("input", persist);
+  $("optFontWeight").addEventListener("change", persist);
   $("optFontColor").addEventListener("input", persist);
   $("optFontSize").addEventListener("input", persist);
   $("optLineHeight").addEventListener("input", persist);
@@ -3483,8 +3734,8 @@ h1 .h1-sub{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;whit
 .item-answer{font-size:13px;line-height:1.65;color:#1f2937}
 .item-answer p{margin:4px 0}
 .item-answer h1,.item-answer h2,.item-answer h3,.item-answer h4{margin:8px 0 4px;font-size:14px}
-.item-answer ul,.item-answer ol{margin:4px 0;padding-left:20px}
-.item-answer li{margin:2px 0}
+.item-answer ul,.item-answer ol{margin:0;padding-left:20px}
+.item-answer li{margin:0}
 .item-answer code{font-family:ui-monospace,SFMono-Regular,Consolas,"Courier New",monospace;font-size:12px;background:rgba(99,102,241,0.08);color:#4f46e5;padding:1px 4px;border-radius:4px}
 .item-answer pre{background:rgba(31,41,55,0.06);padding:8px;border-radius:8px;overflow-x:auto;margin:6px 0}
 .item-answer pre code{background:transparent;color:inherit;padding:0}
@@ -3664,7 +3915,7 @@ function buildExportHtml(list, withPrintScript, titleWithTime, previewBlack) {
     ? "\n@media print{.card{break-inside:avoid;page-break-inside:avoid}.card-gap{height:16px;break-after:avoid;page-break-after:avoid}}"
     : "";
   // 将显示设置（页面背景/原文背景/字体颜色/字号/字体）写入导出样式
-  const displayCss = buildDisplayCss(displayOpts);
+  const displayCss = buildDisplayCss(displayOpts, styleTemplate !== "glass");
   // 风格模板：导出页与历史页共用同一份样式，靠 body 上的 data-tpl 生效；
   // 导出页再追加整页底色（历史页的页面底色只作用于 #list）
   const tplOverridesCss =
@@ -4162,6 +4413,7 @@ initColorSwatches("bgSwatches", "optPageBg", BG_PALETTE);
 initColorSwatches("quoteSwatches", "optQuoteBg", BG_PALETTE);
 initColorSwatches("mainSwatches", "optMainBg", BG_PALETTE);
 initColorSwatches("extractSwatches", "optExtractBg", BG_PALETTE);
+initColorSwatches("cardSwatches", "optCardBg", BG_PALETTE);
 initColorSwatches("fontSwatches", "optFontColor", FONT_RECOMMEND);
 bindExportOpts();
 bindDisplay();
