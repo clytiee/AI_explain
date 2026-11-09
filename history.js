@@ -935,9 +935,12 @@ const STYLE_TEMPLATES = [
     desc: "浅蓝格线 + 楷体，笔记观感",
     css:
       'body[data-tpl="grid"] #list{background:#fdfcf8;' +
-      // 用 repeating-linear-gradient 画格，避免 background-size 百分比在不同场景下只出一方向的线
-      "background-image:repeating-linear-gradient(to bottom,rgba(120,170,220,.28) 0 1px,transparent 1px 25px)," +
-      "repeating-linear-gradient(to right,rgba(120,170,220,.2) 0 1px,transparent 1px 25px);" +
+      // 用线性渐变 + 固定 background-size 平铺：repeating-linear-gradient 在 125% 缩放/非整数像素比下
+      // 会周期性丢掉重复里的某一条线（表现为每隔几条缺一条），改成整块平铺就不会
+      "background-image:" +
+      "linear-gradient(to bottom,rgba(120,170,220,.28) 0 1px,transparent 1px 25px)," +
+      "linear-gradient(to right,rgba(120,170,220,.2) 0 1px,transparent 1px 25px);" +
+      "background-size:100% 25px,25px 100%;background-repeat:repeat,repeat;" +
       "padding:18px;border-radius:10px}" +
       'body[data-tpl="grid"] .card{background:rgba(255,255,255,.72);border:0;border-radius:6px;' +
       "box-shadow:0 1px 0 rgba(120,150,190,.16);-webkit-backdrop-filter:none;backdrop-filter:none}" +
