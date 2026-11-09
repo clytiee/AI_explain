@@ -396,12 +396,14 @@ function isDropQuote(e) {
   return !!t && t.length <= quoteMergeMax;
 }
 
-// 杂志双栏的释义是多列容器（column-count:2），它自成块级上下文，
+// 释义用多列容器（column-count）的模板：它自成块级上下文，
 // 外层浮动只会把两栏整体挤窄、第 3 行也回不到开头；
-// 所以这个模板下把大字头挪到释义第一段的开头，浮动只作用于第一栏，
+// 所以这些模板把大字头挪到释义第一段的开头，浮动只作用于第一栏，
 // 第一栏绕排两行后自然接到第二栏。其余模板仍沿用原来的兄弟节点方式。
+const MULTICOL_TEMPLATES = ["magazine", "news"];
+
 function dropQuoteInsideAnswer() {
-  return styleTemplate === "magazine";
+  return MULTICOL_TEMPLATES.includes(styleTemplate);
 }
 
 function injectDropIntoAnswerHtml(ansHtml, dropInner) {
