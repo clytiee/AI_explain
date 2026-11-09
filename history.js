@@ -376,6 +376,8 @@ function applyDisplay(d) {
   $("optCardRadiusVal").textContent = Number(d.cardRadius) || 0;
   $("optQuoteRadiusVal").textContent = Number(d.quoteRadius) || 0;
   $("optExtractRadiusVal").textContent = Number(d.extractRadius) || 0;
+  // 行高/字号/模板一变，大字头的高度要按新的释义行高重算
+  if (typeof applyDropQuoteSize === "function") applyDropQuoteSize();
 }
 
 // 原文与释义合段：只在 body 上切一个类，具体排版交给 CSS（与风格模板无关，切模板也保持）
@@ -392,6 +394,31 @@ function isDropQuote(e) {
   if (isExtractRecord(e) || isMultilineSelection(e.text)) return false;
   const t = String(e.text || "").trim();
   return !!t && t.length <= quoteMergeMax;
+}
+
+// 杂志双栏的释义是多列容器（column-count:2），它自成块级上下文，
+// 外层浮动只会把两栏整体挤窄、第 3 行也回不到开头；
+// 所以这个模板下把大字头挪到释义第一段的开头，浮动只作用于第一栏，
+// 第一栏绕排两行后自然接到第二栏。其余模板仍沿用原来的兄弟节点方式。
+function dropQuoteInsideAnswer() {
+  return styleTemplate === "magazine";
+}
+
+function injectDropIntoAnswerHtml(ansHtml, dropInner) {
+  const m = ansHtml.match(/<p([^>]*)>/);
+  if (m) return ansHtml.replace(/<p([^>]*)>/, "<p$1>" + dropInner);
+  return dropInner + ansHtml;
+}
+
+function injectDropIntoAnswerEl(ansEl, dropEl) {
+  const first = ansEl.firstElementChild;
+  if (first && first.tagName === "P") first.insertBefore(dropEl, first.firstChild);
+  else ansEl.insertBefore(dropEl, ansEl.firstChild);
+}
+
+// 字符串渲染时用 span：<p> 里塞 <div> 会被浏览器当作段落结束，浮动的原文反而又跑到段落外面
+function dropSpanHtml(e) {
+  return '<span class="item-text item-text-drop">' + esc(String(e.text || "").trim()) + "</span>";
 }
 
 // 字体作用域里的两个数值标签（跟着当前 tab 走）
@@ -1268,9 +1295,11 @@ const STYLE_TEMPLATES = [
       'body[data-tpl="book"] .item-answer{color:#3b3a34;font-size:13.5px;line-height:1.95;margin-top:12px;' +
       "font-family:Georgia,'Songti SC','SimSun',serif;text-align:justify}" +
       'body[data-tpl="book"] .item-answer p{margin:0 0 8px}' +
-      // 首段首字下沉
+      // 首段首字下沉（开了「合并原文释义」时原文已是大字头，首字下沉要失效）
       'body[data-tpl="book"] .item-answer p:first-of-type::first-letter{float:left;font-size:30px;line-height:26px;' +
       "padding-right:4px;font-weight:600;color:#6b4a2f}" +
+      "body[data-tpl=\"book\"].merge-quote .item-answer p:first-of-type::first-letter{float:none;font-size:inherit;" +
+      "line-height:inherit;padding-right:0;font-weight:inherit;color:inherit}" +
       'body[data-tpl="book"] .item-tag{background:transparent;border:0;border-bottom:1px solid #d8d2c3;' +
       "border-radius:0;padding:0 2px;color:#8a8578}" +
       'body[data-tpl="book"] .item-main{background:#faf7f0;border:0;border-left:2px solid #ddd6c6;border-radius:0;' +
@@ -2937,6 +2966,41 @@ function render() {
     box.appendChild(buildItemCard(e));
   }
   renderPager(list.length);
+  applyDropQuoteSize($("list"));
+}
+
+// 大字头（合并原文释义）的高度按「该卡释义的实际行高」算：
+// 模板常常把释义行高写死，CSS 里的 --ans-line-height 未必等于实际值，
+// 所以在卡片上按实测行高写内联高度，保证右边释义正好绕两行。
+function applyDropQuoteSize(root) {
+  const scope = root || document;
+  scope.querySelectorAll(".item-text-drop").forEach((el) => {
+    const ans = el.closest(".card") && el.closest(".card").querySelector(".item-answer");
+    if (!ans) return;
+    const lh = parseFloat(getComputedStyle(ans).lineHeight);
+    if (!lh || !isFinite(lh)) return;
+    // 再减 1px：让浮动的下边缘严格落在第 2 行内，否则第三行会被压出一小段缩进
+    const boxH = Math.max(1, Math.round(lh * 2) - 1);
+    el.style.height = boxH + "px";
+    el.style.lineHeight = boxH + "px";
+    // 字号取盒高的固定比例（0.72），让各模板的上下空隙比例一致，宋体这类墨迹偏下的字体才不会有的模板偏、有的不偏
+    el.style.fontSize = Math.round(boxH * 0.72) + "px";
+    // 不同字体的上行/下行度量差别很大（宋体最明显、Noto Serif 次之，雅黑/楷体几乎为 0），
+    // 同一行高的盒子在不同字体里字会偏上或偏下；这里量出字本身的高度，让它在这两行里垂直居中
+    el.style.top = "0px";
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const textBox = range.getBoundingClientRect();
+      const box = el.getBoundingClientRect();
+      if (textBox.height && box.height) {
+        const shift = Math.round((box.height - textBox.height) / 2 - (textBox.top - box.top));
+        if (isFinite(shift)) el.style.top = shift + "px";
+      }
+    } catch (err) {
+      /* 量不到就保持不偏移 */
+    }
+  });
 }
 
 // 旧版摘录记录残留的占位释义文本；识别摘录记录时一并视为无释义
@@ -3102,7 +3166,8 @@ function buildItemCard(e) {
   if (multi) {
     if (showMainText) item.appendChild(selMain);
   } else if (showQuoteText || isExtract) {
-    item.appendChild(textEl);
+    if (drop && !isExtract && dropQuoteInsideAnswer()) injectDropIntoAnswerEl(ans, textEl);
+    else item.appendChild(textEl);
   }
   item.appendChild(ans);
   return item;
@@ -3498,12 +3563,15 @@ function renderAggregated(list) {
           gi.appendChild(selMain);
         }
       } else if (showQuoteText || isExtract) {
-        gi.appendChild(textEl);
+        if (!(drop && !isExtract && dropQuoteInsideAnswer())) gi.appendChild(textEl);
       }
 
       const ans = document.createElement("div");
       ans.className = "item-answer";
       if (!isExtract) ans.innerHTML = renderMarkdown(e.answer || "");
+      if (drop && !isExtract && showQuoteText && dropQuoteInsideAnswer()) {
+        injectDropIntoAnswerEl(ans, textEl);
+      }
       gi.appendChild(ans);
 
       items.appendChild(gi);
@@ -3512,6 +3580,7 @@ function renderAggregated(list) {
     box.appendChild(item);
   }
   renderPager(entries.length);
+  applyDropQuoteSize(box);
 }
 
 function syncAggBtn() {
@@ -3860,13 +3929,20 @@ function cardHtml(e) {
         (drop ? esc(String(e.text || "").trim()) : "「" + esc(e.text || "") + "」") + "</div>"
       : "";
   const selMain = multi && showMainText ? '<div class="item-main item-main-dim">' + esc(e.text || "") + "</div>" : "";
+  // 杂志双栏：大字头放进释义第一段，浮动只作用于第一栏
+  let quoteOut = quoteHtml;
+  let ansHtml = isExtract ? "" : '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>";
+  if (drop && !isExtract && showQuoteText && dropQuoteInsideAnswer()) {
+    quoteOut = "";
+    ansHtml = '<div class="item-answer">' + injectDropIntoAnswerHtml(renderMarkdown(e.answer || ""), dropSpanHtml(e)) + "</div>";
+  }
   return (
     '<div class="card"' + meta + ">" +
     '<div class="item-head">' + head.join("") + "</div>" +
     main +
-    quoteHtml +
+    quoteOut +
     selMain +
-    (isExtract ? "" : '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>") +
+    ansHtml +
     "</div>"
   );
 }
@@ -3914,16 +3990,23 @@ function buildCardsHtmlAggregated(list) {
           const meta = metaAttrs(e, isExtract, false);
           const multi = isMultilineSelection(e.text);
           const drop = isDropQuote(e);
+          const quoteInner =
+            '<div class="item-text' + (isExtract ? " item-text-extract" : "") + (drop ? " item-text-drop" : "") + '">' +
+            (drop ? esc(String(e.text || "").trim()) : "「" + esc(e.text || "") + "」") + "</div>";
+          // 杂志双栏：大字头放进释义第一段，避免多列容器把两栏整体挤窄
+          const dropInside = drop && !isExtract && showQuoteText && dropQuoteInsideAnswer();
+          const ansInner = isExtract ? "" : renderMarkdown(e.answer || "");
           return (
             '<div class="agg-item"' + meta + ">" +
             (showQuoteText || isExtract
-              ? multi
+              ? multi || dropInside
                 ? ""
-                : '<div class="item-text' + (isExtract ? " item-text-extract" : "") + (drop ? " item-text-drop" : "") + '">' +
-                  (drop ? esc(String(e.text || "").trim()) : "「" + esc(e.text || "") + "」") + "</div>"
+                : quoteInner
               : "") +
             (multi && showMainText ? '<div class="item-main item-main-dim">' + esc(e.text || "") + "</div>" : "") +
-            (isExtract ? "" : '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>") +
+            (isExtract
+              ? ""
+              : '<div class="item-answer">' + (dropInside ? injectDropIntoAnswerHtml(ansInner, dropSpanHtml(e)) : ansInner) + "</div>") +
             "</div>"
           );
         })
@@ -3950,8 +4033,12 @@ const MERGE_QUOTE_CSS =
   "background:transparent!important;border-left:0!important;border-radius:0!important;" +
   "padding:0!important;margin:0 0 2px!important}" +
   "body.merge-quote .card .item-text:not(.item-text-extract).item-text-drop{" +
-  "float:left;display:block;overflow:hidden;width:auto;height:41px;" +
-  "font-size:39px;line-height:41px;font-weight:600;margin:2px 10px 2px 0!important;" +
+  "float:left;display:block;overflow:hidden;width:auto;" +
+  // 高度＝释义两行，字号跟着行高走（上限 39px），避免右侧释义多绕一行
+  "height:calc(var(--ans-line-height,1.2) * var(--ans-font-size,13px) * 2);" +
+  "line-height:calc(var(--ans-line-height,1.2) * var(--ans-font-size,13px) * 2);" +
+  "font-size:calc(var(--ans-line-height,1.2) * var(--ans-font-size,13px) * 1.44);" +
+  "font-weight:600;margin:0 10px 0 0!important;position:relative;" +
   "padding:0!important;background:transparent!important;border-left:0!important;border-radius:0!important;" +
   "white-space:nowrap;word-break:keep-all}" +
   "body.merge-quote .card::after{content:\"\";display:block;clear:both}";
