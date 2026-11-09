@@ -329,6 +329,33 @@ function syncColorSwatches(containerId, inputId) {
 }
 
 // 将显示设置写入 CSS 变量
+// 页面底色是不是「接近白 / 透明」：白底页面顶部那圈留白会显得很空，需要收紧
+function isLightPageBg(css) {
+  const s = String(css || "").trim().toLowerCase();
+  if (!s || s === "transparent" || s === "none") return true;
+  let r = 255;
+  let g = 255;
+  let b = 255;
+  const hex = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    r = parseInt(h.slice(0, 2), 16);
+    g = parseInt(h.slice(2, 4), 16);
+    b = parseInt(h.slice(4, 6), 16);
+  } else {
+    const m = s.match(/rgba?\(([^)]+)\)/);
+    if (!m) return false;
+    const p = m[1].split(",").map((x) => parseFloat(x));
+    if (p.length > 3 && p[3] === 0) return true;
+    r = p[0];
+    g = p[1];
+    b = p[2];
+  }
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return lum >= 0.92;
+}
+
 function applyDisplay(d) {
   const s = document.documentElement.style;
   // 每次刷新样式顺便把「原文与释义合段」的开关重新落一次，避免类名被别处清掉
@@ -386,6 +413,8 @@ function applyDisplay(d) {
   $("optExtractRadiusVal").textContent = Number(d.extractRadius) || 0;
   // 行高/字号/模板一变，大字头的高度要按新的释义行高重算
   if (typeof applyDropQuoteSize === "function") applyDropQuoteSize();
+  // 字号行高变了卡片高度也变，瀑布流要重新分配
+  if (typeof applyMasonry === "function") applyMasonry();
 }
 
 // 原文与释义合段：只在 body 上切一个类，具体排版交给 CSS（与风格模板无关，切模板也保持）
@@ -802,8 +831,14 @@ function buildDisplayCss(d, withTemplate) {
       ";font-weight:" + (d.mainFontWeight || DEFAULT_DISPLAY.mainFontWeight)
     : "";
   return (
+    // 页面底色同时落一份变量：模板里要「咬」页面底色的地方（小票的撕口等）要用到
+    ":root{--page-bg:" + d.pageBg + "}" +
     "body{background:" + d.pageBg + ";color:" + d.fontColor +
       ";font-family:" + ff + ";font-size:" + d.fontSize + "px}" +
+    // 白底/透明底时打印：顶部不留白、标题下边距收到 18px（屏幕预览保持原样）
+    (isLightPageBg(d.pageBg)
+      ? "@media print{body{padding-top:0}h1{margin-bottom:18px}}"
+      : "") +
     ".card{border-radius:" + cardR + "px" + cardExtraCss + "}" +
     metaExtraCss +
     ".item-text{background:" + d.quoteBg + ";color:" + d.fontColor +
@@ -1384,6 +1419,8 @@ const STYLE_TEMPLATES = [
       // 轻微错落，模拟便签贴墙
       'body[data-tpl="cards"] .card:nth-child(odd){transform:rotate(-.35deg)}' +
       'body[data-tpl="cards"] .card:nth-child(even){transform:rotate(.4deg)}' +
+      // 打印用的透明占位块会占掉栅格一格，两栏模板里隐藏掉
+      'body[data-tpl="cards"] .card-gap{display:none!important}' +
       'body[data-tpl="cards"] .item-time{color:#8a93a0;font-size:11px}' +
       'body[data-tpl="cards"] .item-src{color:#8a93a0;font-size:11px}' +
       'body[data-tpl="cards"] .item-src a{color:#8a93a0}' +
@@ -1396,6 +1433,67 @@ const STYLE_TEMPLATES = [
       'body[data-tpl="cards"] .item-tag{background:rgba(99,102,241,.1);border:0;color:#4f46e5}' +
       'body[data-tpl="cards"] .item-main{background:#f5f6f9;border:0;border-radius:6px;color:#4b5563;' +
       "font-size:12px;line-height:1.7}",
+  },
+  {
+    id: "receipt",
+    name: "小票",
+    desc: "整页两栏，白色票据纸、撕口下边、底部条码",
+    css:
+      // 页面级两栏：打印/导出用多列流（grid 整块不可分页，会把卡片全推到第二页），
+      // 屏幕上改用瀑布流（见 applyMasonry：每张卡放进当前较矮的那一栏），两栏都从顶部起、
+      // 底边尽量齐平，卡片完整不拆。
+      'body[data-tpl="receipt"] #list{background:transparent;column-count:2;column-gap:16px}' +
+      '@media (max-width:560px){body[data-tpl="receipt"] #list{column-count:1}}' +
+      '@media screen{body[data-tpl="receipt"] #list{column-count:auto;display:flex;gap:16px;align-items:flex-start}}' +
+      '@media screen{body[data-tpl="receipt"] .rcpt-col{display:flex;flex-direction:column;gap:16px;' +
+      "flex:1 1 0;min-width:0}}" +
+      '@media screen{body[data-tpl="receipt"] .rcpt-col>.card{margin:0}}' +
+      // 只有一张卡（或还没排瀑布流）时占满整行，避免 flex 把它压成内容宽度
+      '@media screen{body[data-tpl="receipt"] #list>.card{flex:1 1 100%;width:100%}}' +
+      // 「卡片不跨页」用的透明占位块会占掉一栏的位置，这里直接不显示
+      'body[data-tpl="receipt"] .card-gap{display:none!important}' +
+      // 票据纸本体：白纸、直角、底部留出撕口与条码的位置
+      'body[data-tpl="receipt"] .card{position:relative;background:#fff;border:0;border-radius:2px;' +
+      "box-shadow:0 8px 20px rgba(17,24,39,.14);padding:14px 18px 46px;margin:0 0 16px;min-width:0;" +
+      "break-inside:avoid;page-break-inside:avoid;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      // 标题上方的操作图标行与时间/来源行收紧，别把原文顶得太靠下
+      'body[data-tpl="receipt"] .item-head{margin-bottom:2px}' +
+      'body[data-tpl="receipt"] .item-meta{margin-top:0}' +
+      'body[data-tpl="receipt"] .item-text{margin-top:2px}' +
+      // 打印时允许卡片跨栏/跨页拆开：纸上不留栏尾空白，内容接着往下排
+      '@media print{body[data-tpl="receipt"] .card{break-inside:auto;page-break-inside:auto}}' +
+      // 底部撕口：纸色半圆齿露在卡片下方，看起来像撕下来的小票边
+      'body[data-tpl="receipt"] .card::after{content:"";position:absolute;left:0;right:0;bottom:-9px;height:10px;' +
+      "background-image:radial-gradient(circle at 5px 0,#fff 5px,transparent 5.5px);" +
+      "background-size:10px 10px;background-repeat:repeat-x}" +
+      // 底部右下角的条码
+      'body[data-tpl="receipt"] .card::before{content:"";position:absolute;right:16px;bottom:14px;width:56px;height:12px;' +
+      "background:repeating-linear-gradient(90deg,#111 0 2px,transparent 2px 4px,#111 4px 5px,transparent 5px 8px);" +
+      "opacity:.5}" +
+      // 页眉/页脚都做成票据上的等宽小字
+      'body[data-tpl="receipt"] .item-time,body[data-tpl="receipt"] .item-src,body[data-tpl="receipt"] .item-src a{' +
+      "font-family:ui-monospace,'Cascadia Mono',Consolas,monospace;font-size:11px;letter-spacing:.1em;" +
+      "text-transform:uppercase;color:#8a8a8a}" +
+      'body[data-tpl="receipt"] .item-text{background:transparent;border:0;border-radius:0;padding:0;margin:2px 0 10px;' +
+      "font-size:15px;line-height:1.6;color:#111;font-weight:700}" +
+      'body[data-tpl="receipt"] .item-text-extract{background-color:transparent!important;border-left:0;padding-left:0}' +
+      // 释义上方一排行点，像撕纸的虚线
+      'body[data-tpl="receipt"] .item-answer{font-size:12.5px;line-height:1.8;color:#33343a}' +
+      'body[data-tpl="receipt"] .item-answer::after{content:"";display:block;height:9px;margin:12px 0 0;' +
+      "background-image:radial-gradient(circle at 4px 4px,#cccccc 1.4px,transparent 1.6px);" +
+      "background-size:9px 9px;background-repeat:repeat-x}" +
+      'body[data-tpl="receipt"] .item-answer p{margin:0 0 6px}' +
+      // 那排圆点是「正文与底部条码之间的撕线」，聚合卡里只留最后一条明细画，中间的明细靠分隔线分段
+      'body[data-tpl="receipt"] .agg-items .item-answer::after{content:none}' +
+      'body[data-tpl="receipt"] .agg-items>.agg-item:last-child .item-answer::after{content:""}' +
+      'body[data-tpl="receipt"] .item-tag{background:transparent;border:1px dashed #cfcfcf;border-radius:2px;' +
+      "color:#6f7078;font-family:ui-monospace,'Cascadia Mono',Consolas,monospace}" +
+      'body[data-tpl="receipt"] .item-main{background:#f6f6f4;border:0;border-left:2px solid #dddddd;border-radius:0;' +
+      "color:#4a4b52;font-size:12px;line-height:1.8}" +
+      // 聚合：明细之间仍是一条虚线，头部时间也是等宽小字
+      'body[data-tpl="receipt"] .agg-items{gap:0}' +
+      'body[data-tpl="receipt"] .agg-item-head{font-family:ui-monospace,\'Cascadia Mono\',Consolas,monospace;' +
+      "font-size:11px;color:#8a8a8a}",
   },
 ];
 let styleTemplate = "glass";
@@ -1442,7 +1540,17 @@ function templateExportPageCss(id) {
       "body[data-tpl=\"cards\"] .wrap{max-width:820px;display:grid;" +
       "grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}" +
       "body[data-tpl=\"cards\"] .wrap>h1,body[data-tpl=\"cards\"] .wrap>.sub{grid-column:1/-1}" +
-      "body[data-tpl=\"cards\"] .card{margin-bottom:0}"
+      "body[data-tpl=\"cards\"] .card{margin-bottom:0}" +
+      "body[data-tpl=\"cards\"] .card-gap{display:none!important}"
+    );
+  // 小票：导出、预览、打印同样是整页两栏（多列流，可跨页续排），标题与副标题横跨整行
+  if (id === "receipt")
+    return (
+      "body[data-tpl=\"receipt\"] .wrap{max-width:820px;column-count:2;column-gap:16px}" +
+      "body[data-tpl=\"receipt\"] .wrap>h1,body[data-tpl=\"receipt\"] .wrap>.sub{column-span:all}" +
+      "body[data-tpl=\"receipt\"] .card{margin:0 0 16px}" +
+      "body[data-tpl=\"receipt\"] .card-gap{display:none!important}" +
+      "@media (max-width:560px){body[data-tpl=\"receipt\"] .wrap{column-count:1}}"
     );
   return "";
 }
@@ -1564,6 +1672,8 @@ const AGG_SEP_BY_TPL = {
   book: "rgba(150,125,85,.3)",
   magazine: "rgba(150,155,165,.28)",
   cards: "rgba(99,102,241,.22)",
+  // 小票：明细之间用细直线分段，末条之后再画那排圆点收尾
+  receipt: "rgba(0,0,0,.16)",
   terminal: "rgba(90,160,140,.28)",
 };
 
@@ -1602,6 +1712,8 @@ function applyStyleTemplate(id, persist = true) {
   if (persist) chrome.storage.local.set({ [STYLE_TPL_KEY]: styleTemplate });
   // 把该模板的样式回填到样式设置面板（面板只记录“改动”，模板默认值作为恢复基准）
   syncTemplateStyleState();
+  // 切进/切出小票模板时，瀑布流的分栏容器要建起来或拆掉
+  if (typeof applyMasonry === "function") applyMasonry();
 }
 
 function renderTplBar() {
@@ -3048,7 +3160,72 @@ function render() {
   }
   renderPager(list.length);
   applyDropQuoteSize($("list"));
+  applyMasonry();
 }
+
+// 小票模板的瀑布流：屏幕上把卡片分进两栏容器，每张放进当前较矮的那一栏，
+// 两栏顶端对齐、底边尽量齐平，卡片整张不拆（打印走 CSS 多列流，模板里没给 .rcpt-col）
+function flattenMasonry(box) {
+  const cols = box.querySelectorAll(".rcpt-col");
+  if (!cols.length) return;
+  const cards = [];
+  cols.forEach((c) => Array.prototype.push.apply(cards, c.querySelectorAll(".card")));
+  // 按排布前的原始阅读顺序放回 #list
+  cards
+    .sort((a, b) => (Number(a.dataset.mi) || 0) - (Number(b.dataset.mi) || 0))
+    .forEach((c) => {
+      delete c.dataset.mi;
+      box.appendChild(c);
+    });
+  cols.forEach((c) => c.remove());
+}
+
+function applyMasonry() {
+  const box = $("list");
+  if (!box) return;
+  if (styleTemplate !== "receipt") {
+    flattenMasonry(box);
+    return;
+  }
+  // 打印时交给 CSS 多列流，卡片必须是 #list 的直接子元素
+  if (window.matchMedia && window.matchMedia("print").matches) {
+    flattenMasonry(box);
+    return;
+  }
+  flattenMasonry(box);
+  const cards = Array.from(box.querySelectorAll(".card"));
+  if (cards.length < 2) return;
+  cards.forEach((c, i) => (c.dataset.mi = String(i)));
+  const n = window.innerWidth <= 560 ? 1 : 2;
+  const cols = [];
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement("div");
+    d.className = "rcpt-col";
+    box.appendChild(d);
+    cols.push(d);
+  }
+  // 先全部丢进第一栏量出各自的真实高度（宽度已经是半栏，量得才准），再按「谁矮放谁」分配
+  cards.forEach((c) => cols[0].appendChild(c));
+  const cardH = cards.map((c) => c.getBoundingClientRect().height);
+  const heights = new Array(n).fill(0);
+  cards.forEach((c, i) => {
+    let k = 0;
+    for (let j = 1; j < n; j++) if (heights[j] < heights[k]) k = j;
+    cols[k].appendChild(c);
+    heights[k] += cardH[i] + 16; // 加上栏间距
+  });
+}
+
+window.addEventListener("beforeprint", () => {
+  const box = $("list");
+  if (box) flattenMasonry(box);
+});
+window.addEventListener("afterprint", () => applyMasonry());
+let masonryResizeTimer = 0;
+window.addEventListener("resize", () => {
+  clearTimeout(masonryResizeTimer);
+  masonryResizeTimer = setTimeout(applyMasonry, 150);
+});
 
 // 大字头（合并原文释义）的高度按「该卡释义的实际行高」算：
 // 模板常常把释义行高写死，CSS 里的 --ans-line-height 未必等于实际值，
@@ -3662,6 +3839,7 @@ function renderAggregated(list) {
   }
   renderPager(entries.length);
   applyDropQuoteSize(box);
+  applyMasonry();
 }
 
 function syncAggBtn() {
@@ -3942,7 +4120,7 @@ h1 .h1-sub{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;whit
 .item-answer a:hover{text-decoration:underline}
 .item-main{font-size:13px;color:#1f2937;background:rgba(99,102,241,0.07);border-left:3px solid #6366f1;border-radius:6px;padding:6px 10px;margin-bottom:8px;white-space:pre-wrap;word-break:break-word}
 .item-main-dim{background:color-mix(in srgb,var(--main-bg) 40%,transparent);border-left-color:color-mix(in srgb,var(--main-border) 35%,transparent)}
-.item-main-label{font-size:11px;color:var(--muted);margin-bottom:2px}.agg-items.no-sep .agg-item{border-top:none;padding-top:0}
+.item-main-label{font-size:11px;color:var(--muted);margin-bottom:2px}.agg-items.no-sep .agg-item{border-top:none!important;padding-top:0}
 .agg-items{display:flex;flex-direction:column;gap:10px}
 .agg-item{border-top:1px dashed rgba(99,102,241,0.28);padding-top:10px}
 .agg-item:first-child{border-top:none;padding-top:0}
@@ -4598,12 +4776,20 @@ $("tagClear").addEventListener("click", () => {
     render();
   });
 });
-$("timeStart").addEventListener("change", () => { page = 1; render(); });
-$("timeEnd").addEventListener("change", () => { page = 1; render(); });
+// 快捷时间（当天/1天/1周/1月）的选中态：只有点过快捷项、且区间没被手动改过时才高亮
+function setQuickActive(range) {
+  document.querySelectorAll(".quick-link[data-range]").forEach((b) => {
+    b.classList.toggle("active", !!range && b.dataset.range === range);
+  });
+}
+
+$("timeStart").addEventListener("change", () => { setQuickActive(""); page = 1; render(); });
+$("timeEnd").addEventListener("change", () => { setQuickActive(""); page = 1; render(); });
 $("optTimeMode").addEventListener("change", () => applyTimeMode(timeMode(), true));
 $("timeClear").addEventListener("click", () => {
   $("timeStart").value = "";
   $("timeEnd").value = "";
+  setQuickActive("");
   page = 1;
   render();
 });
@@ -4620,6 +4806,7 @@ document.querySelectorAll(".quick-link[data-range]").forEach((b) => {
     } else if (r === "1d") start = now - DAY;
     else if (r === "1w") start = now - 7 * DAY;
     else if (r === "1m") start = now - 30 * DAY;
+    setQuickActive(r);
     setTimeRange(start, now);
   });
 });

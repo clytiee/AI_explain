@@ -193,6 +193,9 @@
     .opts.timebar .opts-hint { flex: 0 0 auto; color: var(--primary); font-size: 12px; }
     .opts.timebar .quick-links { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 12px; }
     .opts.timebar .quick-link { cursor: pointer; color: var(--muted); text-decoration: none; width: 25px; text-align: center; border-radius: 5px; }
+    /* 已选中的快捷时间：底色与已选中标签一致，保留 5px 圆角（与悬浮态一致） */
+    .opts.timebar .quick-link.active { background: #6366f1; color: #fff; font-weight: 600; border-radius: 5px; }
+    .opts.timebar .quick-link.active:hover { background: #4f46e5; color: #fff; }
     .opts.timebar .quick-link:hover { color: var(--primary); background: rgba(99, 102, 241, 0.1); }
     .opts.timebar .quick-sep { color: var(--border); }
     .opts-title {
@@ -719,7 +722,7 @@
       </div>
       <span class="count" id="count"></span>
       <button type="button" class="reset-btn" id="pickClear" title="取消全部选中，回到正常筛选" hidden>清除</button>
-      <button class="primary" id="exportHtml">导出 HTML</button>
+      <button class="ghost" id="exportHtml" title="导出与预览页相同的 HTML 文件">导出 HTML</button>
       <button class="ghost" id="previewPage" title="打开与导出 HTML 相同的页面，只预览、不弹打印窗口">预览</button>
       <button class="ghost" id="printPage" title="打开与导出 HTML 相同的页面并直接调起打印">打印</button>
       <button class="ghost" id="export">MD</button>
