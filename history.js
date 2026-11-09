@@ -84,6 +84,9 @@ const DEFAULT_DISPLAY = {
   quoteBorderW: 0,
   mainBorder: "",
   mainBorderW: 3,
+  // 聚合卡片里明细之间的分隔线（颜色留空 = 沿用模板）
+  aggSep: "",
+  aggSepStyle: "", // 空 = 沿用模板（虚线）/ dashed / solid / none
   // 卡片与导出里的时间格式：second 到秒 / date 到日 / short 精简 YY/M/D
   timeDisplay: "second",
   cardRadius: 16,
@@ -353,6 +356,11 @@ function applyDisplay(d) {
   s.setProperty("--quote-border", d.quoteBorder || DEFAULT_DISPLAY.quoteBorder);
   s.setProperty("--quote-border-w", (d.quoteBorderW === undefined ? DEFAULT_DISPLAY.quoteBorderW : Number(d.quoteBorderW) || 0) + "px");
   s.setProperty("--main-border-w", (d.mainBorderW === undefined ? DEFAULT_DISPLAY.mainBorderW : Number(d.mainBorderW) || 0) + "px");
+  // 聚合明细分隔线：留空表示沿用模板自带的线色/线型
+  if (d.aggSep) s.setProperty("--agg-sep", d.aggSep);
+  else s.removeProperty("--agg-sep");
+  if (d.aggSepStyle) s.setProperty("--agg-sep-style", d.aggSepStyle);
+  else s.removeProperty("--agg-sep-style");
   s.setProperty("--font-weight", d.fontWeight || DEFAULT_DISPLAY.fontWeight);
   s.setProperty("--ans-font-weight", d.ansFontWeight || DEFAULT_DISPLAY.ansFontWeight);
   s.setProperty("--main-font-weight", d.mainFontWeight || DEFAULT_DISPLAY.mainFontWeight);
@@ -468,6 +476,8 @@ const SNAP_KEYS = [
   "timeColor", "srcColor", "tagBg", "tagColor", "tagRadius",
   // 原文 / 主文左侧竖线
   "quoteBorder", "quoteBorderW", "mainBorder", "mainBorderW",
+  // 聚合明细分隔线
+  "aggSep", "aggSepStyle",
 ];
 
 function parseCssColor(c) {
@@ -819,7 +829,12 @@ function buildDisplayCss(d, withTemplate) {
     // 摘录记录：左侧深色竖线的引文样式，底色与主文不同，置于最后确保覆盖上面的原文底色
     ".item-text-extract{background:" + d.extractBg +
       ";border-left:3px solid " + deepBorder(d.extractBg) +
-      ";border-radius:" + extractR + "px;padding-left:12px;font-weight:normal}"
+      ";border-radius:" + extractR + "px;padding-left:12px;font-weight:normal}" +
+    // 聚合明细之间的分隔线：写进变量，模板规则用 var 兜自己的默认色
+    (d.aggSep || d.aggSepStyle
+      ? ":root{--agg-sep:" + (d.aggSep || "rgba(99,102,241,.28)") +
+        ";--agg-sep-style:" + (d.aggSepStyle || "dashed") + "}"
+      : "")
   );
 }
 
@@ -1388,7 +1403,7 @@ let stylePinned = false; // 样式设置区是否钉住（滚动时贴住页面�
 
 function styleTemplateCss(id) {
   const t = STYLE_TEMPLATES.find((x) => x.id === id);
-  return t ? t.css : "";
+  return (t ? t.css : "") + (t ? "\n" + aggSepCss(id) : "");
 }
 
 // 导出页整页只有一个记录区，模板的页面底色/字体直接落在 body 上（历史页则只落在 #list，不影响插件自身界面）
@@ -1524,6 +1539,45 @@ function mainDimCss(id) {
   return body ? 'body[data-tpl="' + id + '"] .item-main-dim{' + body + "}" : "";
 }
 
+// 聚合明细之间的分隔线默认色：按模板底色给一条协调的线，留空（跟随模板）时用
+const AGG_SEP_BY_TPL = {
+  glass: "rgba(99,102,241,.28)",
+  doc: "rgba(99,102,241,.22)",
+  quote: "rgba(140,150,165,.3)",
+  compact: "rgba(99,102,241,.22)",
+  paper: "rgba(150,120,70,.28)",
+  sticky: "rgba(180,150,60,.3)",
+  dark: "rgba(255,255,255,.14)",
+  news: "rgba(120,110,95,.28)",
+  grid: "rgba(99,102,241,.22)",
+  ruled: "rgba(99,102,241,.2)",
+  dot: "rgba(99,102,241,.2)",
+  mono: "rgba(60,60,60,.2)",
+  kraft: "rgba(120,90,55,.3)",
+  ink: "rgba(40,40,40,.22)",
+  warmdark: "rgba(255,255,255,.14)",
+  legal: "rgba(99,102,241,.2)",
+  seyes: "rgba(99,102,241,.2)",
+  carre: "rgba(99,102,241,.2)",
+  dots: "rgba(99,102,241,.2)",
+  typer: "rgba(70,60,45,.25)",
+  book: "rgba(150,125,85,.3)",
+  magazine: "rgba(150,155,165,.28)",
+  cards: "rgba(99,102,241,.22)",
+  terminal: "rgba(90,160,140,.28)",
+};
+
+function aggSepCss(id) {
+  const c = AGG_SEP_BY_TPL[id];
+  if (!c) return "";
+  // 用 var 兜模板默认值：用户在面板里改过线色/线型时，变量会盖掉模板默认
+  // 只作用于非首条明细，否则会盖掉基础的「首条无上边框」
+  return (
+    'body[data-tpl="' + id + '"] .agg-item:not(:first-child){border-top-color:var(--agg-sep,' + c + ");" +
+    "border-top-style:var(--agg-sep-style,dashed)}"
+  );
+}
+
 // 把模板样式注入历史页（一次即可，切换靠 body 上的 data-tpl）
 function ensureTemplateStyle() {
   if (document.getElementById("tplStyle")) return;
@@ -1532,7 +1586,9 @@ function ensureTemplateStyle() {
   style.textContent =
     STYLE_TEMPLATES.map((t) => t.css).join("\n") +
     "\n" +
-    STYLE_TEMPLATES.map((t) => mainDimCss(t.id)).join("\n");
+    STYLE_TEMPLATES.map((t) => mainDimCss(t.id)).join("\n") +
+    "\n" +
+    STYLE_TEMPLATES.map((t) => aggSepCss(t.id)).join("\n");
   document.head.appendChild(style);
 }
 
@@ -2089,6 +2145,10 @@ function syncDisplayControls() {
   $("optQuoteBorderW").value = d.quoteBorderW === undefined ? DEFAULT_DISPLAY.quoteBorderW : Number(d.quoteBorderW) || 0;
   $("optMainBorder").value = d.mainBorder || darken(d.mainBg || DEFAULT_DISPLAY.mainBg, 0.12);
   $("optMainBorderW").value = d.mainBorderW === undefined ? DEFAULT_DISPLAY.mainBorderW : Number(d.mainBorderW) || 0;
+  // 聚合明细分隔线：颜色留空表示跟随模板
+  $("optAggSep").value = d.aggSep || "#6366f1";
+  $("optAggSep").disabled = !d.aggSep;
+  $("optAggSepStyle").value = d.aggSepStyle || "";
   $("optCardBorderWVal").textContent = $("optCardBorderW").value;
   $("optCardBarWVal").textContent = $("optCardBarW").value;
   $("optCardGapVal").textContent = $("optCardGap").value;
@@ -2410,6 +2470,9 @@ function bindDisplay() {
     next.mainBorder = $("optMainBorder").value.toLowerCase() === darken(next.mainBg, 0.12).toLowerCase()
       ? "" : $("optMainBorder").value;
     next.mainBorderW = Number($("optMainBorderW").value);
+    // 聚合明细分隔线：只记录用户实际改过的部分，留空表示跟随模板
+    next.aggSepStyle = $("optAggSepStyle").value;
+    next.aggSep = next.aggSepStyle ? $("optAggSep").value : "";
     readFontScopeInto(next); // 只改当前 tab（原文/释义/主文）对应的字段
     displayOpts = next;
     applyDisplay(displayOpts);
@@ -2450,6 +2513,22 @@ function bindDisplay() {
   $("optQuoteBorderW").addEventListener("input", persist);
   $("optMainBorder").addEventListener("input", persist);
   $("optMainBorderW").addEventListener("input", persist);
+  // 明细分隔线：选颜色即视为自定义（线型没选就给虚线）；线型选「跟随模板」则颜色也交回模板
+  $("optAggSep").addEventListener("input", () => {
+    displayOpts.aggSep = $("optAggSep").value;
+    if (!displayOpts.aggSepStyle) displayOpts.aggSepStyle = "dashed";
+    $("optAggSepStyle").value = displayOpts.aggSepStyle;
+    $("optAggSep").disabled = false;
+    applyDisplay(displayOpts);
+    saveStyleState();
+  });
+  $("optAggSepStyle").addEventListener("change", () => {
+    displayOpts.aggSepStyle = $("optAggSepStyle").value;
+    if (!displayOpts.aggSepStyle) displayOpts.aggSep = "";
+    $("optAggSep").disabled = !displayOpts.aggSep;
+    applyDisplay(displayOpts);
+    saveStyleState();
+  });
   $("optFontWeight").addEventListener("change", persist);
   $("optFontColor").addEventListener("input", persist);
   $("optFontSize").addEventListener("input", persist);
