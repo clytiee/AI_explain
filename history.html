@@ -614,6 +614,26 @@
       color: var(--ans-font-color); font-family: var(--ans-font-family);
       font-weight: var(--ans-font-weight, 400);
     }
+    /* 「原文与释义合段」：原文太长（超过字数上限）时退回普通两行截断，不再压成大字头 */
+    body.merge-quote .card .item-text:not(.item-text-extract):not(.item-text-drop),
+    html.merge-quote .card .item-text:not(.item-text-extract):not(.item-text-drop) {
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+      background: transparent !important; border-left: 0 !important; border-radius: 0 !important;
+      padding: 0 !important; margin: 0 0 2px !important;
+    }
+    /* 短原文当大字头：字号放大、占两行高度，释义绕排在它右侧，超过两行自然换行 */
+    body.merge-quote .card .item-text:not(.item-text-extract).item-text-drop,
+    html.merge-quote .card .item-text:not(.item-text-extract).item-text-drop {
+      float: left; display: block; overflow: hidden;
+      width: auto; height: 41px;
+      font-size: 39px; line-height: 41px; font-weight: 600;
+      margin: 2px 10px 2px 0 !important;
+      padding: 0 !important; background: transparent !important;
+      border-left: 0 !important; border-radius: 0 !important;
+      white-space: nowrap; word-break: keep-all;
+    }
+    /* 浮动的大字头要被卡片包住 */
+    body.merge-quote .card::after, html.merge-quote .card::after { content: ""; display: block; clear: both; }
     /* 明细主文（多行选中原文）：默认模板按当前主文底色淡出；其它模板见 history.js 的 MAIN_DIM_CSS */
     .item-main-dim {
       background: var(--main-bg) !important;
@@ -829,6 +849,8 @@
         <option value="600">半粗</option>
         <option value="700">粗</option>
       </select></label>
+      <label title="原文当大字头（占一行高度），释义绕排在它右侧；原文超过字数上限时不放大，退回两行截断"><input type="checkbox" id="optMergeQuote" />合并原文释义</label>
+      <label title="原文字数不超过这个数才当大字头">≤ <input type="number" id="optMergeMax" min="1" max="20" step="1" value="5" style="width:40px" /> 字</label>
       <button type="button" class="reset-btn" id="styleMoreBtn" aria-expanded="false" title="展开或折叠下面的背景色、圆角与样式管理">更多</button>
       <div class="opt-more" id="styleMore" hidden>
       <span class="opts-br"></span>

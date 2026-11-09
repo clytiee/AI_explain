@@ -18,6 +18,8 @@ const STYLE_PANEL_KEY = "stylePanelOpen"; // 独立的样式设置块是否显�
 const STYLE_PIN_KEY = "stylePinned"; // 样式设置区是否钉住（滚动时贴页面顶部）
 const LOCAL_FONTS_KEY = "localFontList"; // 读到的本机中文字体（Local Font Access API）
 const TIME_DISPLAY_KEY = "timeDisplay"; // 时间显示格式（与模板无关，单独存一份，切模板/刷新都不丢）
+const QUOTE_MERGE_KEY = "quoteMerge"; // 原文与释义合段（原文当大字头，占两行）——排版开关，与模板样式无关，单独存一份
+const QUOTE_MERGE_MAX_KEY = "quoteMergeMax"; // 合段时原文最多几个字才做成大字头（默认 5）
 
 const $ = (id) => document.getElementById(id);
 
@@ -31,6 +33,8 @@ let showQuoteText = true; // 是否显示原文（列表与导出/预览/打印�
 let aggregate = false; // 是否按来源聚合
 let settingsHidden = false; // 是否隐藏所有设置
 let readOnly = false; // 只读模式：卡片里不显示任何操作图标
+let quoteMerge = false; // 原文与释义合段：原文当大字头，占两行，释义绕排
+let quoteMergeMax = 5; // 原文最多几个字才做大字头（超出就走普通的 2 行截断）
 let aggOrder = {}; // 聚合模式下每来源记录的手工排序
 const PAGE_SIZE = 10; // 历史页分页：每页记录/组数
 let page = 1; // 当前页码
@@ -324,6 +328,8 @@ function syncColorSwatches(containerId, inputId) {
 // 将显示设置写入 CSS 变量
 function applyDisplay(d) {
   const s = document.documentElement.style;
+  // 每次刷新样式顺便把「原文与释义合段」的开关重新落一次，避免类名被别处清掉
+  applyQuoteMerge();
   s.setProperty("--page-bg", d.pageBg);
   s.setProperty("--quote-bg", d.quoteBg);
   s.setProperty("--extract-bg", d.extractBg);
@@ -370,6 +376,22 @@ function applyDisplay(d) {
   $("optCardRadiusVal").textContent = Number(d.cardRadius) || 0;
   $("optQuoteRadiusVal").textContent = Number(d.quoteRadius) || 0;
   $("optExtractRadiusVal").textContent = Number(d.extractRadius) || 0;
+}
+
+// 原文与释义合段：只在 body 上切一个类，具体排版交给 CSS（与风格模板无关，切模板也保持）
+function applyQuoteMerge() {
+  // body 与 html 都挂一份：任何一处刷新/重建都不会把开关丢掉
+  document.body.classList.toggle("merge-quote", !!quoteMerge);
+  document.documentElement.classList.toggle("merge-quote", !!quoteMerge);
+  if ($("optMergeQuote")) $("optMergeQuote").checked = !!quoteMerge;
+}
+
+// 合段模式下，原文短到能当「大字头」时给它一个 class：去掉书名号、字号放大、占两行
+function isDropQuote(e) {
+  if (!quoteMerge || !e) return false;
+  if (isExtractRecord(e) || isMultilineSelection(e.text)) return false;
+  const t = String(e.text || "").trim();
+  return !!t && t.length <= quoteMergeMax;
 }
 
 // 字体作用域里的两个数值标签（跟着当前 tab 走）
@@ -2010,6 +2032,8 @@ function syncDisplayControls() {
   $("optExtractBg").value = displayOpts.extractBg || DEFAULT_DISPLAY.extractBg;
   syncFontScopeControls();
   $("optTimeDisplay").value = recordTimeMode();
+  $("optMergeQuote").checked = quoteMerge;
+  $("optMergeMax").value = quoteMergeMax;
   $("optCardRadius").value = displayOpts.cardRadius ?? DEFAULT_DISPLAY.cardRadius;
   $("optQuoteRadius").value = displayOpts.quoteRadius ?? DEFAULT_DISPLAY.quoteRadius;
   $("optExtractRadius").value = displayOpts.extractRadius ?? DEFAULT_DISPLAY.extractRadius;
@@ -2168,6 +2192,8 @@ function load() {
       [STYLE_PIN_KEY]: false,
       [LOCAL_FONTS_KEY]: [],
       [TIME_DISPLAY_KEY]: "second",
+      [QUOTE_MERGE_KEY]: false,
+      [QUOTE_MERGE_MAX_KEY]: 5,
       timeMode: "date",
       config: {},
     },
@@ -2189,6 +2215,9 @@ function load() {
       displayOpts = { ...DEFAULT_DISPLAY, ...(res[DISPLAY_OPTS_KEY] || {}) };
       // 时间显示格式单独存一份：换模板、刷新都不丢（不跟着模板样式回填走）
       if (res[TIME_DISPLAY_KEY]) displayOpts.timeDisplay = res[TIME_DISPLAY_KEY];
+      quoteMerge = !!res[QUOTE_MERGE_KEY];
+      quoteMergeMax = Number(res[QUOTE_MERGE_MAX_KEY]) || 5;
+      applyQuoteMerge();
       glassDisplay = { ...displayOpts };
       glassDisplay.timeDisplay = displayOpts.timeDisplay;
       syncDisplayControls();
@@ -2399,6 +2428,20 @@ function bindDisplay() {
   $("optTimeDisplay").addEventListener("change", () => {
     persist();
     refreshHistory();
+  });
+  // 原文与释义合段：纯排版开关，单独存一份（不跟模板样式走，恢复模板默认也不会关掉）
+  // 原文是否去掉书名号、是否当大字头都由渲染时决定，所以改了要重出卡片
+  $("optMergeQuote").addEventListener("change", () => {
+    quoteMerge = $("optMergeQuote").checked;
+    applyQuoteMerge();
+    chrome.storage.local.set({ [QUOTE_MERGE_KEY]: quoteMerge });
+    render();
+  });
+  $("optMergeMax").addEventListener("change", () => {
+    quoteMergeMax = Math.max(1, Math.min(20, Number($("optMergeMax").value) || 5));
+    $("optMergeMax").value = quoteMergeMax;
+    chrome.storage.local.set({ [QUOTE_MERGE_MAX_KEY]: quoteMergeMax });
+    if (quoteMerge) render();
   });
   $("optCardRadius").addEventListener("input", persist);
   $("optQuoteRadius").addEventListener("input", persist);
@@ -3026,9 +3069,10 @@ function buildItemCard(e) {
   const isExtract = isExtractRecord(e);
   // 多行选中：整段原文改放进主文块（带换行显示），有主文就不再渲染原文行
   const multi = isMultilineSelection(e.text);
+  const drop = isDropQuote(e);
   const textEl = document.createElement("div");
-  textEl.className = "item-text" + (isExtract ? " item-text-extract" : "");
-  textEl.textContent = "「" + (e.text || "") + "」";
+  textEl.className = "item-text" + (isExtract ? " item-text-extract" : "") + (drop ? " item-text-drop" : "");
+  textEl.textContent = drop ? String(e.text || "").trim() : "「" + (e.text || "") + "」";
 
   const selMain = multi ? document.createElement("div") : null;
   if (selMain) {
@@ -3441,9 +3485,10 @@ function renderAggregated(list) {
 
       const isExtract = isExtractRecord(e);
       const multi = isMultilineSelection(e.text);
+      const drop = isDropQuote(e);
       const textEl = document.createElement("div");
-      textEl.className = "item-text" + (isExtract ? " item-text-extract" : "");
-      textEl.textContent = "「" + (e.text || "") + "」";
+      textEl.className = "item-text" + (isExtract ? " item-text-extract" : "") + (drop ? " item-text-drop" : "");
+      textEl.textContent = drop ? String(e.text || "").trim() : "「" + (e.text || "") + "」";
       // 原文行受「隐藏原文」控制（摘录记录照旧显示）；多行选中的明细主文受「隐藏主文」控制
       if (multi) {
         if (showMainText) {
@@ -3807,10 +3852,12 @@ function cardHtml(e) {
       : "";
   const meta = metaAttrs(e, isExtract);
   const multi = isMultilineSelection(e.text);
+  const drop = isDropQuote(e);
   // 原文行受「隐藏原文」控制（摘录记录的原文就是内容，照旧显示）；明细主文受「隐藏主文」控制
   const quoteHtml =
     !multi && (showQuoteText || isExtract)
-      ? '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>"
+      ? '<div class="item-text' + (isExtract ? " item-text-extract" : "") + (drop ? " item-text-drop" : "") + '">' +
+        (drop ? esc(String(e.text || "").trim()) : "「" + esc(e.text || "") + "」") + "</div>"
       : "";
   const selMain = multi && showMainText ? '<div class="item-main item-main-dim">' + esc(e.text || "") + "</div>" : "";
   return (
@@ -3866,12 +3913,14 @@ function buildCardsHtmlAggregated(list) {
           const isExtract = isExtractRecord(e);
           const meta = metaAttrs(e, isExtract, false);
           const multi = isMultilineSelection(e.text);
+          const drop = isDropQuote(e);
           return (
             '<div class="agg-item"' + meta + ">" +
             (showQuoteText || isExtract
               ? multi
                 ? ""
-                : '<div class="item-text' + (isExtract ? " item-text-extract" : "") + '">「' + esc(e.text || "") + "」</div>"
+                : '<div class="item-text' + (isExtract ? " item-text-extract" : "") + (drop ? " item-text-drop" : "") + '">' +
+                  (drop ? esc(String(e.text || "").trim()) : "「" + esc(e.text || "") + "」") + "</div>"
               : "") +
             (multi && showMainText ? '<div class="item-main item-main-dim">' + esc(e.text || "") + "</div>" : "") +
             (isExtract ? "" : '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>") +
@@ -3892,6 +3941,20 @@ function buildCardsHtmlAggregated(list) {
     })
     .join("\n");
 }
+
+// 「原文与释义合段」：导出/预览/打印与历史页共用的排版规则
+// 短原文当大字头（占两行、释义绕排），长原文退回 2 行截断
+const MERGE_QUOTE_CSS =
+  "\nbody.merge-quote .card .item-text:not(.item-text-extract):not(.item-text-drop){" +
+  "display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;" +
+  "background:transparent!important;border-left:0!important;border-radius:0!important;" +
+  "padding:0!important;margin:0 0 2px!important}" +
+  "body.merge-quote .card .item-text:not(.item-text-extract).item-text-drop{" +
+  "float:left;display:block;overflow:hidden;width:auto;height:41px;" +
+  "font-size:39px;line-height:41px;font-weight:600;margin:2px 10px 2px 0!important;" +
+  "padding:0!important;background:transparent!important;border-left:0!important;border-radius:0!important;" +
+  "white-space:nowrap;word-break:keep-all}" +
+  "body.merge-quote .card::after{content:\"\";display:block;clear:both}";
 
 // 导出 HTML 右上角的打印按钮：仅用于屏幕，打印时隐藏
 const HEAD_BTN_CSS =
@@ -3948,8 +4011,8 @@ function buildExportHtml(list, withPrintScript, titleWithTime, previewBlack) {
     '<meta charset="UTF-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n' +
     "<title>" + docTitle + "</title>\n" +
-    "<style>\n" + CARD_CSS + noSplitCss + displayCss + HEAD_BTN_CSS + tplCss + printBlackCss + "\n</style>\n" +
-    "</head>\n" + '<body data-tpl="' + esc(styleTemplate) + '">\n' +
+    "<style>\n" + CARD_CSS + MERGE_QUOTE_CSS + noSplitCss + displayCss + HEAD_BTN_CSS + tplCss + printBlackCss + "\n</style>\n" +
+    "</head>\n" + '<body data-tpl="' + esc(styleTemplate) + '"' + (quoteMerge ? ' class="merge-quote"' : "") + ">\n" +
     '<div class="wrap">\n' +
     '<h1><span class="dot"></span><span class="h1-title">划词AI释义 · 历史记录</span>' +
     '<span class="h1-sub">共 ' + list.length + " 条 · 导出时间：" + formatTime(Date.now()) + "</span>" +
