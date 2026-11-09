@@ -219,7 +219,7 @@
       display: inline-block; margin-left: 2px; color: #9aa3b2;
       font-size: 13px; line-height: 1; cursor: help; vertical-align: -1px;
     }
-    .opts-sep { border-top: 1px dashed var(--border); margin: 5px 0;}
+    .opts-sep { border-top: 1px dashed rgba(15, 23, 42, 0.08); margin: 6px 0 8px; flex-basis: 100%; height: 0; }
     .opts-toggle-row {
       display: inline-flex; align-items: center; justify-content: center;
       gap: 14px; flex-basis: 100%;
@@ -851,23 +851,7 @@
         <option value="600">半粗</option>
         <option value="700">粗</option>
       </select></label>
-      <label title="原文当大字头（占一行高度），释义绕排在它右侧；原文超过字数上限时不放大，退回两行截断"><input type="checkbox" id="optMergeQuote" />合并原文释义</label>
-      <label title="原文字数不超过这个数才当大字头">≤ <input type="number" id="optMergeMax" min="1" max="20" step="1" value="5" style="width:40px" /> 字</label>
       <button type="button" class="reset-btn" id="styleMoreBtn" aria-expanded="false" title="展开或折叠下面的背景色、圆角与样式管理">更多</button>
-      <span class="opts-br"></span>
-      <span class="opts-section">全局样式</span>
-      <label class="opt-lbl">布局：<span class="seg" id="layoutBar" title="两栏：屏幕上左右两栏瀑布流，打印时首尾相接、卡片可跨栏拆开">
-        <button type="button" class="seg-btn active" data-layout="single">单栏</button>
-        <button type="button" class="seg-btn" data-layout="twocol">两栏</button>
-      </span></label>
-      <label class="opt-lbl">时间显示
-        <select id="optTimeDisplay" title="卡片与导出里的时间格式：到秒、到日，或精简的年/月/日">
-          <option value="second">到秒</option>
-          <option value="date">到日</option>
-          <option value="short">精简 YY/M/D</option>
-          <option value="ganzhi">干支纪年</option>
-        </select>
-      </label>
       <div class="opt-more" id="styleMore" hidden>
       <span class="opts-br"></span>
       <span class="opts-title">页面背景色：</span>
@@ -940,6 +924,22 @@
       <button type="button" id="deletePreset" class="reset-btn">删除</button>
       <button type="button" id="resetDisplay" class="reset-btn">恢复模板默认</button>
       </div>
+      <span class="opts-sep"></span>
+      <span class="opts-section">全局样式</span>
+      <label class="opt-lbl">布局：<span class="seg" id="layoutBar" title="两栏：屏幕上左右两栏瀑布流，打印时首尾相接、卡片可跨栏拆开">
+        <button type="button" class="seg-btn active" data-layout="single">单栏</button>
+        <button type="button" class="seg-btn" data-layout="twocol">两栏</button>
+      </span></label>
+      <label class="opt-lbl">时间显示
+        <select id="optTimeDisplay" title="卡片与导出里的时间格式：到秒、到日，或精简的年/月/日">
+          <option value="second">到秒</option>
+          <option value="date">到日</option>
+          <option value="short">精简 YY/M/D</option>
+          <option value="ganzhi">干支纪年</option>
+        </select>
+      </label>
+      <label title="原文当大字头（占一行高度），释义绕排在它右侧；原文超过字数上限时不放大，退回两行截断"><input type="checkbox" id="optMergeQuote" />合并原文释义</label>
+      <label title="原文字数不超过这个数才当大字头">≤ <input type="number" id="optMergeMax" min="1" max="20" step="1" value="5" style="width:40px" /> 字</label>
     </div>
     </div>
 

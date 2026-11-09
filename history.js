@@ -87,8 +87,6 @@ const DEFAULT_DISPLAY = {
   // 聚合卡片里明细之间的分隔线（颜色留空 = 沿用模板）
   aggSep: "",
   aggSepStyle: "", // 空 = 沿用模板（虚线）/ dashed / solid / none
-  // 卡片与导出里的时间格式：second 到秒 / date 到日 / short 精简 YY/M/D
-  timeDisplay: "second",
   cardRadius: 16,
   quoteRadius: 8,
   extractRadius: 0,
@@ -772,6 +770,7 @@ function styleValueDiffers(key, a, b) {
 }
 
 // 当前面板值与「模板默认值」的差异（默认模板以 DEFAULT_DISPLAY 为基准）
+// 只算模板相关的字段：时间显示、布局、合并原文释义这些是全局设置，改了不该把模板标成「样式有修改」
 function currentStyleDiff() {
   const base = styleTemplate === "glass" ? DEFAULT_DISPLAY : tplSnapshot;
   const diff = {};
@@ -791,7 +790,6 @@ function updateStyleModifiedHint() {
 
 // 切换模板后，把该模板的默认样式灌进面板（叠加该模板已保存的改动）
 function syncTemplateStyleState() {
-  const keepTimeDisplay = displayOpts && displayOpts.timeDisplay;
   if (styleTemplate === "glass") {
     tplSnapshot = { ...DEFAULT_DISPLAY };
     tplFontPalette = [];
@@ -804,7 +802,6 @@ function syncTemplateStyleState() {
     delete tplSnapshot.palette; // palette 只给色块用，不进显示设置
     displayOpts = { ...DEFAULT_DISPLAY, ...tplSnapshot, ...(tplOverrides[styleTemplate] || {}) };
   }
-  if (keepTimeDisplay) displayOpts.timeDisplay = keepTimeDisplay;
   if (styleTemplate === "glass") glassDisplay = { ...displayOpts };
   applyDisplay(displayOpts);
   syncDisplayControls();
@@ -2032,10 +2029,11 @@ function formatLunarDate(sy, sm, sd) {
   return ganzhiYear(l.year) + leapMark + LUNAR_MONTH_NAMES[l.month - 1] + "月" + dayName;
 }
 
-// 记录时间的展示格式：按「设置 → 时间显示」决定（默认到秒）
+// 记录时间的展示格式：全局设置（与模板无关，单独存 TIME_DISPLAY_KEY，默认到秒）
+let timeDisplayMode = "second";
+const TIME_MODES = ["second", "date", "short", "ganzhi"];
 function recordTimeMode() {
-  const m = displayOpts && displayOpts.timeDisplay;
-  return m === "date" || m === "short" || m === "ganzhi" ? m : "second";
+  return TIME_MODES.includes(timeDisplayMode) ? timeDisplayMode : "second";
 }
 
 // 干支纪年：(公历年 - 1984) 取模 60，1984 年为甲子年
@@ -2510,13 +2508,13 @@ function load() {
       $("optBackup").checked = exportOpts.backup;
 
       displayOpts = { ...DEFAULT_DISPLAY, ...(res[DISPLAY_OPTS_KEY] || {}) };
-      // 时间显示格式单独存一份：换模板、刷新都不丢（不跟着模板样式回填走）
-      if (res[TIME_DISPLAY_KEY]) displayOpts.timeDisplay = res[TIME_DISPLAY_KEY];
+      // 时间显示格式是全局设置：单独存 key，不进模板样式（老数据里可能有 displayOpts.timeDisplay，一并迁过去）
+      timeDisplayMode = res[TIME_DISPLAY_KEY] || (res[DISPLAY_OPTS_KEY] && res[DISPLAY_OPTS_KEY].timeDisplay) || "second";
+      delete displayOpts.timeDisplay;
       quoteMerge = !!res[QUOTE_MERGE_KEY];
       quoteMergeMax = Number(res[QUOTE_MERGE_MAX_KEY]) || 5;
       applyQuoteMerge();
       glassDisplay = { ...displayOpts };
-      glassDisplay.timeDisplay = displayOpts.timeDisplay;
       syncDisplayControls();
       applyDisplay(displayOpts);
 
@@ -2623,7 +2621,6 @@ function saveStyleState() {
 
 // 恢复到当前模板的默认样式
 function resetToTemplateStyle() {
-  const keepTimeDisplay = displayOpts.timeDisplay;
   if (styleTemplate === "glass") {
     displayOpts = { ...DEFAULT_DISPLAY };
     glassDisplay = { ...displayOpts };
@@ -2631,7 +2628,6 @@ function resetToTemplateStyle() {
     delete tplOverrides[styleTemplate];
     displayOpts = { ...DEFAULT_DISPLAY, ...tplSnapshot };
   }
-  displayOpts.timeDisplay = keepTimeDisplay;
   applyDisplay(displayOpts);
   syncDisplayControls();
   $("presetSelect").value = "";
@@ -2657,8 +2653,6 @@ function bindDisplay() {
     next.quoteBg = $("optQuoteBg").value;
     next.mainBg = $("optMainBg").value;
     next.extractBg = $("optExtractBg").value;
-    next.timeDisplay = $("optTimeDisplay").value;
-    chrome.storage.local.set({ [TIME_DISPLAY_KEY]: next.timeDisplay });
     next.cardRadius = Number($("optCardRadius").value);
     next.quoteRadius = Number($("optQuoteRadius").value);
     next.extractRadius = Number($("optExtractRadius").value);
@@ -2749,9 +2743,12 @@ function bindDisplay() {
   $("optFontSize").addEventListener("input", persist);
   $("optLineHeight").addEventListener("input", persist);
   $("optParaSpacing").addEventListener("input", persist);
-  // 时间显示格式改了要重渲染列表（时间文字是渲染时生成的）
+  // 时间显示格式是全局设置（不属于任何模板）：只改全局值并重渲染列表，
+  // 不碰模板样式状态，所以不会把当前模板标成「样式有修改」
   $("optTimeDisplay").addEventListener("change", () => {
-    persist();
+    timeDisplayMode = $("optTimeDisplay").value;
+    if (!TIME_MODES.includes(timeDisplayMode)) timeDisplayMode = "second";
+    chrome.storage.local.set({ [TIME_DISPLAY_KEY]: timeDisplayMode });
     refreshHistory();
   });
   // 原文与释义合段：纯排版开关，单独存一份（不跟模板样式走，恢复模板默认也不会关掉）
