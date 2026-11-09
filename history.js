@@ -418,6 +418,48 @@ function applyDisplay(d) {
 }
 
 // 原文与释义合段：只在 body 上切一个类，具体排版交给 CSS（与风格模板无关，切模板也保持）
+// 合段模式下，释义开头常自带「原文：」；原文已单独作大字头，这段就是重复的
+// 规则：原文后紧跟冒号 → 连冒号一起去掉；原文和冒号之间还夹着别的字（拼音、括号等）→ 只去掉原文
+function stripQuotePrefixInAnswer(answer, quoteText) {
+  if (!quoteMerge) return answer;
+  const q = String(quoteText || "").trim();
+  const raw = String(answer || "");
+  if (!q || !raw) return answer;
+  const t = raw.replace(/^\s+/, "");
+  // 前缀分两段：列表符号（- * + 1.）保留，其余装饰（书名号、引号、markdown 强调）跟着原文一起去掉
+  const lm = (t.match(/^\s*(?:[-*+]|\d+[.)])\s+/) || [""])[0];
+  const leadRaw = t.slice(lm.length);
+  const deco = (leadRaw.match(/^[^\p{L}\p{N}]{0,6}/u) || [""])[0];
+  const core = leadRaw.slice(deco.length);
+  if (!core.startsWith(q)) return answer;
+  const rest = core.slice(q.length);
+  const tailTrim = (s) => s.replace(/^\s+/, "");
+  const emph = /(?:\*\*|\*|__|_|~~)+/;
+  // A. 原文之后（只隔着空格、收尾括号、强调符号等装饰）直接是冒号：连冒号一起去掉
+  const m = rest.match(/^[^\p{L}\p{N}]{0,6}[:：]/u);
+  if (m && !/[。！？；]/.test(m[0])) {
+    return lm + tailTrim(rest.slice(m[0].length));
+  }
+  // B. 原文与冒号之间还有实际文字（拼音、括号说明等）：只去掉原文，中间那段保留
+  const colon = rest.search(/[:：]/);
+  const pre = colon > 0 ? rest.slice(0, colon) : "";
+  // 括号里夹拼音时这段会很长（如「**（xiāo xiāo）」），只要它看起来像注音/括号，就别用长度卡它
+  const isAnnotation = /^[\s()（）\[\]【】<>《》"'’‘*_~·.\-a-zA-Zāáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜüńňǹç]*$/u.test(pre);
+  if (colon > 0 && !/[。！？；\n]/.test(pre) && (colon <= 12 || isAnnotation)) {
+    // 只在「原文到第一个冒号」这一段里收拾装饰，后面的正文（可能有 **书证** 之类）一律别碰
+    let mid = pre.replace(/^[」』》）】”’]+/, ""); // 原文外侧的收尾引号/括号
+    mid = mid.replace(new RegExp(emph.source + "$"), ""); // 冒号前紧邻的强调符号
+    mid = mid.replace(new RegExp("^" + emph.source), ""); // 原文后面紧跟的强调符号
+    return lm + tailTrim(mid + rest.slice(colon));
+  }
+  return answer;
+}
+
+// 释义统一从这里渲染，合段模式的「原文：」前缀只在渲染前处理
+function answerMarkdownForRender(e) {
+  return renderMarkdown(stripQuotePrefixInAnswer(e && e.answer, e && e.text));
+}
+
 function applyQuoteMerge() {
   // body 与 html 都挂一份：任何一处刷新/重建都不会把开关丢掉
   document.body.classList.toggle("merge-quote", !!quoteMerge);
@@ -1493,7 +1535,14 @@ const STYLE_TEMPLATES = [
       // 聚合：明细之间仍是一条虚线，头部时间也是等宽小字
       'body[data-tpl="receipt"] .agg-items{gap:0}' +
       'body[data-tpl="receipt"] .agg-item-head{font-family:ui-monospace,\'Cascadia Mono\',Consolas,monospace;' +
-      "font-size:11px;color:#8a8a8a}",
+      "font-size:11px;color:#8a8a8a}" +
+      // 打印时纸面吃掉一档对比度：等宽小字、标签框、票面轮廓都加深，屏幕上保持原样
+      '@media print{body[data-tpl="receipt"] .item-time,body[data-tpl="receipt"] .item-src,' +
+      'body[data-tpl="receipt"] .item-src a,body[data-tpl="receipt"] .agg-item-head{color:#3f3f3f}' +
+      'body[data-tpl="receipt"] .item-tag{color:#3f3f3f;border-color:#909090}' +
+      // 卡片阴影打印不出来，改用一条浅边框勾出票面轮廓
+      'body[data-tpl="receipt"] .card{border:1px solid #dcdcdc}' +
+      'body[data-tpl="receipt"] .card::before{opacity:.8}}',
   },
 ];
 let styleTemplate = "glass";
@@ -3404,7 +3453,7 @@ function buildItemCard(e) {
 
   const ans = document.createElement("div");
   ans.className = "item-answer";
-  if (!isExtract) ans.innerHTML = renderMarkdown(e.answer || "");
+  if (!isExtract) ans.innerHTML = answerMarkdownForRender(e);
 
   item.appendChild(head);
   // 标签在第二行最右
@@ -3826,7 +3875,7 @@ function renderAggregated(list) {
 
       const ans = document.createElement("div");
       ans.className = "item-answer";
-      if (!isExtract) ans.innerHTML = renderMarkdown(e.answer || "");
+      if (!isExtract) ans.innerHTML = answerMarkdownForRender(e);
       if (drop && !isExtract && showQuoteText && dropQuoteInsideAnswer()) {
         injectDropIntoAnswerEl(ans, textEl);
       }
@@ -4190,10 +4239,10 @@ function cardHtml(e) {
   const selMain = multi && showMainText ? '<div class="item-main item-main-dim">' + esc(e.text || "") + "</div>" : "";
   // 杂志双栏：大字头放进释义第一段，浮动只作用于第一栏
   let quoteOut = quoteHtml;
-  let ansHtml = isExtract ? "" : '<div class="item-answer">' + renderMarkdown(e.answer || "") + "</div>";
+  let ansHtml = isExtract ? "" : '<div class="item-answer">' + answerMarkdownForRender(e) + "</div>";
   if (drop && !isExtract && showQuoteText && dropQuoteInsideAnswer()) {
     quoteOut = "";
-    ansHtml = '<div class="item-answer">' + injectDropIntoAnswerHtml(renderMarkdown(e.answer || ""), dropSpanHtml(e)) + "</div>";
+    ansHtml = '<div class="item-answer">' + injectDropIntoAnswerHtml(answerMarkdownForRender(e), dropSpanHtml(e)) + "</div>";
   }
   return (
     '<div class="card"' + meta + ">" +
@@ -4254,7 +4303,7 @@ function buildCardsHtmlAggregated(list) {
             (drop ? esc(String(e.text || "").trim()) : "「" + esc(e.text || "") + "」") + "</div>";
           // 杂志双栏：大字头放进释义第一段，避免多列容器把两栏整体挤窄
           const dropInside = drop && !isExtract && showQuoteText && dropQuoteInsideAnswer();
-          const ansInner = isExtract ? "" : renderMarkdown(e.answer || "");
+          const ansInner = isExtract ? "" : answerMarkdownForRender(e);
           return (
             '<div class="agg-item"' + meta + ">" +
             (showQuoteText || isExtract
