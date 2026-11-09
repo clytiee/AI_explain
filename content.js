@@ -1009,7 +1009,7 @@
     config = { ...config, currentTag: name };
     // 写回时以存储里的最新配置为底，避免把别处刚改的字段覆盖成旧值
     chrome.storage.local.get({ config: null }, (res) => {
-      chrome.storage.local.set({ config: { ...(res.config || {}), currentTag: name } });
+      chrome.storage.local.set({ config: { ...(res.config || {}), currentTag: name }, configUpdatedAt: Date.now() });
     });
     updateCurTagChip();
     setStatus("idle", "之后的划词与摘录将打上标签：" + (name || "无"));
@@ -1111,7 +1111,7 @@
     // 写回时以存储里的最新配置为底，避免把别处刚改的字段覆盖成旧值
     chrome.storage.local.get({ config: null }, (res) => {
       const base = { ...(res.config || {}), activePromptId: target.id, systemPrompt: target.prompt };
-      chrome.storage.local.set({ config: base });
+      chrome.storage.local.set({ config: base, configUpdatedAt: Date.now() });
     });
     // 已经有释义结果时，直接用新提示词重新解释当前这段文字
     if (rawAnswer && rawAnswer.trim()) {

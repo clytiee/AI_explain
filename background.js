@@ -412,7 +412,7 @@ async function clearHistory() {
 // 只同步「设置项」：config（含提示词、接口参数、WebDAV 账号）+ 摘录/高亮两个开关。
 // 暂停状态属于单机行为，不同步，否则一端暂停会把另一端也停掉。
 const SETTINGS_SYNC_KEY = "settingsSync";
-const SETTINGS_SYNC_FIELDS = ["config", "highlightMode", "extractMode"];
+const SETTINGS_SYNC_FIELDS = ["config", "configUpdatedAt", "highlightMode", "extractMode"];
 const SETTINGS_SYNC_DEBOUNCE = 1500;
 
 let settingsSyncTimer = null;
@@ -444,12 +444,18 @@ async function pushSettingsToSync() {
 }
 
 // 把远端设置并到本地（config 按字段浅合并，保留本地独有的字段）
+// 只认「更新的一次」：本地刚保存的配置比远端新时，不用旧的远端值把提示词盖回去
 async function applyRemoteSettings(payload) {
   if (!payload) return;
   const patch = {};
   if (payload.config && typeof payload.config === "object") {
-    const res = await chrome.storage.local.get({ config: null });
-    patch.config = { ...(res.config || {}), ...payload.config };
+    const res = await chrome.storage.local.get({ config: null, configUpdatedAt: 0 });
+    const localTs = Number(res.configUpdatedAt) || 0;
+    const remoteTs = Number(payload.configUpdatedAt) || 0;
+    if (remoteTs >= localTs) {
+      patch.config = { ...(res.config || {}), ...payload.config };
+      patch.configUpdatedAt = remoteTs || Date.now();
+    }
   }
   if (payload.highlightMode !== undefined) patch.highlightMode = !!payload.highlightMode;
   if (payload.extractMode !== undefined) patch.extractMode = !!payload.extractMode;

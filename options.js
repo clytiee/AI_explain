@@ -464,7 +464,7 @@ $("save").addEventListener("click", () => {
     setStatus("当前选中的提示词正文为空，请填写后再保存。", false);
     return;
   }
-  chrome.storage.local.set({ config: cfg }, () => {
+  chrome.storage.local.set({ config: cfg, configUpdatedAt: Date.now() }, () => {
     currentConfig = cfg;
     setStatus("已保存 ✓ 现在去网页上选中文字试试吧。", true);
   });
@@ -663,7 +663,7 @@ $("syncTest").addEventListener("click", () => {
     setSyncStatus("请先填写 WebDAV 地址、账号与应用密码。", false);
     return;
   }
-  chrome.storage.local.set({ config: cfg }, () => {
+  chrome.storage.local.set({ config: cfg, configUpdatedAt: Date.now() }, () => {
     currentConfig = cfg;
     setSyncStatus("正在连接…", true);
     chrome.runtime.sendMessage({ type: "sync-test" }, (res) => {
@@ -686,7 +686,7 @@ $("syncNow").addEventListener("click", () => {
     setSyncStatus("请先填写 WebDAV 地址、账号与应用密码。", false);
     return;
   }
-  chrome.storage.local.set({ config: cfg }, () => {
+  chrome.storage.local.set({ config: cfg, configUpdatedAt: Date.now() }, () => {
     currentConfig = cfg;
     setSyncStatus("正在同步…", true);
     chrome.runtime.sendMessage({ type: "sync-now" }, (res) => {
@@ -704,6 +704,34 @@ $("syncNow").addEventListener("click", () => {
 });
 
 // ---------- 右侧悬浮导航 ----------
+let navTipTimer = null;
+
+// 导航里点「保存设置」后，把保存结果显示在按钮下方（底部状态栏通常看不见）
+function showNavSaveTip() {
+  const tip = $("navTip");
+  const st = $("status");
+  if (!tip) return;
+  const prev = st ? st.textContent : "";
+  const started = Date.now();
+  const check = () => {
+    const text = st ? String(st.textContent || "").trim() : "";
+    const changed = text && text !== prev;
+    // 校验失败是同步写的状态；保存成功在写存储的回调里，稍等一下
+    if (!changed && Date.now() - started < 800) {
+      setTimeout(check, 50);
+      return;
+    }
+    const ok = st && st.className === "ok";
+    tip.textContent = ok ? "保存成功 ✓" : text || "保存失败";
+    tip.className = "nav-tip " + (ok ? "ok" : "err");
+    tip.hidden = false;
+    if (navTipTimer) clearTimeout(navTipTimer);
+    navTipTimer = setTimeout(() => {
+      tip.hidden = true;
+    }, 2200);
+  };
+  check();
+}
 // 按设置页里的卡片自动生成条目（①～⑥ + 保存设置），点击平滑滚到对应块，滚动时高亮当前块
 function buildSideNav() {
   const nav = $("sideNav");
@@ -747,6 +775,7 @@ function buildSideNav() {
         setTimeout(() => a.classList.remove("active"), 300);
         const btn = $("save");
         if (btn) btn.click();
+        showNavSaveTip();
         return;
       }
       const el = document.getElementById(it.id);
@@ -758,8 +787,17 @@ function buildSideNav() {
     nav.appendChild(a);
   });
 
-  const spyItems = items.filter((it) => !it.save);
-  const setActive = () => {
+  // 保存结果提示条：挂在「保存设置」按钮下方，页面底部的状态栏滚远了看不见
+  let tip = $("navTip");
+  if (!tip) {
+    tip = document.createElement("div");
+    tip.id = "navTip";
+    tip.className = "nav-tip";
+    tip.hidden = true;
+  }
+  nav.appendChild(tip);
+
+  const spyItems = items.filter((it) => !it.save);  const setActive = () => {
     const line = window.scrollY + window.innerHeight * 0.3;
     let cur = spyItems[0] ? spyItems[0].id : "";
     spyItems.forEach((it) => {

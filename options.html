@@ -53,6 +53,14 @@
     }
     .sidenav a.is-save:hover { background: #4338ca; color: #fff; }
     .sidenav a.is-save.active { background: var(--primary); color: #fff; }
+    /* 导航里点保存后，结果直接显示在按钮下方（页面底部的状态栏看不见） */
+    .sidenav .nav-tip {
+      margin-top: 6px; font-size: 12px; line-height: 1.4; text-align: center;
+      padding: 4px 8px; border-radius: 8px; white-space: normal; word-break: break-word;
+    }
+    .sidenav .nav-tip.ok { color: #15803d; background: rgba(22, 163, 74, 0.12); }
+    .sidenav .nav-tip.err { color: #b91c1c; background: rgba(220, 38, 38, 0.12); }
+    .sidenav .nav-tip[hidden] { display: none !important; }
     @media (max-width: 1000px) { .sidenav { display: none; } }
     .key-row { display: flex; gap: 10px; align-items: center; }
     .key-row input { flex: 1 1 auto; min-width: 0; }

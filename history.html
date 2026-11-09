@@ -53,15 +53,6 @@
       border: none; background: none; cursor: pointer; padding: 3px 8px; border-radius: 6px;
     }
     h1 .clear-link:hover { color: #dc2626; background: rgba(220, 38, 38, 0.08); }
-    /* 标题栏的刷新图标按钮 */
-    h1 .icon-btn {
-      margin-left: auto; /* 独占标题行最右，就是原来「清空记录」的位置 */
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 24px; height: 24px; padding: 0; border: 0; border-radius: 7px;
-      background: transparent; color: var(--muted); font-size: 15px; line-height: 1;
-      cursor: pointer; transition: transform 0.2s ease, color 0.2s ease;
-    }
-    h1 .icon-btn:hover { color: var(--primary); background: rgba(99, 102, 241, 0.1); transform: rotate(180deg); }
     h1 .dot {
       flex: 0 0 auto; /* 圆点不允许被 flex 压缩成椭圆 */
       width: 12px; height: 12px; border-radius: 50%;
@@ -688,7 +679,7 @@
 </head>
 <body>
   <div class="wrap">
-    <h1><span class="dot"></span>划词AI释义 · 历史记录<button type="button" class="clear-link" id="clear">清空记录</button><button type="button" class="icon-btn" id="refresh" title="刷新列表（保留当前搜索、时间范围与标签筛选）" aria-label="刷新">⟳</button></h1>
+    <h1><span class="dot"></span>划词AI释义 · 历史记录<button type="button" class="clear-link" id="clear">清空记录</button></h1>
     <p class="sub">这里保存了你每次划词释义的原文与 AI 结果，可搜索、删除，也可一键导出为 HTML 或 Markdown 文件。</p>
 
     <div class="toolbar">

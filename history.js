@@ -4157,7 +4157,6 @@ $("importModal").addEventListener("click", (ev) => {
   if (ev.target === $("importModal")) closeImportModal();
 });
 $("clear").addEventListener("click", clearAll);
-$("refresh").addEventListener("click", refreshHistory);
 initFontSelect();
 initColorSwatches("bgSwatches", "optPageBg", BG_PALETTE);
 initColorSwatches("quoteSwatches", "optQuoteBg", BG_PALETTE);
