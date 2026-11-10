@@ -933,9 +933,10 @@
       </div>
       <span class="opts-sep"></span>
       <span class="opts-section">全局样式</span>
-      <label class="opt-lbl">布局：<span class="seg" id="layoutBar" title="两栏：屏幕上左右两栏瀑布流，打印时首尾相接、卡片可跨栏拆开">
-        <button type="button" class="seg-btn active" data-layout="single">单栏</button>
-        <button type="button" class="seg-btn" data-layout="twocol">两栏</button>
+      <label class="opt-lbl">布局：<span class="seg" id="layoutBar">
+        <button type="button" class="seg-btn active" data-layout="single" title="单栏：一张卡片占一整行">单栏</button>
+        <button type="button" class="seg-btn" data-layout="twocol" title="两栏：历史页屏幕上按瀑布流排（新卡片放进较矮的一栏）；预览与打印按整页多列流，首尾相接、卡片可跨栏拆开">两栏</button>
+        <button type="button" class="seg-btn" data-layout="inner" title="卡片内双栏：卡片本身仍是单栏，只把释义正文分成左右两栏">卡片内双栏</button>
       </span></label>
       <label class="opt-lbl">时间显示
         <select id="optTimeDisplay" title="卡片与导出里的时间格式：到秒、到日，或精简的年/月/日">

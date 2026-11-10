@@ -459,14 +459,16 @@ function isDropQuote(e) {
   return !!t && t.length <= quoteMergeMax;
 }
 
-// 释义用多列容器（column-count）的模板：它自成块级上下文，
+// 释义用多列容器（column-count）时：它自成块级上下文，
 // 外层浮动只会把两栏整体挤窄、第 3 行也回不到开头；
-// 所以这些模板把大字头挪到释义第一段的开头，浮动只作用于第一栏，
-// 第一栏绕排两行后自然接到第二栏。其余模板仍沿用原来的兄弟节点方式。
+// 所以分栏时把大字头挪到释义第一段的开头，浮动只作用于第一栏，
+// 第一栏绕排两行后自然接到第二栏。不分栏时仍沿用原来的兄弟节点方式。
 const MULTICOL_TEMPLATES = ["magazine", "news"];
 
 function dropQuoteInsideAnswer() {
-  return MULTICOL_TEMPLATES.includes(styleTemplate);
+  // 卡内双栏现在由全局布局开关控制（报纸/杂志切过去时默认选中它），
+  // 所以判据是「当前是否分栏」，而不是模板 id
+  return innerActive();
 }
 
 function injectDropIntoAnswerHtml(ansHtml, dropInner) {
@@ -1164,7 +1166,8 @@ const STYLE_TEMPLATES = [
       "font-family:Georgia,'Songti SC','SimSun',serif;font-size:16px;line-height:1.85;color:#211d18;font-weight:600}" +
       'body[data-tpl="news"] .item-text-extract{background:transparent!important;border:0;padding-left:0}' +
       'body[data-tpl="news"] .item-answer{font-family:Georgia,\'Songti SC\',\'SimSun\',serif;color:#332e28;' +
-      "font-size:13px;line-height:1.8;column-count:2;column-gap:22px}" +
+      // 分栏由「布局：卡片内双栏」控制，模板本身只管字色字号行高
+      "font-size:13px;line-height:1.8}" +
       'body[data-tpl="news"] .item-answer p{margin:0 0 6px}' +
       'body[data-tpl="news"] .item-tag{background:transparent;border:1px solid #cfcbc2;color:#6b6257;border-radius:2px}' +
       'body[data-tpl="news"] .item-main{background:transparent;border-left:3px solid #cfcbc2;border-radius:0;' +
@@ -1514,7 +1517,8 @@ const STYLE_TEMPLATES = [
       'body[data-tpl="magazine"] .item-text-extract{background-color:transparent!important;border-left:0;padding-left:0}' +
       // 正文排两栏，栏间一条细分割线
       'body[data-tpl="magazine"] .item-answer{font-size:12.5px;line-height:1.75;color:#45484f;margin-top:8px;' +
-      "column-count:2;column-gap:22px;column-rule:1px solid #eceef0;text-align:justify}" +
+      // 分栏由「布局：卡片内双栏」控制；这里只留栏间细线（单栏时不会显示）
+      "column-rule:1px solid #eceef0;text-align:justify}" +
       'body[data-tpl="magazine"] .item-answer p{margin:0 0 6px}' +
       'body[data-tpl="magazine"] .item-tag{background:#f1f2f4;border:0;border-radius:2px;color:#4b5058}' +
       'body[data-tpl="magazine"] .item-main{background:#f7f7f5;border-left:2px solid #c9ccd2;border-radius:0;' +
@@ -1648,9 +1652,10 @@ let stylePinned = false; // 样式设置区是否钉住（滚动时贴住页面�
 
 // ---------- 全局布局：单栏 / 两栏 ----------
 // 两栏本身与外观无关：页面排成两栏（屏幕走瀑布流，打印走 CSS 多列流）。
-// 报纸、杂志的自定义卡片内部已经是双栏，再套一层页面两栏会碎，所以这两个模板下不生效。
+// 「卡片内双栏」是另一套：只把卡片里的释义正文分成两栏，页面仍单栏。
+// 卡片墙模板的列表本身已是网格两列，页面两栏对它不生效。
 const LAYOUT_KEY = "layoutMode";
-const LAYOUT_NO_TWOCOL = ["news", "magazine", "cards"];
+const LAYOUT_NO_TWOCOL = ["cards"];
 let layoutMode = "single";
 const LAYOUT_CSS =
   'body[data-layout="twocol"] #list{column-count:2;column-gap:16px}' +
@@ -1663,9 +1668,27 @@ const LAYOUT_CSS =
   'body[data-layout="twocol"] .card-gap{display:none!important}' +
   '@media print{body[data-layout="twocol"] .card{break-inside:auto;page-break-inside:auto}}';
 
-// 当前是否真的按两栏排：选了「两栏」且模板不是报纸/杂志；小票模板自带两栏，也走这里
+// 卡片内双栏：只对释义正文分栏，扣掉卡片自身的内边距后左右各占一半；
+// 窄屏（打印 A4 可排宽度也在 720px 左右，故阈值取 560px）退回单栏
+const LAYOUT_INNER_CSS =
+  'body[data-layout="inner"] .item-answer{column-count:2;column-gap:22px}' +
+  '@media (max-width:560px){body[data-layout="inner"] .item-answer{column-count:1}}';
+
+// 当前是否真的按两栏排：选了「两栏」且模板不是卡片墙；小票模板自带两栏，也走这里
 function layoutActive() {
   return layoutMode === "twocol" && !LAYOUT_NO_TWOCOL.includes(styleTemplate);
+}
+
+// 当前卡片内是否按双栏排释义
+function innerActive() {
+  return layoutMode === "inner";
+}
+
+// 落到 body 上的实际布局值（单栏时也要写值，模板自带的规则才能被盖回去）
+function effectiveLayout() {
+  if (styleTemplate === "receipt") return "twocol";
+  if (layoutMode === "twocol" && LAYOUT_NO_TWOCOL.includes(styleTemplate)) return "";
+  return layoutMode;
 }
 
 // 导出/预览页没有 #list，卡片直接挂在 .wrap 上，两栏要落在 .wrap；
@@ -1678,24 +1701,25 @@ const LAYOUT_EXPORT_CSS =
 
 // 把当前布局落到 body 上，并同步面板按钮
 function syncLayout() {
-  const on = layoutActive() || styleTemplate === "receipt";
-  document.body.dataset.layout = on ? "twocol" : "";
+  document.body.dataset.layout = effectiveLayout();
   [...document.querySelectorAll("#layoutBar .seg-btn")].forEach((b) => {
     b.classList.toggle("active", b.dataset.layout === layoutMode);
   });
-  const bar = $("layoutBar");
-  if (bar) {
-    bar.title = LAYOUT_NO_TWOCOL.includes(styleTemplate)
-      ? "该模板的卡片内部已是双栏，页面两栏对它不生效"
-      : "两栏：屏幕上左右两栏瀑布流，打印时首尾相接、卡片可跨栏拆开";
+  // 每个选项各带一句短提示，不把三种说明拼成一段；
+  // 卡片墙的列表本身就是两列网格，所以它的「两栏」按钮要单独说明不生效
+  const twoBtn = document.querySelector('#layoutBar .seg-btn[data-layout="twocol"]');
+  if (twoBtn) {
+    twoBtn.title = LAYOUT_NO_TWOCOL.includes(styleTemplate)
+      ? "该模板的列表本身就是两列网格，页面两栏对它不生效"
+      : "两栏：历史页屏幕上按瀑布流排（新卡片放进较矮的一栏）；预览与打印按整页多列流，首尾相接、卡片可跨栏拆开";
   }
 }
 
 function setLayout(mode, persist = true) {
-  layoutMode = mode === "twocol" ? "twocol" : "single";
+  layoutMode = mode === "twocol" || mode === "inner" ? mode : "single";
   if ($("layoutBar")) syncLayout();
   if (persist) chrome.storage.local.set({ [LAYOUT_KEY]: layoutMode });
-  // 单栏/两栏会改变标签占几行（单栏跟来源同行、两栏另起一行），要重画
+  // 布局会改变标签占几行、释义是否分栏，要重画
   if (typeof render === "function") render();
   else if (typeof applyMasonry === "function") applyMasonry();
 }
@@ -1902,7 +1926,9 @@ function ensureTemplateStyle() {
     "\n" +
     STYLE_TEMPLATES.map((t) => aggSepCss(t.id)).join("\n") +
     "\n" +
-    LAYOUT_CSS;
+    LAYOUT_CSS +
+    "\n" +
+    LAYOUT_INNER_CSS;
   document.head.appendChild(style);
 }
 
@@ -1914,7 +1940,14 @@ function applyStyleTemplate(id, persist = true) {
     b.classList.toggle("active", b.dataset.tpl === styleTemplate);
   });
   if (persist) chrome.storage.local.set({ [STYLE_TPL_KEY]: styleTemplate });
-  // 切模板可能让「两栏」生效或失效（报纸/杂志不吃页面两栏）
+  // 报纸/杂志原来是模板自带卡内双栏，现在交给「布局：卡片内双栏」；
+  // 用户主动切到这两个模板、且当前还是单栏时，默认替用户选中它，保持原来的观感
+  // （加载时 applyStyleTemplate(..., false) 不参与，免得把用户存下的单栏反复改回去）
+  if (persist && MULTICOL_TEMPLATES.includes(styleTemplate) && layoutMode === "single") {
+    layoutMode = "inner";
+    if (persist) chrome.storage.local.set({ [LAYOUT_KEY]: layoutMode });
+  }
+  // 切模板可能让「两栏」生效或失效（卡片墙不吃页面两栏）
   syncLayout();
   // 把该模板的样式回填到样式设置面板（面板只记录“改动”，模板默认值作为恢复基准）
   syncTemplateStyleState();
@@ -2668,7 +2701,8 @@ function load() {
       tplOverrides = (res[TPL_OVERRIDES_KEY] && typeof res[TPL_OVERRIDES_KEY] === "object") ? res[TPL_OVERRIDES_KEY] : {};
       styleTemplate = res[STYLE_TPL_KEY] || "glass";
       // 全局布局：单栏 / 两栏（老数据没有这个键时按单栏）
-      layoutMode = res[LAYOUT_KEY] === "twocol" ? "twocol" : "single";
+      layoutMode =
+    res[LAYOUT_KEY] === "twocol" || res[LAYOUT_KEY] === "inner" ? res[LAYOUT_KEY] : "single";
       renderTplBar();
       applyStyleTemplate(styleTemplate, false);
 
@@ -3619,12 +3653,14 @@ function buildItemCard(e) {
       const src = document.createElement("span");
       src.className = "item-src";
       const titleText = vis.pageTitle ? (displayTitle(e) || safeHost(e.pageUrl || "")) : "";
+      // 只读模式当作导出成品看，不带「来源：」前缀；编辑模式保留，便于识别这一块是什么
+      const srcPrefix = readOnly ? "" : "来源：";
       if (e.pageUrl && vis.pageUrl) {
         src.innerHTML =
-          '来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+          srcPrefix + '<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
           esc(titleText || safeHost(e.pageUrl)) + "</a>";
       } else {
-        src.textContent = "来源：" + titleText;
+        src.textContent = srcPrefix + titleText;
       }
       meta.appendChild(src);
       srcEl = src;
@@ -4010,12 +4046,14 @@ function renderAggregated(list) {
         src.className = "item-src";
         const first = recs[0];
         const titleText = vis.pageTitle ? (displayTitle(first) || safeHost(first.pageUrl || "")) : "";
+        // 只读模式不带「来源：」前缀，与导出成品一致
+        const srcPrefix = readOnly ? "" : "来源：";
         if (first.pageUrl && vis.pageUrl) {
           src.innerHTML =
-            '来源：<a href="' + esc(first.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+            srcPrefix + '<a href="' + esc(first.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
             esc(titleText || safeHost(first.pageUrl)) + "</a>";
         } else {
-          src.textContent = "来源：" + titleText;
+          src.textContent = srcPrefix + titleText;
         }
         meta.appendChild(src);
         srcEl = src;
@@ -4673,9 +4711,10 @@ function buildExportHtml(list, withPrintScript, titleWithTime, previewBlack) {
     '<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n' +
     "<title>" + docTitle + "</title>\n" +
     "<style>\n" + CARD_CSS + MERGE_QUOTE_CSS + noSplitCss + displayCss + HEAD_BTN_CSS + tplCss +
-    (layoutActive() ? LAYOUT_CSS + LAYOUT_EXPORT_CSS : "") + printBlackCss + "\n</style>\n" +
+    (layoutActive() ? LAYOUT_CSS + LAYOUT_EXPORT_CSS : "") +
+    (innerActive() ? LAYOUT_INNER_CSS : "") + printBlackCss + "\n</style>\n" +
     "</head>\n" + '<body data-tpl="' + esc(styleTemplate) + '"' +
-    (layoutActive() ? ' data-layout="twocol"' : "") +
+    (effectiveLayout() ? ' data-layout="' + effectiveLayout() + '"' : "") +
     (quoteMerge ? ' class="merge-quote"' : "") + ">\n" +
     '<div class="wrap">\n' +
     '<h1><span class="dot"></span><span class="h1-title">划词AI释义 · 历史记录</span>' +
