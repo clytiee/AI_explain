@@ -196,6 +196,38 @@ async function getPaused() {
   return !!res.paused;
 }
 
+// 按路径设置图标；Edge 里偶发「Failed to fetch」（按路径取图失败，文件确实存在），
+// 所以失败时回退成：读文件 → ImageData → setIcon，绕开按路径取图这一环
+const iconDataCache = new Map();
+async function iconImageData(relPath) {
+  if (iconDataCache.has(relPath)) return iconDataCache.get(relPath);
+  const res = await fetch(chrome.runtime.getURL(relPath));
+  if (!res.ok) throw new Error("fetch " + res.status);
+  const blob = await res.blob();
+  const bmp = await createImageBitmap(blob);
+  const canvas = new OffscreenCanvas(bmp.width, bmp.height);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(bmp, 0, 0);
+  const data = ctx.getImageData(0, 0, bmp.width, bmp.height);
+  iconDataCache.set(relPath, data);
+  return data;
+}
+
+async function applyActionIcon(paths) {
+  try {
+    await chrome.action.setIcon({ path: paths });
+    return;
+  } catch (err) {
+    // 取最大尺寸那一档，浏览器会自行缩放到 16/32/48
+    const big = paths[128] || paths[48] || paths[32] || paths[16];
+    try {
+      await chrome.action.setIcon({ imageData: await iconImageData(big) });
+    } catch (err2) {
+      console.warn("[AI释义] setIcon 失败", err && err.message, "| 回退也失败", err2 && err2.message);
+    }
+  }
+}
+
 async function setActionState() {
   const paused = await getPaused();
   const extract = await getExtractMode();
@@ -208,7 +240,8 @@ async function setActionState() {
     path = EXTRACT_ICON;
     title = "划词AI释义（摘录模式，点击暂停）";
   }
-  await chrome.action.setIcon({ path }).catch(() => {});
+  // setIcon 失败时别静默吞掉：图标不跟着切（仍在滑动释义）只能靠这条日志定位
+  await applyActionIcon(path);
   await chrome.action
     .setTitle({ title })
     .catch(() => {});
