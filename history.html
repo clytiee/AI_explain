@@ -202,6 +202,16 @@
       color: var(--muted); font-size: 12px;
       width: 80px; flex-shrink: 0;
     }
+    /* 标题只需自然宽度时用这个（固定 80px 会在短标题后留一大段空白） */
+    .opts-title-auto { width: auto; }
+    /* 字段被改过：控件所在那格右上角点一个红点（不占位、不挡点击） */
+    .field-mod { position: relative; }
+    .field-mod::after {
+      content: ""; position: absolute; top: -5px; right: -7px;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #ef4444; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9);
+      pointer-events: none;
+    }
     .opts-br { flex-basis: 100%; width: 100%; height: 0; }
     /* 样式面板里的分区标题：全局样式 / 模板样式，粗体、和后面的控件同行 */
     .opts-section { color: var(--text); font-size: 12px; font-weight: 700; margin-right: 10px; flex-shrink: 0; }
@@ -293,7 +303,11 @@
     .opts .btn-mini:hover { color: var(--primary); border-color: var(--primary); }
     .agg-items { display: flex; flex-direction: column; gap: 10px; }
     .agg-item { border-top: 1px var(--agg-sep-style, dashed) var(--agg-sep, rgba(99, 102, 241, 0.28)); padding-top: 10px; }
-    .agg-item:first-child { border-top: none; padding-top: 0; }
+    .agg-item:first-child { border-top: 0 solid transparent; padding-top: 0; }
+    /* 关掉「分隔线」时，聚合明细之间也不画线（与导出效果一致）
+       注意不能用 border-top:none：简写会把宽度重置成 medium(≈3px)，
+       模板里那条只改「线色/线型」的规则优先级更高，会把 3px 的虚线补回来 */
+    .agg-items.no-sep .agg-item { border-top: 0 solid transparent !important; padding-top: 0; }
     .agg-item-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
     .agg-item-time { font-size: 12px; color: var(--muted); flex: 1 1 auto; white-space: nowrap; }
     .bg-swatches { display: inline-flex; gap: 4px; align-items: center; }
@@ -397,7 +411,7 @@
       /* 操作图标行整体上移一点，下面用一道淡实线跟时间/来源行分开 */
       margin: -12px 0 10px; padding-bottom: 2px;
       /* 右上角让给选中角标，图标不压到它 */
-      padding-right: 24px;
+      padding-right: 10px;
       border-bottom: 1px solid rgba(15, 23, 42, 0.07);
     }
     /* 卡片右上角：点一下选中这张卡片（可多选，选中后只导出选中的记录） */
@@ -429,23 +443,24 @@
       white-space: nowrap;
     }
     /* 每张卡片上的标签行：点标签即移除，＋ 可新增 */
-    /* 标签行本体：默认靠右，放在来源那一行的行尾 */
+    /* 标签行本体：独立一行（在时间/来源下面），右对齐；整行可换行，但单个标签不拆字 */
     .item-tags {
       display: flex; align-items: center; justify-content: flex-end;
       gap: 6px; flex-wrap: wrap; margin: 0 0 8px; margin-left: auto;
     }
-    /* 第二行：来源居左，标签推到最右 */
+    /* 第一行：时间/条数 + 来源，始终同一行（来源放不下就用省略号收尾） */
     .item-meta {
       display: flex; align-items: center; gap: 10px;
-      margin: 0 0 8px; min-width: 0;
+      margin: 0 0 6px; min-width: 0; flex-wrap: nowrap;
     }
-    .item-meta .item-tags { margin: 0 0 0 auto; flex: 0 1 auto; }
+    /* 标签行在来源同一行时不被压缩：来源长了先省略，标签和「＋标签」保持一行 */
+    .item-meta .item-tags { margin: 0 0 0 auto; flex: 0 0 auto; }
     .item-tags .item-tag { cursor: pointer; }
     .item-tags .item-tag:hover { background: rgba(220, 38, 38, 0.12); border-color: rgba(220, 38, 38, 0.35); color: #b91c1c; }
     .item-tag-add {
       font-size: 11px; padding: 1px 7px; border-radius: 999px; cursor: pointer;
       border: 1px dashed rgba(99, 102, 241, 0.45); background: transparent; color: #6366f1;
-      font-family: inherit;
+      font-family: inherit; white-space: nowrap; flex: 0 0 auto;
     }
     .item-tag-add:hover { background: rgba(99, 102, 241, 0.1); }
     .item-tag-input {
@@ -791,14 +806,6 @@
       <span class="opts-hint" id="timeModeHint" hidden>起始日 00:00:00 到结束日 23:59:59</span>
     </div>
     <div class="opts">
-      <span class="opts-title">导出时包含：</span>
-      <label><input type="checkbox" id="optTime" checked />时间</label>
-      <label><input type="checkbox" id="optPageTitle" checked />来源页面</label>
-      <label><input type="checkbox" id="optPageUrl" checked />页面地址</label>
-      <label><input type="checkbox" id="optCount" checked />条数</label>
-      <label><input type="checkbox" id="optTags" checked />标签</label>
-      <label><input type="checkbox" id="optSep" checked />分隔线</label>
-      <span class="opts-br"></span>
       <span class="opts-title">导出为HTML：</span>
       <label><input type="checkbox" id="optNoSplit" />卡片不跨页拆分</label>
       <label title="打印预览、打印或另存为 PDF 时，正文文字统一用纯黑，颜色更实、防水"><input type="checkbox" id="optPrintBlack" checked />打印用纯黑字</label>
@@ -851,6 +858,7 @@
         <option value="600">半粗</option>
         <option value="700">粗</option>
       </select></label>
+      <button type="button" id="resetDisplay" class="reset-btn">恢复模板默认</button>
       <button type="button" class="reset-btn" id="styleMoreBtn" aria-expanded="false" title="展开或折叠下面的背景色、圆角与样式管理">更多</button>
       <div class="opt-more" id="styleMore" hidden>
       <span class="opts-br"></span>
@@ -922,7 +930,6 @@
       <button type="button" id="saveDisplay" class="reset-btn">保存样式组</button>
       <label>样式组 <select id="presetSelect"></select></label>
       <button type="button" id="deletePreset" class="reset-btn">删除</button>
-      <button type="button" id="resetDisplay" class="reset-btn">恢复模板默认</button>
       </div>
       <span class="opts-sep"></span>
       <span class="opts-section">全局样式</span>
@@ -940,6 +947,14 @@
       </label>
       <label title="原文当大字头（占一行高度），释义绕排在它右侧；原文超过字数上限时不放大，退回两行截断"><input type="checkbox" id="optMergeQuote" />合并原文释义</label>
       <label title="原文字数不超过这个数才当大字头">≤ <input type="number" id="optMergeMax" min="1" max="20" step="1" value="5" style="width:40px" /> 字</label>
+      <span class="opts-br"></span>
+      <span class="opts-title opts-title-auto" title="这几项在只读模式下生效：关掉就让历史页看起来和导出的样子一致；编辑模式下为了好操作，时间/来源/条数/标签/分隔线一律显示">只读显示：</span>
+      <label><input type="checkbox" id="optTime" checked />时间</label>
+      <label><input type="checkbox" id="optPageTitle" checked />来源页面</label>
+      <label><input type="checkbox" id="optPageUrl" checked />页面地址</label>
+      <label><input type="checkbox" id="optCount" checked />条数</label>
+      <label><input type="checkbox" id="optTags" checked />标签</label>
+      <label><input type="checkbox" id="optSep" checked />分隔线</label>
     </div>
     </div>
 

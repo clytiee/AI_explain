@@ -780,12 +780,69 @@ function currentStyleDiff() {
   return diff;
 }
 
+// 每个控件对应哪些样式字段：字段与模板默认值不同时，在控件所在那格的右上角点一个小红点。
+// 字体/字号/行高/字重这几个框随「主文|原文|释义」作用域切换，红点也跟着当前作用域走。
+const FIELD_DOT_MAP = {
+  optPageBg: ["pageBg"],
+  optQuoteBg: ["quoteBg"],
+  optMainBg: ["mainBg"],
+  optExtractBg: ["extractBg"],
+  optCardBg: ["cardBg"],
+  optCardBorder: ["cardBorder"],
+  optCardBorderW: ["cardBorderW"],
+  optCardBar: ["cardBar"],
+  optCardBarW: ["cardBarW"],
+  optCardShadow: ["cardShadow"],
+  optCardGap: ["cardGap"],
+  optCardPad: ["cardPad"],
+  optTimeColor: ["timeColor"],
+  optSrcColor: ["srcColor"],
+  optTagBg: ["tagBg"],
+  optTagColor: ["tagColor"],
+  optTagRadius: ["tagRadius"],
+  optQuoteBorder: ["quoteBorder"],
+  optQuoteBorderW: ["quoteBorderW"],
+  optMainBorder: ["mainBorder"],
+  optMainBorderW: ["mainBorderW"],
+  optCardRadius: ["cardRadius"],
+  optQuoteRadius: ["quoteRadius"],
+  optExtractRadius: ["extractRadius"],
+  optAggSep: ["aggSep"],
+  optAggSepStyle: ["aggSepStyle"],
+  optParaSpacing: ["ansSpacing"],
+};
+const SCOPED_DOT_KEYS = {
+  main: { family: "mainFontFamily", color: "mainFontColor", size: "mainFontSize", lh: "mainLineHeight", fw: "mainFontWeight" },
+  quote: { family: "fontFamily", color: "fontColor", size: "fontSize", lh: "lineHeight", fw: "fontWeight" },
+  answer: { family: "ansFontFamily", color: "ansFontColor", size: "ansFontSize", lh: "ansLineHeight", fw: "ansFontWeight" },
+};
+
+function updateFieldDots() {
+  const keys = Object.keys(currentStyleDiff());
+  const sc = SCOPED_DOT_KEYS[fontScope] || SCOPED_DOT_KEYS.quote;
+  const map = {
+    ...FIELD_DOT_MAP,
+    optFontFamily: [sc.family],
+    optFontColor: [sc.color],
+    optFontSize: [sc.size],
+    optLineHeight: [sc.lh],
+    optFontWeight: [sc.fw],
+  };
+  Object.keys(map).forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    const host = el.closest("label") || el.parentElement;
+    if (!host) return;
+    host.classList.toggle("field-mod", map[id].some((k) => keys.includes(k)));
+  });
+}
+
 function updateStyleModifiedHint() {
   // 提示放在风格模板行的最后：当前模板的样式被改过时显示
   const hint = $("tplModified");
-  if (!hint) return;
   const modified = Object.keys(currentStyleDiff()).length > 0;
-  hint.hidden = !modified;
+  if (hint) hint.hidden = !modified;
+  updateFieldDots();
 }
 
 // 切换模板后，把该模板的默认样式灌进面板（叠加该模板已保存的改动）
@@ -1638,7 +1695,9 @@ function setLayout(mode, persist = true) {
   layoutMode = mode === "twocol" ? "twocol" : "single";
   if ($("layoutBar")) syncLayout();
   if (persist) chrome.storage.local.set({ [LAYOUT_KEY]: layoutMode });
-  if (typeof applyMasonry === "function") applyMasonry();
+  // 单栏/两栏会改变标签占几行（单栏跟来源同行、两栏另起一行），要重画
+  if (typeof render === "function") render();
+  else if (typeof applyMasonry === "function") applyMasonry();
 }
 
 
@@ -2464,6 +2523,8 @@ function setFontScope(scope) {
   });
   syncFontScopeControls();
   refreshFontSwatches();
+  // 字体/字号/行高/字重这几个框共用一套控件，作用域一变，红点要换到对应字段
+  if (typeof updateFieldDots === "function") updateFieldDots();
 }
 
 function refreshPresetSelect() {
@@ -2634,7 +2695,7 @@ function load() {
   );
 }
 
-// 导出选项变更时即时生效并保存
+// 列表显示项（时间/来源/条数/标签/分隔线）与导出共用：改完立刻重画，只读模式下就是所见所得
 function bindExportOpts() {
   const persist = () => {
     exportOpts = {
@@ -2650,6 +2711,7 @@ function bindExportOpts() {
       backup: $("optBackup").checked,
     };
     chrome.storage.local.set({ [EXPORT_OPTS_KEY]: exportOpts });
+    render();
   };
   $("optTime").addEventListener("change", persist);
   $("optPageTitle").addEventListener("change", persist);
@@ -3489,6 +3551,29 @@ function clearPicked() {
   render();
 }
 
+// 标签放哪一行：只有「编辑模式 + 两栏」时列宽窄，标签（含「＋标签」）才另起一行；
+// 其余情况（只读的单/双栏、编辑的单栏）都跟来源同一行靠右
+function tagsOwnLine() {
+  return !readOnly && document.body.dataset.layout === "twocol";
+}
+
+// 只读模式下的列表显示项：时间/来源标题/页面地址/条数/标签/分隔线
+// 这几项与导出共用同一份状态（exportOpts），所以只读页看到的就是导出的样子；
+// 编辑模式下全部显示，否则没法改标签、看来源、点删除。
+function pageVis() {
+  if (!readOnly) {
+    return { time: true, pageTitle: true, pageUrl: true, count: true, tags: true, sep: true };
+  }
+  return {
+    time: exportOpts.time !== false,
+    pageTitle: exportOpts.pageTitle !== false,
+    pageUrl: exportOpts.pageUrl !== false,
+    count: exportOpts.count !== false,
+    tags: exportOpts.tags !== false,
+    sep: exportOpts.sep !== false,
+  };
+}
+
 // 普通卡片（非聚合）：第一行 时间 + 来源按钮 + 来源 + 删除
 function buildItemCard(e) {
   const item = document.createElement("div");
@@ -3520,21 +3605,30 @@ function buildItemCard(e) {
   const actions = document.createElement("div");
   actions.className = "item-actions";
 
+  const vis = pageVis();
   const meta = document.createElement("div");
   meta.className = "item-meta";
-  meta.appendChild(timeEl);
+  if (vis.time) meta.appendChild(timeEl);
 
+  // 「来源标题」控制标题文字，「页面地址」控制那个链接：
+  // 只开地址时用域名当链接文字，只开标题时退成纯文本，两个都关就不出这一块
+  const showSrcLine = !!srcKey && (vis.pageTitle || vis.pageUrl);
+  let srcEl = null;
   if (srcKey) {
-    const src = document.createElement("span");
-    src.className = "item-src";
-    if (e.pageUrl) {
-      src.innerHTML =
-        '来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
-        esc(displayTitle(e) || safeHost(e.pageUrl)) + "</a>";
-    } else {
-      src.textContent = "来源：" + displayTitle(e);
+    if (showSrcLine) {
+      const src = document.createElement("span");
+      src.className = "item-src";
+      const titleText = vis.pageTitle ? (displayTitle(e) || safeHost(e.pageUrl || "")) : "";
+      if (e.pageUrl && vis.pageUrl) {
+        src.innerHTML =
+          '来源：<a href="' + esc(e.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+          esc(titleText || safeHost(e.pageUrl)) + "</a>";
+      } else {
+        src.textContent = "来源：" + titleText;
+      }
+      meta.appendChild(src);
+      srcEl = src;
     }
-    meta.appendChild(src);
 
     // 来源左侧的搜索图标：点击筛选同来源记录
     const srcBtn = document.createElement("button");
@@ -3558,14 +3652,16 @@ function buildItemCard(e) {
     mainBtn.addEventListener("click", () => openMainModal(srcKey));
     actions.appendChild(mainBtn);
 
-    // 改来源文本（只改标题，链接地址不变）
-    const editSrcBtn = document.createElement("button");
-    editSrcBtn.type = "button";
-    editSrcBtn.className = "item-src-edit";
-    editSrcBtn.title = "修改来源文本（链接地址不变）";
-    editSrcBtn.innerHTML = EDIT_SRC_ICON;
-    editSrcBtn.addEventListener("click", () => startEditSource(src, [e]));
-    actions.appendChild(editSrcBtn);
+    // 改来源文本（只改标题，链接地址不变）；来源整行被隐藏时没有可编辑的节点
+    if (srcEl) {
+      const editSrcBtn = document.createElement("button");
+      editSrcBtn.type = "button";
+      editSrcBtn.className = "item-src-edit";
+      editSrcBtn.title = "修改来源文本（链接地址不变）";
+      editSrcBtn.innerHTML = EDIT_SRC_ICON;
+      editSrcBtn.addEventListener("click", () => startEditSource(srcEl, [e]));
+      actions.appendChild(editSrcBtn);
+    }
   }
 
   const del = document.createElement("button");
@@ -3595,9 +3691,12 @@ function buildItemCard(e) {
   if (!isExtract) ans.innerHTML = answerMarkdownForRender(e);
 
   item.appendChild(head);
-  // 标签在第二行最右
-  meta.appendChild(buildTagsRow([e]));
-  item.appendChild(meta);
+  // 标签（含「＋标签」）：单栏跟时间/来源同一行靠右，两栏另起一行；
+  // 时间/来源全关掉时，空的第二行会多出一条高度，直接不挂
+  const ownLine = tagsOwnLine();
+  if (vis.tags && !ownLine) meta.appendChild(buildTagsRow([e]));
+  if (meta.childNodes.length) item.appendChild(meta);
+  if (vis.tags && ownLine) item.appendChild(buildTagsRow([e]));
 
   // 同源主文：该来源保存过主文时，同源所有卡片都显示（受“显示/隐藏主文”开关控制）
   if (showMainText && sourceTexts[srcKey]) {
@@ -3879,27 +3978,48 @@ function renderAggregated(list) {
     const actions = document.createElement("div");
     actions.className = "item-actions";
 
+    const vis = pageVis();
     const meta = document.createElement("div");
     meta.className = "item-meta";
 
-    const countEl = document.createElement("span");
-    countEl.className = "item-count";
-    countEl.textContent = recs.length + " 条";
-    meta.appendChild(countEl);
+    if (vis.count) {
+      const countEl = document.createElement("span");
+      countEl.className = "item-count";
+      countEl.textContent = recs.length + " 条";
+      meta.appendChild(countEl);
+    }
 
+    // 只读模式：聚合卡按导出那样在卡头显示这组明细里最近的时间，明细行不再逐条重复；
+    // 编辑模式下仍然逐条显示（哪条新、哪条旧要看得出来，方便上移/下移和删除）
+    if (readOnly && vis.time) {
+      const newest = Math.max(...recs.map((e) => Number(e.time) || 0));
+      if (newest) {
+        const t = document.createElement("span");
+        t.className = "item-time";
+        t.textContent = formatRecordTime(newest);
+        meta.appendChild(t);
+      }
+    }
+
+    const showSrcLine = !!srcKey && (vis.pageTitle || vis.pageUrl);
+    let srcEl = null;
     if (srcKey) {
       // 来源接在记录数后面
-      const src = document.createElement("span");
-      src.className = "item-src";
-      const first = recs[0];
-      if (first.pageUrl) {
-        src.innerHTML =
-          '来源：<a href="' + esc(first.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
-          esc(displayTitle(first) || safeHost(first.pageUrl)) + "</a>";
-      } else {
-        src.textContent = "来源：" + displayTitle(first);
+      if (showSrcLine) {
+        const src = document.createElement("span");
+        src.className = "item-src";
+        const first = recs[0];
+        const titleText = vis.pageTitle ? (displayTitle(first) || safeHost(first.pageUrl || "")) : "";
+        if (first.pageUrl && vis.pageUrl) {
+          src.innerHTML =
+            '来源：<a href="' + esc(first.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+            esc(titleText || safeHost(first.pageUrl)) + "</a>";
+        } else {
+          src.textContent = "来源：" + titleText;
+        }
+        meta.appendChild(src);
+        srcEl = src;
       }
-      meta.appendChild(src);
 
       const srcBtn = document.createElement("button");
       srcBtn.type = "button";
@@ -3922,19 +4042,23 @@ function renderAggregated(list) {
       actions.appendChild(mainBtn);
 
       // 改来源文本：聚合视图下改这一组全部记录的来源标题，链接地址不变
-      const editSrcBtn = document.createElement("button");
-      editSrcBtn.type = "button";
-      editSrcBtn.className = "item-src-edit";
-      editSrcBtn.title = "修改来源文本（链接地址不变）";
-      editSrcBtn.innerHTML = EDIT_SRC_ICON;
-      editSrcBtn.addEventListener("click", () => startEditSource(src, recs));
-      actions.appendChild(editSrcBtn);
+      if (srcEl) {
+        const editSrcBtn = document.createElement("button");
+        editSrcBtn.type = "button";
+        editSrcBtn.className = "item-src-edit";
+        editSrcBtn.title = "修改来源文本（链接地址不变）";
+        editSrcBtn.innerHTML = EDIT_SRC_ICON;
+        editSrcBtn.addEventListener("click", () => startEditSource(srcEl, recs));
+        actions.appendChild(editSrcBtn);
+      }
     }
     head.appendChild(actions);
     item.appendChild(head);
-    // 聚合模式按「来源」打标签：一组同源记录共用一行，单独一行靠右
-    meta.appendChild(buildTagsRow(recs));
-    item.appendChild(meta);
+    // 标签：单栏跟来源同一行靠右，两栏另起一行（与单卡规则一致）
+    const ownLine = tagsOwnLine();
+    if (vis.tags && !ownLine) meta.appendChild(buildTagsRow(recs));
+    if (meta.childNodes.length) item.appendChild(meta);
+    if (vis.tags && ownLine) item.appendChild(buildTagsRow(recs));
 
     // 主文只显示一次
     if (showMainText && sourceTexts[srcKey]) {
@@ -3946,7 +4070,7 @@ function renderAggregated(list) {
 
     // 多个原文排列在一个卡片里
     const items = document.createElement("div");
-    items.className = "agg-items";
+    items.className = "agg-items" + (vis.sep ? "" : " no-sep");
     for (let idx = 0; idx < recs.length; idx++) {
       const e = recs[idx];
       const gi = document.createElement("div");
@@ -3957,7 +4081,8 @@ function renderAggregated(list) {
       const t = document.createElement("span");
       t.className = "agg-item-time";
       t.textContent = formatRecordTime(e.time);
-      giHead.appendChild(t);
+      // 只读模式下时间已上移到卡头，明细行不再重复
+      if (vis.time && !readOnly) giHead.appendChild(t);
       const top = document.createElement("button");
       top.className = "item-move";
       top.title = "移到最上";
@@ -4086,6 +4211,8 @@ function syncReadonly(on) {
 function toggleReadonly() {
   syncReadonly(!readOnly);
   chrome.storage.local.set({ [READONLY_KEY]: readOnly });
+  // 只读/编辑切换会改变列表显示项（只读按开关、编辑全显示），要立刻重画
+  render();
   page = 1;
   render();
 }
@@ -4308,10 +4435,10 @@ h1 .h1-sub{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;whit
 .item-answer a:hover{text-decoration:underline}
 .item-main{font-size:13px;color:#1f2937;background:rgba(99,102,241,0.07);border-left:3px solid #6366f1;border-radius:6px;padding:6px 10px;margin-bottom:8px;white-space:pre-wrap;word-break:break-word}
 .item-main-dim{background:color-mix(in srgb,var(--main-bg) 40%,transparent);border-left-color:color-mix(in srgb,var(--main-border) 35%,transparent)}
-.item-main-label{font-size:11px;color:var(--muted);margin-bottom:2px}.agg-items.no-sep .agg-item{border-top:none!important;padding-top:0}
+.item-main-label{font-size:11px;color:var(--muted);margin-bottom:2px}.agg-items.no-sep .agg-item{border-top:0 solid transparent!important;padding-top:0}
 .agg-items{display:flex;flex-direction:column;gap:10px}
 .agg-item{border-top:1px dashed rgba(99,102,241,0.28);padding-top:10px}
-.agg-item:first-child{border-top:none;padding-top:0}
+.agg-item:first-child{border-top:0 solid transparent;padding-top:0}
 .agg-item-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .agg-item-time{font-size:12px;color:var(--muted)}`;
 
