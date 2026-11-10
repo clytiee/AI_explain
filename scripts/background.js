@@ -172,23 +172,23 @@ async function updateHighlightMenu() {
 
 // ---------- 暂停/恢复（点击插件图标切换） ----------
 const NORMAL_ICON = {
-  16: "icon16.png",
-  32: "icon32.png",
-  48: "icon48.png",
-  128: "icon128.png",
+  16: "icons/icon16.png",
+  32: "icons/icon32.png",
+  48: "icons/icon48.png",
+  128: "icons/icon128.png",
 };
 const PAUSED_ICON = {
-  16: "icon-paused-16.png",
-  32: "icon-paused-32.png",
-  48: "icon-paused-48.png",
-  128: "icon-paused-128.png",
+  16: "icons/icon-paused-16.png",
+  32: "icons/icon-paused-32.png",
+  48: "icons/icon-paused-48.png",
+  128: "icons/icon-paused-128.png",
 };
 // 摘录模式图标：左上角带粉点（基于正常图标生成）
 const EXTRACT_ICON = {
-  16: "icon-extract-16.png",
-  32: "icon-extract-32.png",
-  48: "icon-extract-48.png",
-  128: "icon-extract-128.png",
+  16: "icons/icon-extract-16.png",
+  32: "icons/icon-extract-32.png",
+  48: "icons/icon-extract-48.png",
+  128: "icons/icon-extract-128.png",
 };
 
 async function getPaused() {
@@ -749,7 +749,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return;
   }
   if (msg && msg.type === "open-history") {
-    chrome.tabs.create({ url: chrome.runtime.getURL("history.html") });
+    chrome.tabs.create({ url: chrome.runtime.getURL("pages/history.html") });
     return;
   }
   if (msg && msg.type === "history-save") {
@@ -886,7 +886,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "ai-explain-history") {
-    chrome.tabs.create({ url: chrome.runtime.getURL("history.html") });
+    chrome.tabs.create({ url: chrome.runtime.getURL("pages/history.html") });
     return;
   }
   if (info.menuItemId === "ai-explain-extract") {

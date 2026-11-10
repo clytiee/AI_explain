@@ -47,13 +47,18 @@
 ## 目录结构
 
 ```
-manifest.json      # MV3 清单（权限、后台、内容脚本、图标）
-background.js      # Service Worker：统一代理所有 AI API 请求（流式/非流式）
-content.js         # 内容脚本：选择检测 → 浮层 → 流式渲染
-content.css        # 浮层样式（毛玻璃卡片）
-options.html/js    # 设置页：服务商/Key/模型/提示词/行为开关
-history.html/js    # 历史记录页：查看/搜索/聚合/删除/导入导出（MD、HTML、JSON）
-icon*.png          # 扩展图标
+manifest.json              # MV3 清单（权限、后台、内容脚本、图标）
+icons/                     # 扩展图标（正常/暂停/摘录三套，各含 16/32/48/128）
+scripts/
+  background.js            # Service Worker：统一代理所有 AI API 请求（流式/非流式）
+  content.js               # 内容脚本：选择检测 → 浮层 → 流式渲染
+  options.js               # 设置页脚本：服务商/Key/模型/提示词/行为开关
+  history.js               # 历史记录页脚本：查看/搜索/聚合/删除/导入导出（MD、HTML、JSON）
+styles/
+  content.css              # 浮层样式（毛玻璃卡片）
+pages/
+  options.html             # 设置页
+  history.html             # 历史记录页
 ```
 
 ## API 说明

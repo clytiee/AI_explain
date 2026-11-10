@@ -5,32 +5,32 @@
   "description": "选中网页文本后自动弹出浮层，调用 AI 大模型 API 对所选文本进行释义、翻译或讲解（划词 AI 释义）。",
   "minimum_chrome_version": "102",
   "icons": {
-    "16": "icon16.png",
-    "32": "icon32.png",
-    "48": "icon48.png",
-    "128": "icon128.png"
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   },
   "permissions": ["storage", "contextMenus", "unlimitedStorage"],
   "host_permissions": ["<all_urls>"],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "scripts/background.js"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "css": ["content.css"],
+      "js": ["scripts/content.js"],
+      "css": ["styles/content.css"],
       "run_at": "document_idle"
     }
   ],
-  "options_page": "options.html",
+  "options_page": "pages/options.html",
   "action": {
     "default_title": "划词AI释义（点击暂停/恢复）",
     "default_icon": {
-      "16": "icon16.png",
-      "32": "icon32.png",
-      "48": "icon48.png",
-      "128": "icon128.png"
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   }
 }

@@ -1264,7 +1264,7 @@
     try {
       chrome.runtime.sendMessage({ type: "open-history" });
     } catch (e) {
-      chrome.tabs.create({ url: chrome.runtime.getURL("history.html") });
+      chrome.tabs.create({ url: chrome.runtime.getURL("pages/history.html") });
     }
   }
 

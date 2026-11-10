@@ -572,7 +572,7 @@ $("promptDel").addEventListener("click", () => {
 });
 
 $("openHistory").addEventListener("click", () => {
-  chrome.tabs.create({ url: chrome.runtime.getURL("history.html") });
+  chrome.tabs.create({ url: chrome.runtime.getURL("pages/history.html") });
 });
 
 $("test").addEventListener("click", async () => {
