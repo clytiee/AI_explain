@@ -811,10 +811,56 @@ function syncTemplateStyleState() {
   if (styleTemplate === "glass") chrome.storage.local.set({ [DISPLAY_OPTS_KEY]: glassDisplay });
 }
 
+// 大字头在导出/预览页没有 JS 可测：
+// 历史页由 applyDropQuoteSize 逐卡写死「高度/行高/字号」像素（还按字形量了垂直偏移），
+// 这里直接把当前页面上那个大字头的实测值搬进导出样式，字号/字重/盒高都与屏幕一模一样；
+// 拿不到（没开合段或当前没有短原文）时才退回释义实际字号×行高的变量近似。
+function measureAnsMetrics(d) {
+  const fs0 = Number(d.ansFontSize || d.fontSize) || 13;
+  const lh0 = Number(d.ansLineHeight || d.lineHeight) || 1.2;
+  const out = { fs: fs0, lh: lh0, drop: null };
+  try {
+    const ans = document.querySelector("#list .item-answer");
+    if (ans) {
+      const cs = getComputedStyle(ans);
+      const fs = parseFloat(cs.fontSize);
+      const px = parseFloat(cs.lineHeight);
+      if (isFinite(fs) && fs > 0 && isFinite(px) && px > 0) {
+        out.fs = Math.round(fs * 100) / 100;
+        out.lh = Math.round((px / fs) * 100) / 100;
+      }
+    }
+  } catch (e) {
+    /* 量不到就用设置值 */
+  }
+  try {
+    const drop = document.querySelector("#list .item-text-drop");
+    if (drop) {
+      const cs = getComputedStyle(drop);
+      const h = parseFloat(drop.style.height) || parseFloat(cs.height);
+      const fs = parseFloat(cs.fontSize);
+      const lh = parseFloat(cs.lineHeight);
+      const fw = cs.fontWeight;
+      if (isFinite(h) && h > 0 && isFinite(fs) && fs > 0) {
+        out.drop = {
+          h: Math.round(h * 100) / 100,
+          fs: Math.round(fs * 100) / 100,
+          lh: isFinite(lh) && lh > 0 ? Math.round(lh * 100) / 100 : Math.round(h * 100) / 100,
+          fw,
+        };
+      }
+    }
+  } catch (e) {
+    /* 忽略 */
+  }
+  return out;
+}
+
 // 导出 HTML 时，把显示设置写成覆盖规则追加到样式末尾
 // withTemplate=true（当前是风格模板）时，卡片底色/边框/阴影/标签/竖线/字重这些交给模板 CSS 与
 // tplOverrideCss 负责，这里不再重复输出，避免读回来的近似值把模板原样式盖偏。
 function buildDisplayCss(d, withTemplate) {
+  const ansMetrics = measureAnsMetrics(d);
   const ff = toFontFamilyCss(d.fontFamily);
   const aff = toFontFamilyCss(d.ansFontFamily || d.fontFamily);
   const mff = toFontFamilyCss(d.mainFontFamily || d.fontFamily);
@@ -857,7 +903,11 @@ function buildDisplayCss(d, withTemplate) {
     : "";
   return (
     // 页面底色同时落一份变量：模板里要「咬」页面底色的地方（小票的撕口等）要用到
-    ":root{--page-bg:" + d.pageBg + "}" +
+    // 释义字号/行高也落成变量：大字头的尺寸靠 calc(var(--ans-line-height) * var(--ans-font-size)) 算，
+    // 导出/预览页没有 JS 逐卡测量，不落变量就会退回默认 1.2×13px，大字头明显偏小
+    ":root{--page-bg:" + d.pageBg +
+      ";--ans-font-size:" + ansMetrics.fs + "px" +
+      ";--ans-line-height:" + ansMetrics.lh + "}" +
     "body{background:" + d.pageBg + ";color:" + d.fontColor +
       ";font-family:" + ff + ";font-size:" + d.fontSize + "px}" +
     // 白底/透明底时打印：顶部不留白、标题下边距收到 18px（屏幕预览保持原样）
@@ -894,6 +944,14 @@ function buildDisplayCss(d, withTemplate) {
     (d.aggSep || d.aggSepStyle
       ? ":root{--agg-sep:" + (d.aggSep || "rgba(99,102,241,.28)") +
         ";--agg-sep-style:" + (d.aggSepStyle || "dashed") + "}"
+      : "") +
+    // 大字头直接用历史页实测的那组像素：盒高、行高、字号、字重全部对齐屏幕，
+    // 避免 CSS 公式算出的非整数值（如 35.568px）和模板/公式之间的字重差异
+    (ansMetrics.drop
+      ? "body.merge-quote .card .item-text:not(.item-text-extract).item-text-drop{" +
+        "height:" + ansMetrics.drop.h + "px;line-height:" + ansMetrics.drop.lh + "px;" +
+        "font-size:" + ansMetrics.drop.fs + "px" +
+        (ansMetrics.drop.fw ? ";font-weight:" + ansMetrics.drop.fw : "") + "}"
       : "")
   );
 }
@@ -2570,6 +2628,8 @@ function load() {
       syncStylePin();
 
       render();
+      // 首次进页面也去云端拉一次（远端更新后开页就能看到）
+      pullRemoteHistory();
     }
   );
 }
@@ -5014,6 +5074,19 @@ bindMainModal();
 })();
 
 document.addEventListener("DOMContentLoaded", load);
+
+// 打开历史页时先让后台去云端拉一次再合并进来：
+// 远端（坚果云 history.json）更新了，本机没做过写入就不会触发同步，页面上就一直看不到新记录。
+// 后台合并后会写回 history，上面的 storage.onChanged 负责刷新列表。
+function pullRemoteHistory() {
+  try {
+    chrome.runtime.sendMessage({ type: "sync-now" }, () => {
+      void chrome.runtime.lastError; // 后台不在线 / 未启用同步时静默跳过
+    });
+  } catch (e) {
+    // 扩展上下文失效（如重载后旧页面）时静默
+  }
+}
 
 // 后台云端同步会直接改写 history，页面跟着刷新（否则要手动重开才看得到）
 chrome.storage.onChanged.addListener((changes, area) => {
