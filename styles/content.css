@@ -398,8 +398,34 @@
 }
 
 #ai-explain-popup .aie-status {
+  display: inline-block; /* 让后面的【删除】能接在同一行，不被 block 挤到下一行 */
   font-size: 12.5px;
   color: #9ca3af;
+}
+
+/* 「未在历史中找到释义」后面的【删除】：小号文字按钮，和提示同一行 */
+#ai-explain-popup .aie-status-del {
+  display: inline; /* 行内按钮：基线跟提示文字对齐（inline-block 的基线在底边，会显得偏低） */
+  margin-left: 8px;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 12.5px;
+  line-height: inherit;
+  color: #dc2626;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+
+#ai-explain-popup .aie-status-del:hover {
+  background: rgba(220, 38, 38, 0.1);
+  text-decoration: underline;
+}
+
+#ai-explain-popup .aie-status-del[hidden] {
+  display: none;
 }
 
 #ai-explain-popup .aie-status-loading::before {

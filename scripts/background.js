@@ -882,23 +882,12 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 // 右键菜单：复制选中文本 / 打开历史记录
-chrome.runtime.onInstalled.addListener((details) => {
-  // 全新安装时默认开启「高亮划词」（已有的用户配置不覆盖）
-  if (details && details.reason === "install") {
-    chrome.storage.local.get({ [HIGHLIGHT_KEY]: null }, (res) => {
-      if (res[HIGHLIGHT_KEY] === null) chrome.storage.local.set({ [HIGHLIGHT_KEY]: true });
-    });
-  }
+function createContextMenus() {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: "ai-explain-copy",
       title: "复制选中文本到划词AI释义",
       contexts: ["selection"],
-    });
-    chrome.contextMenus.create({
-      id: "ai-explain-history",
-      title: "打开划词AI释义 · 历史记录",
-      contexts: ["page", "selection"],
     });
     chrome.contextMenus.create({
       id: "ai-explain-extract",
@@ -910,7 +899,26 @@ chrome.runtime.onInstalled.addListener((details) => {
       title: "高亮划词（关）",
       contexts: ["action"],
     });
+    // 图标右键菜单里也放一条历史记录入口（上面那条只出现在页面/选区的右键里）
+    chrome.contextMenus.create({
+      id: "ai-explain-history-action",
+      title: "打开历史记录",
+      contexts: ["action"],
+    });
   });
+}
+// 后台每次启动都重建一次：解包扩展「重新加载」不一定触发 onInstalled，
+// 只在 onInstalled 里建的话，新加的菜单项要等下次装/升级才出现
+createContextMenus();
+
+chrome.runtime.onInstalled.addListener((details) => {
+  // 全新安装时默认开启「高亮划词」（已有的用户配置不覆盖）
+  if (details && details.reason === "install") {
+    chrome.storage.local.get({ [HIGHLIGHT_KEY]: null }, (res) => {
+      if (res[HIGHLIGHT_KEY] === null) chrome.storage.local.set({ [HIGHLIGHT_KEY]: true });
+    });
+  }
+  createContextMenus();
   setActionState(); // 初始化图标状态（暂停/正常）
   updateExtractMenu(); // 初始化摘录模式菜单标题
   updateHighlightMenu(); // 初始化高亮划词菜单标题
@@ -918,7 +926,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === "ai-explain-history") {
+  if (info.menuItemId === "ai-explain-history-action") {
     chrome.tabs.create({ url: chrome.runtime.getURL("pages/history.html") });
     return;
   }

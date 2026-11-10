@@ -29,6 +29,8 @@
   let pinned = false;             // 浮层是否被钉住（钉住后不自动消失）
   let statusEl, bodyEl, resultEl, selEl, closeBtn, copyBtn, historyBtn, warnEl, settingsBtn, retryBtn, header;
   let pinBtn;
+  let statusDelBtn;               // 「未在历史中找到释义」提示后的【删除】：删掉这条划线
+  let statusDelTarget = null;     // 当前这条提示要删的划线（{ span, text }）
   let promptSelect, selTextEl, histTag;  // 提示词下拉（原文行最右）+ 原文文字节点 + 「历史释义」标签
   let curTagBtn, tagMenu; // 标题栏的「当前标签」chip 与它的下拉
   let hoverEntry = null; // 悬停看历史释义时取到的那条记录（改标签要改它，而不是全局当前标签）
@@ -274,6 +276,9 @@
             }
           } else {
             setStatus("idle", "未在历史中找到这条划词的释义");
+            // 这条划线在历史里没有对应释义，只能从这里删：给出【删除】并记住目标
+            statusDelTarget = { span: hlSpan, text };
+            if (statusDelBtn) statusDelBtn.hidden = false;
           }
         }
       );
@@ -455,6 +460,32 @@
           delete all[pageKey()];
           chrome.storage.local.set({ highlights: all });
         }
+      });
+    } catch (e) {}
+  }
+
+  // 删掉一条划线：页面上把 <span class="aie-hl"> 拆回裸文字，同时从持久化记录里去掉
+  function removeHighlightMark(span, text) {
+    try {
+      if (span && span.parentNode) {
+        const parent = span.parentNode;
+        while (span.firstChild) parent.insertBefore(span.firstChild, span);
+        parent.removeChild(span);
+        if (parent.normalize) parent.normalize();
+      }
+    } catch (e) {
+      /* 节点已被页面改掉时跳过，不影响记录清理 */
+    }
+    try {
+      const key = pageKey();
+      chrome.storage.local.get({ highlights: {} }, (res) => {
+        const all = res.highlights;
+        const page = all[key];
+        if (!page || !Array.isArray(page.items)) return;
+        page.items = page.items.filter((it) => !(it && it.text === text));
+        if (page.items.length) all[key] = page;
+        else delete all[key];
+        chrome.storage.local.set({ highlights: all });
       });
     } catch (e) {}
   }
@@ -652,6 +683,7 @@
       "</div>" +
       '<div class="aie-body">' +
       '<div class="aie-status"></div>' +
+      '<button class="aie-status-del" type="button" hidden>删除</button>' +
       '<div class="aie-result"></div>' +
       '<div class="aie-retry-row"><button class="aie-btn aie-retry">重新解释</button></div>' +
       "</div>" +
@@ -685,6 +717,17 @@
     // 每次都挪到 html 末尾：浮层被重建时会重新 append，若菜单留在它前面，同层级下会被浮层盖住
     document.documentElement.appendChild(tagMenu);
     statusEl = root.querySelector(".aie-status");
+    statusDelBtn = root.querySelector(".aie-status-del");
+    // 【删除】：划了线但没等到释义就取消的，历史里查不到、也就没法在历史页删，
+    // 只能在这里把这条划线（页面上的 span + 持久化记录）一起删掉
+    statusDelBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const tgt = statusDelTarget;
+      statusDelTarget = null;
+      statusDelBtn.hidden = true;
+      if (tgt) removeHighlightMark(tgt.span, tgt.text);
+      hidePopup();
+    });
     bodyEl = root.querySelector(".aie-body");
     resultEl = root.querySelector(".aie-result");
     header = root.querySelector(".aie-header");
@@ -1201,12 +1244,17 @@
   function render() {
     resultEl.hidden = false;
     statusEl.hidden = true;
+    if (statusDelBtn) statusDelBtn.hidden = true; // 有释义了就不再给「删除这条划线」
+    statusDelTarget = null;
     resultEl.innerHTML = renderMarkdown(rawAnswer);
   }
 
   function setStatus(kind, text) {
     statusEl.className = "aie-status aie-status-" + kind;
     statusEl.textContent = text;
+    // 【删除】只属于「未在历史中找到释义」这一种提示，换提示/换状态时一律收起
+    if (statusDelBtn) statusDelBtn.hidden = true;
+    statusDelTarget = null;
   }
 
   function copyAnswer() {

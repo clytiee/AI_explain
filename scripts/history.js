@@ -3478,7 +3478,9 @@ function applyMasonry() {
   }
   flattenMasonry(box);
   const cards = Array.from(box.querySelectorAll(".card"));
-  if (cards.length < 2) return;
+  // 只有 1 张卡片也要建两栏：否则页面是 flex 但没 .rcpt-col，卡片被 #list>.card 拉满一整行，
+  // 看起来和单栏一模一样（两栏时这张卡应该只占左栏宽度）
+  if (!cards.length) return;
   cards.forEach((c, i) => (c.dataset.mi = String(i)));
   const n = window.innerWidth <= 560 ? 1 : 2;
   const cols = [];
