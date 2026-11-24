@@ -380,6 +380,8 @@
     /* 样式设置行里的字段名（字体/字体颜色/字体大小/行高）与「页面背景色」这类小标题同字号同色 */
     .opts label.opt-lbl { font-size: 12px; color: var(--muted); gap: 6px; }
     .opts label.opt-lbl[hidden] { display: none !important; }
+    /* 同一行里新加的选项，前面用一条短竖线把它和已有字段分隔开 */
+    .opts .opt-bar { color: var(--border); margin: 0 2px 0 8px; }
     /* 展开面板不再缩进，换行后的字段与第一行左对齐即可 */
     .opts label.opt-rowstart { margin-left: 0; }
     /* 记录区：样式设置里的「页面背景色」与风格模板的底色都只落在这里，不影响工具栏/设置区 */
@@ -948,6 +950,7 @@
       </label>
       <label title="原文当大字头（占一行高度），释义绕排在它右侧；原文超过字数上限时不放大，退回两行截断"><input type="checkbox" id="optMergeQuote" />合并原文释义</label>
       <label title="原文字数不超过这个数才当大字头">≤ <input type="number" id="optMergeMax" min="1" max="20" step="1" value="5" style="width:40px" /> 字</label>
+      <label class="opt-lbl opt-main-span" hidden title="两栏时，有主文的卡片整宽：主文横跨两栏，卡内明细在下方分成两栏"><span class="opt-bar">|</span>主文跨栏 <input type="checkbox" id="optMainSpan" /></label>
       <span class="opts-br"></span>
       <span class="opts-title opts-title-auto" title="这几项在只读模式下生效：关掉就让历史页看起来和导出的样子一致；编辑模式下为了好操作，时间/来源/条数/标签/分隔线一律显示">只读显示：</span>
       <label><input type="checkbox" id="optTime" checked />时间</label>

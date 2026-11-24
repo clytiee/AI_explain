@@ -1656,7 +1656,9 @@ let stylePinned = false; // 样式设置区是否钉住（滚动时贴住页面�
 // 卡片墙模板的列表本身已是网格两列，页面两栏对它不生效。
 const LAYOUT_KEY = "layoutMode";
 const LAYOUT_NO_TWOCOL = ["cards"];
+const MAIN_SPAN_KEY = "mainSpan"; // 两栏时让「有主文」的卡片整宽：主文跨两栏、卡内明细分两栏
 let layoutMode = "single";
+let mainSpanMode = false;
 const LAYOUT_CSS =
   'body[data-layout="twocol"] #list{column-count:2;column-gap:16px}' +
   '@media (max-width:560px){body[data-layout="twocol"] #list{column-count:1}}' +
@@ -1683,6 +1685,25 @@ function layoutActive() {
 function innerActive() {
   return layoutMode === "inner";
 }
+
+// 「主文跨栏」：只在两栏布局下、且模板不是卡片墙时生效
+function mainSpanActive() {
+  return mainSpanMode && layoutMode === "twocol" && !LAYOUT_NO_TWOCOL.includes(styleTemplate);
+}
+
+// 主文跨栏：卡片自己横跨两栏，主文因此占满整宽；卡内明细在下方另排成两栏
+// .wrap（导出/预览）与历史页打印时的 #list 都是多列容器，column-span 在这两种场合都生效；
+// 历史页屏幕是 flex，column-span 被忽略，跨栏卡不参与瀑布流、靠 flex 独占一行
+const MAIN_SPAN_CSS =
+  '@media screen{body[data-layout="twocol"] #list{flex-wrap:wrap}}' +
+  'body[data-layout="twocol"] .card.span-main{column-span:all;-webkit-column-span:all}' +
+  // .agg-items 原本是 flex 纵向列，多列排版要先回到 block（column-count 对 flex 容器无效）
+  'body[data-layout="twocol"] .card.span-main .agg-items{display:block;column-count:2;column-gap:16px}' +
+  // 每条明细整条放进其中一栏，不拆到另一栏；用 margin 代替原来 flex 的 gap
+  'body[data-layout="twocol"] .card.span-main .agg-items>.agg-item{break-inside:avoid;page-break-inside:avoid;' +
+  "margin-bottom:10px}" +
+  'body[data-layout="twocol"] .card.span-main .agg-items>.agg-item:last-child{margin-bottom:0}' +
+  '@media (max-width:560px){body[data-layout="twocol"] .card.span-main .agg-items{column-count:1}}';
 
 // 落到 body 上的实际布局值（单栏时也要写值，模板自带的规则才能被盖回去）
 function effectiveLayout() {
@@ -1713,6 +1734,9 @@ function syncLayout() {
       ? "该模板的列表本身就是两列网格，页面两栏对它不生效"
       : "两栏：历史页屏幕上按瀑布流排（新卡片放进较矮的一栏）；预览与打印按整页多列流，首尾相接、卡片可跨栏拆开";
   }
+  // 「主文跨栏」只有两栏时有意义：别的布局下整条选项藏起来
+  const msLabel = document.querySelector(".opt-main-span");
+  if (msLabel) msLabel.hidden = layoutMode !== "twocol";
 }
 
 function setLayout(mode, persist = true) {
@@ -1928,7 +1952,9 @@ function ensureTemplateStyle() {
     "\n" +
     LAYOUT_CSS +
     "\n" +
-    LAYOUT_INNER_CSS;
+    LAYOUT_INNER_CSS +
+    "\n" +
+    MAIN_SPAN_CSS;
   document.head.appendChild(style);
 }
 
@@ -2634,6 +2660,7 @@ function load() {
       [AGG_ORDER_KEY]: {},
       [STYLE_TPL_KEY]: "glass",
       [LAYOUT_KEY]: "single",
+      [MAIN_SPAN_KEY]: false,
       [STYLE_PANEL_KEY]: false,
       [STYLE_PIN_KEY]: false,
       [LOCAL_FONTS_KEY]: [],
@@ -2703,6 +2730,8 @@ function load() {
       // 全局布局：单栏 / 两栏（老数据没有这个键时按单栏）
       layoutMode =
     res[LAYOUT_KEY] === "twocol" || res[LAYOUT_KEY] === "inner" ? res[LAYOUT_KEY] : "single";
+      mainSpanMode = res[MAIN_SPAN_KEY] === true;
+      if ($("optMainSpan")) $("optMainSpan").checked = mainSpanMode;
       renderTplBar();
       applyStyleTemplate(styleTemplate, false);
 
@@ -2921,6 +2950,10 @@ function bindDisplay() {
       chrome.storage.local.set({ [QUOTE_MERGE_KEY]: quoteMerge });
       render();
       requestAnimationFrame(() => applyDropQuoteSize($("list")));
+    } else if (t.id === "optMainSpan") {
+      mainSpanMode = t.checked;
+      chrome.storage.local.set({ [MAIN_SPAN_KEY]: mainSpanMode });
+      render(); // 卡片要多加/去掉 span-main 类，重新画一遍
     } else if (t.id === "optMergeMax") {
       quoteMergeMax = Math.max(1, Math.min(20, Number(t.value) || 5));
       t.value = quoteMergeMax;
@@ -3483,23 +3516,42 @@ function applyMasonry() {
   if (!cards.length) return;
   cards.forEach((c, i) => (c.dataset.mi = String(i)));
   const n = window.innerWidth <= 560 ? 1 : 2;
-  const cols = [];
-  for (let i = 0; i < n; i++) {
-    const d = document.createElement("div");
-    d.className = "rcpt-col";
-    box.appendChild(d);
-    cols.push(d);
+  // 跨栏卡（有主文且勾了「主文跨栏」）不参与瀑布流：先把它及相邻的普通卡摘下，
+  // 再按「普通卡凑一段分两栏、跨栏卡独占一整行」的顺序重新摆回 #list
+  cards.forEach((c) => c.remove());
+  const putCols = (seg) => {
+    const cols = [];
+    for (let i = 0; i < n; i++) {
+      const d = document.createElement("div");
+      d.className = "rcpt-col";
+      box.appendChild(d);
+      cols.push(d);
+    }
+    // 先全部丢进第一栏量出各自的真实高度（宽度已经是半栏，量得才准），再按「谁矮放谁」分配
+    seg.forEach((c) => cols[0].appendChild(c));
+    const cardH = seg.map((c) => c.getBoundingClientRect().height);
+    const heights = new Array(n).fill(0);
+    seg.forEach((c, i) => {
+      let k = 0;
+      for (let j = 1; j < n; j++) if (heights[j] < heights[k]) k = j;
+      cols[k].appendChild(c);
+      heights[k] += cardH[i] + 16; // 加上栏间距
+    });
+  };
+  let i = 0;
+  while (i < cards.length) {
+    if (cards[i].classList.contains("span-main")) {
+      box.appendChild(cards[i]); // 整宽独占一行
+      i++;
+      continue;
+    }
+    const seg = [];
+    while (i < cards.length && !cards[i].classList.contains("span-main")) {
+      seg.push(cards[i]);
+      i++;
+    }
+    putCols(seg);
   }
-  // 先全部丢进第一栏量出各自的真实高度（宽度已经是半栏，量得才准），再按「谁矮放谁」分配
-  cards.forEach((c) => cols[0].appendChild(c));
-  const cardH = cards.map((c) => c.getBoundingClientRect().height);
-  const heights = new Array(n).fill(0);
-  cards.forEach((c, i) => {
-    let k = 0;
-    for (let j = 1; j < n; j++) if (heights[j] < heights[k]) k = j;
-    cols[k].appendChild(c);
-    heights[k] += cardH[i] + 16; // 加上栏间距
-  });
 }
 
 window.addEventListener("beforeprint", () => {
@@ -3993,6 +4045,8 @@ function renderAggregated(list) {
     const srcKey = key.startsWith("__no_") ? "" : key;
     const item = document.createElement("div");
     item.className = "card card-agg";
+    // 主文跨栏：有主文的聚合卡整卡横跨两栏，主文跟着占满整宽，明细在下方另排两栏
+    if (mainSpanActive() && showMainText && sourceTexts[srcKey]) item.classList.add("span-main");
 
     // 右上角角标：聚合卡片按「整组」选中（选中后把这组全部记录算进自由筛选）
     const pick = document.createElement("button");
@@ -4627,7 +4681,7 @@ function buildCardsHtmlAggregated(list) {
         .join("\n");
       return (
         gap +
-        '<div class="card card-agg"' +
+        '<div class="card card-agg' + (mainSpanActive() && main ? " span-main" : "") + '"' +
         ' data-page-url="' + esc(first.pageUrl || "") + '"' +
         ' data-page-title="' + esc(first.pageTitle || "") + '">' +
         '<div class="item-head item-head-agg">' + head.join("") + "</div>" +
@@ -4714,7 +4768,7 @@ function buildExportHtml(list, withPrintScript, titleWithTime, previewBlack) {
     "<title>" + docTitle + "</title>\n" +
     "<style>\n" + CARD_CSS + MERGE_QUOTE_CSS + noSplitCss + displayCss + HEAD_BTN_CSS + tplCss +
     (layoutActive() ? LAYOUT_CSS + LAYOUT_EXPORT_CSS : "") +
-    (innerActive() ? LAYOUT_INNER_CSS : "") + printBlackCss + "\n</style>\n" +
+    (innerActive() ? LAYOUT_INNER_CSS : "") + (mainSpanActive() ? MAIN_SPAN_CSS : "") + printBlackCss + "\n</style>\n" +
     "</head>\n" + '<body data-tpl="' + esc(styleTemplate) + '"' +
     (effectiveLayout() ? ' data-layout="' + effectiveLayout() + '"' : "") +
     (quoteMerge ? ' class="merge-quote"' : "") + ">\n" +
